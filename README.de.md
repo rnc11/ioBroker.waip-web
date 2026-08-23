@@ -255,10 +255,15 @@ Wird nur geprüft, falls der Dekoder auf dem Tab
 [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter) nicht gegriffen
 hat: eine Liste von `{Stichwort-Muster, Beschreibung, Abgleich-Typ}`-Zeilen
 – Abgleich-Typ ist `beginnt mit` oder `enthält`, der Vergleich ist
-case-insensitiv, und passen mehrere Zeilen, gewinnt automatisch das
-**spezifischste (längste) Muster** – die Zeilenreihenfolge hat keinen
-Einfluss auf den Abgleich, die Tabelle kann also gefahrlos nach jeder
-Spalte sortiert werden (Klick auf die Spaltenüberschrift). Die Tabelle ist mit
+case-insensitiv und behandelt Leerzeichen und Bindestriche als
+gleichwertig (jede Folge aus beidem wird vor dem Vergleich zu einem
+Leerzeichen zusammengefasst) – z.B. matchen `H:VU mit P`,
+`H:VU-mit-P` und `H:VU - mit - P` dieselbe Zeile, es muss also keine
+eigene Zeile pro Schreibvariante gepflegt werden. Passen mehrere
+Zeilen, gewinnt automatisch das **spezifischste (längste) Muster** –
+die Zeilenreihenfolge hat keinen Einfluss auf den Abgleich, die
+Tabelle kann also gefahrlos nach jeder Spalte sortiert werden (Klick
+auf die Spaltenüberschrift). Die Tabelle ist mit
 einer beispielhaften Feuerwehr-/Rettungsdienst-Stichwortliste
 (`B:...`/`H:...`) als Startpunkt vorbefüllt – das ist **nicht** für
 irgendeine bestimmte Leitstelle bestätigt, bei Bedarf anpassen oder

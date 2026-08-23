@@ -254,10 +254,13 @@ multi-language and these labels aren't translated automatically:
 Checked only if the decoder on the [Rescue-service keywords](#rescue-service-keywords)
 tab didn't match: a list of `{keyword pattern, description, match type}`
 rows – match type is `starts with` or `contains`, comparison is
-case-insensitive, and if several rows match, the **most specific
-(longest) pattern wins automatically** – row order has no effect on
-matching, so the table can be freely sorted by any column (click the
-column header) without changing behavior. The table is pre-filled
+case-insensitive and treats spaces and hyphens as equivalent (any run
+of either collapses to one before comparing), so e.g. `H:VU mit P`,
+`H:VU-mit-P` and `H:VU - mit - P` all match the same row – no need to
+add a separate row per spelling variant. If several rows match, the
+**most specific (longest) pattern wins automatically** – row order has
+no effect on matching, so the table can be freely sorted by any column
+(click the column header) without changing behavior. The table is pre-filled
 with an example fire/rescue keyword list (`B:...`/`H:...`) as a
 starting point only – it is **not** confirmed to match any specific
 dispatch center's real catalog, edit or fully replace it as needed.
@@ -407,6 +410,18 @@ message the adapter can produce, grouped by level, with its cause and an
 example.
 
 ## Changelog
+
+### 0.7.27 (2026-08-23)
+
+- [Keyword table](#keyword-descriptions) matching now treats spaces
+  and hyphens as equivalent (any run of either collapses to one
+  before comparing) - e.g. `H:VU mit P` and `H:VU-mit-P` now match
+  the same row, so dispatch-center spelling variants no longer need a
+  separate row each. Removed the now-redundant `B:Gebäude-Groß`/
+  `B:Gebäude-Klein` rows added in 0.7.24 (the existing `B:Gebäude
+  groß`/`B:Gebäude klein` rows already cover them). Comparison was
+  already case-insensitive before this change. Admin UI help text
+  updated accordingly.
 
 ### 0.7.26 (2026-08-23)
 
