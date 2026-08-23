@@ -404,6 +404,15 @@ example.
 
 ## Changelog
 
+### 0.7.24 (2026-08-23)
+
+- Extended the default [keyword table](#keyword-descriptions) with two
+  more Brandenburg spelling variants: `B:Gebäude-Groß` and
+  `B:Gebäude-Klein` (hyphen instead of space, as used by some dispatch
+  centers) - same descriptions as the existing `B:Gebäude groß`/`B:Gebäude
+  klein` entries. Only affects the shipped example table for new
+  installs - existing configured tables are untouched.
+
 ### 0.7.23 (2026-08-23)
 
 - Extended the default [keyword table](#keyword-descriptions) with the
