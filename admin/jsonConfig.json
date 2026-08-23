@@ -1,162 +1,178 @@
 {
-    "type": "panel",
+    "type": "tabs",
     "i18n": true,
     "items": {
-        "url": {
-            "type": "text",
-            "label": "WAIP server URL",
-            "help": "Base URL of the WAIP dispatch server (Socket.IO endpoint, namespace /waip is appended automatically)",
-            "xs": 12,
-            "sm": 12,
-            "md": 8,
-            "lg": 6,
-            "xl": 6
-        },
-        "monitorID": {
-            "type": "selectSendTo",
-            "command": "getMonitorList",
-            "jsonData": "{\"url\": \"${data.url}\"}",
-            "alsoDependsOn": ["url"],
-            "manual": true,
-            "label": "Monitor ID",
-            "help": "Loaded live from the configured server's /waip/ overview page - choose by Leitstelle, Kreis, Träger or Wache, or pick 'Alle Wachalarme' (ID 0) for every incident. If the server can't be reached, an ID can still be entered manually.",
-            "xs": 12,
-            "sm": 12,
-            "md": 12,
-            "lg": 12,
-            "xl": 12
-        },
-        "_divider1": {
-            "type": "divider"
-        },
-        "registrationTimeoutSec": {
-            "type": "number",
-            "label": "Registration timeout (s)",
-            "help": "How long to wait for the server to confirm the monitor registration before logging a warning; the connection itself keeps running either way.",
-            "min": 1,
-            "max": 120,
-            "xs": 12,
-            "sm": 12,
-            "md": 6,
-            "lg": 4,
-            "xl": 4
-        },
-        "reconnectDelaySec": {
-            "type": "number",
-            "label": "Reconnect delay (s)",
-            "help": "Wait time before the adapter automatically reconnects after a lost connection or a connection error.",
-            "min": 1,
-            "max": 120,
-            "xs": 12,
-            "sm": 12,
-            "md": 6,
-            "lg": 4,
-            "xl": 4
-        },
-        "_divider2": {
-            "type": "divider"
-        },
-        "rdKeywordDecodingEnabled": {
-            "type": "checkbox",
-            "label": "Automatically decode rescue-service keywords (R<RTW>N<NEF>[p][f][-NT])",
-            "help": "Rescue-service keyword scheme (R<RTW>N<NEF>[p][f][-NT], e.g. \"R1N0\" = 1 ambulance, no emergency physician) used by several German dispatch centers (documented example: Leitstelle Lausitz) - only enable if your dispatch center actually uses this pattern. Takes priority over the table below when a keyword matches.",
-            "xs": 12,
-            "sm": 12,
-            "md": 12,
-            "lg": 12,
-            "xl": 12
-        },
-        "rdLabelR": {
-            "type": "text",
-            "label": "Label for R (ambulance count)",
-            "help": "Text used in the generated description for the R<n> part, e.g. \"Rettungswagen: 1\".",
-            "hidden": "!data.rdKeywordDecodingEnabled",
-            "xs": 12,
-            "sm": 6,
-            "md": 4,
-            "lg": 4,
-            "xl": 4
-        },
-        "rdLabelN": {
-            "type": "text",
-            "label": "Label for N (emergency vehicle count)",
-            "help": "Text used in the generated description for the N<n> part, e.g. \"Notfalleinsatzfahrzeug: 0\".",
-            "hidden": "!data.rdKeywordDecodingEnabled",
-            "xs": 12,
-            "sm": 6,
-            "md": 4,
-            "lg": 4,
-            "xl": 4
-        },
-        "rdLabelP": {
-            "type": "text",
-            "label": "Label for suffix p (polytrauma)",
-            "help": "Text appended when the keyword ends in \"p\".",
-            "hidden": "!data.rdKeywordDecodingEnabled",
-            "xs": 12,
-            "sm": 6,
-            "md": 4,
-            "lg": 4,
-            "xl": 4
-        },
-        "rdLabelF": {
-            "type": "text",
-            "label": "Label for suffix f (first responder)",
-            "help": "Text appended when the keyword ends in \"f\".",
-            "hidden": "!data.rdKeywordDecodingEnabled",
-            "xs": 12,
-            "sm": 6,
-            "md": 4,
-            "lg": 4,
-            "xl": 4
-        },
-        "rdLabelNT": {
-            "type": "text",
-            "label": "Label for suffix -NT (special ambulance transport)",
-            "help": "Text appended when the keyword ends in \"-NT\".",
-            "hidden": "!data.rdKeywordDecodingEnabled",
-            "xs": 12,
-            "sm": 6,
-            "md": 4,
-            "lg": 4,
-            "xl": 4
-        },
-        "stichwortMapping": {
-            "type": "table",
-            "label": "Alarm keyword descriptions",
-            "help": "Maps einsatz.stichwort to einsatz.beschreibung. If several rows match, the most specific (longest) pattern wins automatically - row order has no effect on matching, sort by keyword freely. Pre-filled with an example fire/rescue keyword list as a starting point - it is not confirmed to match your own dispatch center's actual keywords, edit/replace as needed. Export/import as CSV via the buttons above the table.",
-            "export": true,
-            "import": true,
-            "items": [
-                {
+        "tabConnection": {
+            "type": "panel",
+            "label": "Connection",
+            "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMi41IiB5PSI4LjUiIHdpZHRoPSI5IiBoZWlnaHQ9IjciIHJ4PSIzLjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjgiLz48cmVjdCB4PSIxMi41IiB5PSI4LjUiIHdpZHRoPSI5IiBoZWlnaHQ9IjciIHJ4PSIzLjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjgiLz48bGluZSB4MT0iOSIgeTE9IjEyIiB4Mj0iMTUiIHkyPSIxMiIgc3Ryb2tlPSIjNWY2MzY4IiBzdHJva2Utd2lkdGg9IjEuOCIvPjwvc3ZnPg==",
+            "items": {
+                "url": {
                     "type": "text",
-                    "attr": "stichwort",
-                    "title": "Keyword / pattern",
-                    "width": "35%",
-                    "sort": true
+                    "label": "WAIP server URL",
+                    "help": "Base URL of the WAIP dispatch server (Socket.IO endpoint, namespace /waip is appended automatically)",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 8,
+                    "lg": 6,
+                    "xl": 6
                 },
-                {
-                    "type": "text",
-                    "attr": "beschreibung",
-                    "title": "Description",
-                    "width": "45%"
+                "monitorID": {
+                    "type": "selectSendTo",
+                    "command": "getMonitorList",
+                    "jsonData": "{\"url\": \"${data.url}\"}",
+                    "alsoDependsOn": ["url"],
+                    "manual": true,
+                    "label": "Monitor ID",
+                    "help": "Loaded live from the configured server's /waip/ overview page - choose by Leitstelle, Kreis, Träger or Wache, or pick 'Alle Wachalarme' (ID 0) for every incident. If the server can't be reached, an ID can still be entered manually.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
                 },
-                {
-                    "type": "select",
-                    "attr": "matchType",
-                    "title": "Match",
-                    "width": "20%",
-                    "options": [
-                        { "label": "starts with", "value": "startsWith" },
-                        { "label": "contains", "value": "contains" }
-                    ]
+                "_divider1": {
+                    "type": "divider"
+                },
+                "registrationTimeoutSec": {
+                    "type": "number",
+                    "label": "Registration timeout (s)",
+                    "help": "How long to wait for the server to confirm the monitor registration before logging a warning; the connection itself keeps running either way.",
+                    "min": 1,
+                    "max": 120,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 6,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "reconnectDelaySec": {
+                    "type": "number",
+                    "label": "Reconnect delay (s)",
+                    "help": "Wait time before the adapter automatically reconnects after a lost connection or a connection error.",
+                    "min": 1,
+                    "max": 120,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 6,
+                    "lg": 4,
+                    "xl": 4
                 }
-            ],
-            "xs": 12,
-            "sm": 12,
-            "md": 12,
-            "lg": 12,
-            "xl": 12
+            }
+        },
+        "tabRescueService": {
+            "type": "panel",
+            "label": "Rescue-service keywords",
+            "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMi41IiB5PSI4IiB3aWR0aD0iMTIiIGhlaWdodD0iOCIgcng9IjEiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48cG9seWdvbiBwb2ludHM9IjE0LjUsMTEgMTcuNSwxMSAyMC41LDE0IDIwLjUsMTYgMTQuNSwxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNWY2MzY4IiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxsaW5lIHgxPSIxNy43IiB5MT0iMTEiIHgyPSIxNy43IiB5Mj0iMTQiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjQiLz48Y2lyY2xlIGN4PSI2LjUiIGN5PSIxNy43IiByPSIxLjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48Y2lyY2xlIGN4PSIxNi41IiBjeT0iMTcuNyIgcj0iMS44IiBmaWxsPSJub25lIiBzdHJva2U9IiM1ZjYzNjgiIHN0cm9rZS13aWR0aD0iMS42Ii8+PGxpbmUgeDE9IjgiIHkxPSIxMC4yIiB4Mj0iOCIgeTI9IjEzLjgiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxsaW5lIHgxPSI2LjIiIHkxPSIxMiIgeDI9IjkuOCIgeTI9IjEyIiBzdHJva2U9IiM1ZjYzNjgiIHN0cm9rZS13aWR0aD0iMS40IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=",
+            "items": {
+                "rdKeywordDecodingEnabled": {
+                    "type": "checkbox",
+                    "label": "Automatically decode rescue-service keywords (R<RTW>N<NEF>[p][f][-NT])",
+                    "help": "Rescue-service keyword scheme (R<RTW>N<NEF>[p][f][-NT], e.g. \"R1N0\" = 1 ambulance, no emergency physician) used by several German dispatch centers (documented example: Leitstelle Lausitz) - only enable if your dispatch center actually uses this pattern. Takes priority over the table on the Keyword descriptions tab when a keyword matches.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "rdLabelR": {
+                    "type": "text",
+                    "label": "Label for R (ambulance count)",
+                    "help": "Text used in the generated description for the R<n> part, e.g. \"Rettungswagen: 1\".",
+                    "hidden": "!data.rdKeywordDecodingEnabled",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "rdLabelN": {
+                    "type": "text",
+                    "label": "Label for N (emergency vehicle count)",
+                    "help": "Text used in the generated description for the N<n> part, e.g. \"Notfalleinsatzfahrzeug: 0\".",
+                    "hidden": "!data.rdKeywordDecodingEnabled",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "rdLabelP": {
+                    "type": "text",
+                    "label": "Label for suffix p (polytrauma)",
+                    "help": "Text appended when the keyword ends in \"p\".",
+                    "hidden": "!data.rdKeywordDecodingEnabled",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "rdLabelF": {
+                    "type": "text",
+                    "label": "Label for suffix f (first responder)",
+                    "help": "Text appended when the keyword ends in \"f\".",
+                    "hidden": "!data.rdKeywordDecodingEnabled",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "rdLabelNT": {
+                    "type": "text",
+                    "label": "Label for suffix -NT (special ambulance transport)",
+                    "help": "Text appended when the keyword ends in \"-NT\".",
+                    "hidden": "!data.rdKeywordDecodingEnabled",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                }
+            }
+        },
+        "tabKeywordTable": {
+            "type": "panel",
+            "label": "Keyword descriptions",
+            "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMi41IiB5PSI0LjUiIHdpZHRoPSIxOSIgaGVpZ2h0PSIxNSIgcng9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48bGluZSB4MT0iMi41IiB5MT0iOS41IiB4Mj0iMjEuNSIgeTI9IjkuNSIgc3Ryb2tlPSIjNWY2MzY4IiBzdHJva2Utd2lkdGg9IjEuNiIvPjxsaW5lIHgxPSIxMC41IiB5MT0iOS41IiB4Mj0iMTAuNSIgeTI9IjE5LjUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48L3N2Zz4=",
+            "items": {
+                "stichwortMapping": {
+                    "type": "table",
+                    "label": "Alarm keyword descriptions",
+                    "help": "Maps einsatz.stichwort to einsatz.beschreibung. If several rows match, the most specific (longest) pattern wins automatically - row order has no effect on matching, sort by keyword freely. Pre-filled with an example fire/rescue keyword list as a starting point - it is not confirmed to match your own dispatch center's actual keywords, edit/replace as needed. To back up or transfer this table, use ioBroker's standard instance configuration export/import (JSON). After using that import, reload the Admin page before checking this table - the open config dialog doesn't refresh it from an external import automatically (a state-sync limitation of the Admin table component itself).",
+                    "items": [
+                        {
+                            "type": "text",
+                            "attr": "stichwort",
+                            "title": "Keyword / pattern",
+                            "width": "35%",
+                            "sort": true
+                        },
+                        {
+                            "type": "text",
+                            "attr": "beschreibung",
+                            "title": "Description",
+                            "width": "45%"
+                        },
+                        {
+                            "type": "select",
+                            "attr": "matchType",
+                            "title": "Match",
+                            "width": "20%",
+                            "options": [
+                                { "label": "starts with", "value": "startsWith" },
+                                { "label": "contains", "value": "contains" }
+                            ]
+                        }
+                    ],
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                }
+            }
         }
     }
 }

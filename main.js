@@ -1,14 +1,14 @@
 'use strict';
 
 /*
- * ioBroker.WAIP-Web
+ * DE: ioBroker.WAIP-Web
  *
  * Verbindet sich mit einem WAIP-Wachalarm-Monitor (Socket.IO) und bildet
  * Einsätze, Rückmeldungen, Routen und TTS-Ansagen als ioBroker-States ab.
  *
- * Ported from the original "WAIP Instrumented" ioBroker-JavaScript-Adapter
- * script into a standalone adapter: URL/Monitor-ID kommen jetzt aus der
- * Admin-Konfiguration statt aus einem Laufzeit-State.
+ * Portiert aus dem ursprünglichen "WAIP Instrumented" ioBroker-JavaScript-
+ * Adapter-Script in einen eigenständigen Adapter: URL/Monitor-ID kommen
+ * jetzt aus der Admin-Konfiguration statt aus einem Laufzeit-State.
  *
  * Objektstruktur (Stand 0.7.15): einsatz.json ist ein eigener Channel mit
  * ausschließlich flachen JSON-States, da VIS-Tabellen-Widgets keine
@@ -21,6 +21,26 @@
  * Ergänzt um schnell bindbare Zähler (einsatz.routenGesamt,
  * einsatz.rueckmeldungGesamt, einsatz.rueckmeldungAnzahl.*). Der frühere
  * vis.*-Kanal entfällt komplett.
+ *
+ * EN: ioBroker.WAIP-Web
+ *
+ * Connects to a WAIP dispatch monitor (Socket.IO) and mirrors incidents,
+ * responder feedback, routes and TTS announcements into ioBroker states.
+ *
+ * Ported from the original "WAIP Instrumented" ioBroker-JavaScript-Adapter
+ * script into a standalone adapter: URL/monitor ID now come from the admin
+ * configuration instead of a runtime state.
+ *
+ * Object structure (as of 0.7.15): einsatz.json is its own channel with
+ * exclusively flat JSON states, since VIS table widgets can't render
+ * nested structures. einsatz.json.current/.history10 hold only the flat
+ * incident core (the same fields as the individual einsatz.* states,
+ * just bundled as one JSON object/array); routes/feedback/alerted
+ * resources live as their own, likewise flat arrays in
+ * einsatz.json.routen/.rueckmeldungen/.emAlarmiert/.emWeitere - only for
+ * the currently running incident, not historized. Complemented by
+ * quick-to-bind counters (einsatz.routenGesamt, einsatz.rueckmeldungGesamt,
+ * einsatz.rueckmeldungAnzahl.*). The former vis.* channel is gone entirely.
  */
 
 const https = require('node:https');
@@ -30,27 +50,42 @@ const utils = require('@iobroker/adapter-core');
 const { io } = require('socket.io-client');
 
 const DEFAULT_URL = 'https://wachalarm.leitstelle-lausitz.de';
-const DEFAULT_SESSION_KEEPALIVE_SEC = 300; // Obergrenze, wie /js/session_keepalive.js der Seite selbst
-// Untergrenze fürs Keepalive-Intervall, analog zur Klammerung in /js/session_keepalive.js
+// DE: Obergrenze, wie /js/session_keepalive.js der Seite selbst
+// EN: Upper bound, matching /js/session_keepalive.js of the site itself
+const DEFAULT_SESSION_KEEPALIVE_SEC = 300;
+// DE: Untergrenze fürs Keepalive-Intervall, analog zur Klammerung in /js/session_keepalive.js
 // (min(max(maxAge*0.8, 55s), Obergrenze)). Die tatsächliche Cookie-Laufzeit ist je
 // WAIP-Web-Instanz per ENV konfigurierbar (Server-Default lt. server/app_cfg.js: 60s!) -
 // deshalb wird das Intervall unten adaptiv aus der vom Server gemeldeten Ablaufzeit
 // berechnet, statt einen festen Wert anzunehmen.
+// EN: Lower bound for the keepalive interval, matching the clamping in
+// /js/session_keepalive.js (min(max(maxAge*0.8, 55s), upper bound)). The actual cookie
+// lifetime is configurable per WAIP-Web instance via an env var (server default per
+// server/app_cfg.js: 60s!) - so the interval below is derived adaptively from the
+// expiry time the server reports, instead of assuming a fixed value.
 const SESSION_KEEPALIVE_MIN_MS = 55 * 1000;
 const HISTORY_SIZE = 10;
-// Default-Beschriftungen für decodeRettungsdienstStichwort() - in der Admin-UI unter dem
+// DE: Default-Beschriftungen für decodeRettungsdienstStichwort() - in der Admin-UI unter dem
 // "Automatically decode rescue-service keywords"-Häkchen als Textfelder überschreibbar, da der
 // Adapter mehrsprachig ist und die Bezeichnungen daher nicht fest im Code stehen dürfen.
+// EN: Default labels for decodeRettungsdienstStichwort() - overridable as text fields in
+// the admin UI under the "Automatically decode rescue-service keywords" checkbox, since
+// the adapter is multi-language and these labels must therefore not be hardcoded.
 const DEFAULT_RD_LABEL_R = 'Rettungswagen';
 const DEFAULT_RD_LABEL_N = 'Notfalleinsatzfahrzeug';
 const DEFAULT_RD_LABEL_P = 'Polytrauma';
 const DEFAULT_RD_LABEL_F = 'First Responder';
 const DEFAULT_RD_LABEL_NT = 'Notfalltransport mit Notfallkrankenwagen';
-// einsatznummer/objekt/objektteil/besonderheiten/strasse/hausnummer/einsatzdetails/permissions
-// wurden mit 0.7.18 entfernt: server/waip.js von WAIP-Web befüllt diese Felder serverseitig
-// nur für eingeloggte Clients (db_user_check_permission_for_waip) - da dieser Adapter sich
-// bewusst ohne Login verbindet (siehe "Über diesen Adapter"), waren sie immer leer bzw.
-// permissions immer false. Siehe OBSOLETE_OBJECT_IDS für die zugehörige Migration.
+// DE: einsatznummer/objekt/objektteil/besonderheiten/strasse/hausnummer/einsatzdetails/
+// permissions wurden mit 0.7.18 entfernt: server/waip.js von WAIP-Web befüllt diese Felder
+// serverseitig nur für eingeloggte Clients (db_user_check_permission_for_waip) - da dieser
+// Adapter sich bewusst ohne Login verbindet (siehe "Über diesen Adapter"), waren sie immer
+// leer bzw. permissions immer false. Siehe OBSOLETE_OBJECT_IDS für die zugehörige Migration.
+// EN: einsatznummer/objekt/objektteil/besonderheiten/strasse/hausnummer/einsatzdetails/
+// permissions were removed in 0.7.18: WAIP-Web's server/waip.js only populates these
+// fields server-side for logged-in clients (db_user_check_permission_for_waip) - since
+// this adapter connects without a login by design (see "About this adapter"), they were
+// always empty/permissions always false. See OBSOLETE_OBJECT_IDS for the migration.
 const ALLOWED_EINSATZ_FIELDS = [
     'id',
     'uuid',
@@ -60,32 +95,50 @@ const ALLOWED_EINSATZ_FIELDS = [
     'ortsteil',
     'ablaufzeit',
     'sondersignal',
-    // laut client_waip.js (offizielles Frontend) zusätzlich vorhandenes Feld:
+    // DE: laut client_waip.js (offizielles Frontend) zusätzlich vorhandenes Feld:
+    // EN: additional field per client_waip.js (the official frontend):
     'zeitstempel',
 ];
 const RUECKMELDUNG_ANZAHL_KEYS = ['ek', 'gf', 'zf', 'vf', 'agt', 'fzf', 'ma', 'med'];
-const DISCONNECT_DEDUPE_MS = 60000; // suppress identical disconnect logs for 60s
+// DE: identische Disconnect-Logs 60s lang unterdrücken
+// EN: suppress identical disconnect logs for 60s
+const DISCONNECT_DEDUPE_MS = 60000;
 const WARN_DEDUPE_MS = 5000;
-// Obergrenze für die Anzahl unterschiedlicher Nachrichten, die safeLog() gleichzeitig für
+// DE: Obergrenze für die Anzahl unterschiedlicher Nachrichten, die safeLog() gleichzeitig für
 // die Dedupe vorhält - verhindert unbegrenztes Wachstum über eine lange Laufzeit, falls
 // viele verschiedene (z.B. dynamische) Fehlermeldungen auftreten. Wird der Cache voll,
 // wird er komplett geleert (führt höchstens zu vereinzelt nicht deduplizierten Meldungen,
 // unkritisch - die Dedupe ist eine Rausch-Reduzierung, keine Korrektheitsanforderung).
+// EN: Upper bound for the number of distinct messages safeLog() keeps for deduplication
+// at once - prevents unbounded growth over a long runtime if many different (e.g.
+// dynamic) error messages occur. Once the cache is full it's cleared entirely (at worst
+// causes a few not-deduplicated messages, uncritical - deduplication is noise reduction,
+// not a correctness requirement).
 const WARN_DEDUPE_CACHE_MAX = 200;
-// Für die Eskalation wiederholter "Event für anderen Monitor"-Meldungen (siehe
+// DE: Für die Eskalation wiederholter "Event für anderen Monitor"-Meldungen (siehe
 // wrapHandlerWithMonitorCheck/checkWrongMonitorRate) - Hinweis auf eine falsch
 // konfigurierte Monitor-ID, statt dauerhaft nur auf info zu bleiben.
+// EN: For escalating repeated "event for a different monitor" messages (see
+// wrapHandlerWithMonitorCheck/checkWrongMonitorRate) - a hint at a misconfigured
+// monitor ID, instead of staying at info level indefinitely.
 const WRONG_MONITOR_WARN_THRESHOLD = 20;
 const WRONG_MONITOR_WARN_WINDOW_MS = 5 * 60 * 1000;
-// Toleranz nach Ablauf von einsatz.ablaufzeit, bevor der Watchdog in restzeitInterval ein
+// DE: Toleranz nach Ablauf von einsatz.ablaufzeit, bevor der Watchdog in restzeitInterval ein
 // verpasstes io.standby annimmt und den Einsatz automatisch abschließt (siehe dort).
+// EN: Grace period after einsatz.ablaufzeit has passed, before the watchdog in
+// restzeitInterval assumes a missed io.standby and finalizes the incident (see there).
 const MISSED_STANDBY_GRACE_MS = 60000;
 
-/* Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
+/* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
    Monitore typischerweise in diese vier Überschriften. Nicht jede Instanz nutzt
    zwingend exakt diese Gliederung - findet fetchMonitorList() keine davon, wird
-   die komplette Seite als eine einzige, unkategorisierte Liste geparst. */
+   die komplette Seite als eine einzige, unkategorisierte Liste geparst.
+   EN: For the dynamic monitor selection in the admin UI (see fetchMonitorList/
+   onMessage): a WAIP-Web instance's /waip/ overview page typically groups the
+   available monitors under these four headings. Not every instance necessarily
+   uses exactly this grouping - if fetchMonitorList() finds none of them, the
+   whole page is parsed as a single, uncategorized list. */
 const MONITOR_CATEGORY_HEADINGS = [
     { key: 'leitstelle', re: /Alarmmonitor\s+Leitstelle/i },
     { key: 'kreis', re: /Alarmmonitor\s+Kreis/i },
@@ -94,7 +147,8 @@ const MONITOR_CATEGORY_HEADINGS = [
 ];
 const MONITOR_CATEGORY_LABELS = { leitstelle: 'Leitstelle', kreis: 'Kreis', traeger: 'Träger', wache: 'Wache' };
 
-// State-Objekte, die beim Start aus früheren Versionen entfernt werden (Struktur-Migration).
+// DE: State-Objekte, die beim Start aus früheren Versionen entfernt werden (Struktur-Migration).
+// EN: State objects removed at startup that are left over from earlier versions (structural migration).
 const OBSOLETE_OBJECT_IDS = [
     'json.raw',
     'json.einsatz',
@@ -106,21 +160,30 @@ const OBSOLETE_OBJECT_IDS = [
     'geo.position',
     'history.last10',
     'einsatz.emWeitere',
-    // Umstrukturierung in 0.7.15: einsatz.json/einsatz.history10 wechseln von State zu
+    // DE: Umstrukturierung in 0.7.15: einsatz.json/einsatz.history10 wechseln von State zu
     // Channel (einsatz.json.current/.history10/.routen/.rueckmeldungen/.emAlarmiert/
     // .emWeitere) - ein Objekt kann nicht gleichzeitig State und Channel sein, die alten
     // States müssen daher vor initObjects() entfernt werden.
+    // EN: Restructuring in 0.7.15: einsatz.json/einsatz.history10 change from state to
+    // channel (einsatz.json.current/.history10/.routen/.rueckmeldungen/.emAlarmiert/
+    // .emWeitere) - an object can't be both a state and a channel at once, so the old
+    // states must be removed before initObjects() runs.
     'einsatz.json',
     'einsatz.history10',
-    // Umstrukturierung in 0.7.15: Kanal tts zieht komplett unter einsatz um
+    // DE: Umstrukturierung in 0.7.15: Kanal tts zieht komplett unter einsatz um
     // (einsatz.tts.last/.lastTimestamp), da er sich auf den aktuellen Einsatz bezieht.
     // tts.history10 entfällt ersatzlos (keine sinnvolle Historie ohne Einsatzbezug).
+    // EN: Restructuring in 0.7.15: the tts channel moves entirely under einsatz
+    // (einsatz.tts.last/.lastTimestamp), since it relates to the current incident.
+    // tts.history10 is dropped without replacement (no meaningful history without an incident).
     'tts.last',
     'tts.lastTimestamp',
     'tts.history10',
     'tts',
-    // Umstrukturierung in 0.7.15: status.alarmAktiv/status.restzeit ziehen unter einsatz
+    // DE: Umstrukturierung in 0.7.15: status.alarmAktiv/status.restzeit ziehen unter einsatz
     // um (einsatz.alarmAktiv/.restzeit), da sie sich auf den aktuellen Einsatz beziehen.
+    // EN: Restructuring in 0.7.15: status.alarmAktiv/status.restzeit move under einsatz
+    // (einsatz.alarmAktiv/.restzeit), since they relate to the current incident.
     'status.alarmAktiv',
     'status.restzeit',
     'rueckmeldung.last.json',
@@ -135,10 +198,15 @@ const OBSOLETE_OBJECT_IDS = [
     'rueckmeldung.counts.gesamt',
     'routen.json',
     'routen.count',
-    // Umstrukturierung in 0.7.18: diese Felder werden von WAIP-Web serverseitig ohnehin nur
+    // DE: Umstrukturierung in 0.7.18: diese Felder werden von WAIP-Web serverseitig ohnehin nur
     // befüllt, wenn der verbindende Client eingeloggt ist (siehe db_user_check_permission_for_waip
     // in server/waip.js) - da dieser Adapter sich bewusst ohne Login verbindet, waren sie immer
     // leer bzw. permissions immer false. Ersatzlos entfernt statt dauerhaft leere States zu führen.
+    // EN: Restructuring in 0.7.18: WAIP-Web's server only ever populates these fields
+    // server-side when the connecting client is logged in (see
+    // db_user_check_permission_for_waip in server/waip.js) - since this adapter connects
+    // without a login by design, they were always empty/permissions always false. Removed
+    // without replacement instead of permanently carrying empty states.
     'einsatz.einsatznummer',
     'einsatz.objekt',
     'einsatz.objektteil',
@@ -149,9 +217,12 @@ const OBSOLETE_OBJECT_IDS = [
     'einsatz.permissions',
 ];
 
-// Übergeordnete Channel/Folder-Objekte, die für jeden State-Zweig existieren müssen.
+// DE: Übergeordnete Channel/Folder-Objekte, die für jeden State-Zweig existieren müssen.
 // ioBroker verlangt ein eigenes Objekt für jedes Segment eines State-Pfads - reine
 // State-Blätter (siehe STATE_DEFS) reichen dafür nicht aus.
+// EN: Parent channel/folder objects that must exist for every state branch. ioBroker
+// requires its own object for every segment of a state path - plain state leaves
+// (see STATE_DEFS) alone aren't enough.
 const CHANNEL_DEFS = [
     { id: 'status', type: 'channel', name: 'Verbindungs- und Registrierungsstatus' },
     { id: 'einsatz', type: 'channel', name: 'Aktueller Einsatz' },
@@ -161,7 +232,8 @@ const CHANNEL_DEFS = [
     { id: 'debug', type: 'channel', name: 'Diagnose- und Debug-Informationen' },
 ];
 
-// Definition aller States, die beim Start sichergestellt werden.
+// DE: Definition aller States, die beim Start sichergestellt werden.
+// EN: Definition of all states ensured to exist at startup.
 const STATE_DEFS = [
     {
         id: 'status.connected',
@@ -210,7 +282,8 @@ const STATE_DEFS = [
         role: 'text',
         name: 'Zuletzt gemeldete Server-Version/Instanz-ID (io.version)',
     },
-    // flache Felder des aktuellen Einsatzes
+    // DE: flache Felder des aktuellen Einsatzes
+    // EN: flat fields of the current incident
     { id: 'einsatz.alarmAktiv', type: 'boolean', role: 'indicator.alarm', name: 'Alarm aktiv', def: false },
     {
         id: 'einsatz.restzeit',
@@ -237,10 +310,14 @@ const STATE_DEFS = [
     { id: 'einsatz.sondersignal', type: 'number', role: 'value', name: 'Sondersignal', def: 0 },
     { id: 'einsatz.latitude', type: 'number', role: 'value.gps.latitude', name: 'Breitengrad' },
     { id: 'einsatz.longitude', type: 'number', role: 'value.gps.longitude', name: 'Längengrad' },
-    // Flache JSON-Objekte/Arrays für Tabellen-Widgets (siehe einsatz.json.*-Channel).
+    // DE: Flache JSON-Objekte/Arrays für Tabellen-Widgets (siehe einsatz.json.*-Channel).
     // Jedes dieser States ist entweder ein flaches Objekt oder ein Array flacher Objekte -
     // bewusst ohne weitere Verschachtelung, da VIS-Tabellen-Widgets nur eine Ebene abflachen
     // können (siehe Diskussion zu den ursprünglich verschachtelten einsatz.json/history10).
+    // EN: Flat JSON objects/arrays for table widgets (see the einsatz.json.* channel).
+    // Each of these states is either a flat object or an array of flat objects -
+    // deliberately without further nesting, since VIS table widgets can only flatten one
+    // level (see the discussion of the originally nested einsatz.json/history10).
     {
         id: 'einsatz.json.current',
         type: 'string',
@@ -277,7 +354,8 @@ const STATE_DEFS = [
         role: 'json',
         name: 'Weitere Einsatzmittel des aktuellen Einsatzes, flaches Array (JSON)',
     },
-    // abgeleitete Zähler
+    // DE: abgeleitete Zähler
+    // EN: derived counters
     { id: 'einsatz.routenGesamt', type: 'number', role: 'value', name: 'Anzahl Routen im aktuellen Einsatz', def: 0 },
     {
         id: 'einsatz.rueckmeldungGesamt',
@@ -330,7 +408,8 @@ const STATE_DEFS = [
         name: 'Rückmeldungen: Medizinisch/Sanitäter',
         def: 0,
     },
-    // TTS des aktuellen Einsatzes (Kanal liegt unter einsatz, siehe CHANNEL_DEFS)
+    // DE: TTS des aktuellen Einsatzes (Kanal liegt unter einsatz, siehe CHANNEL_DEFS)
+    // EN: TTS announcement of the current incident (channel lives under einsatz, see CHANNEL_DEFS)
     {
         id: 'einsatz.tts.last',
         type: 'string',
@@ -339,10 +418,11 @@ const STATE_DEFS = [
     },
     { id: 'einsatz.tts.lastTimestamp', type: 'string', role: 'date', name: 'Zeitstempel letzte TTS-Ansage' },
 ];
-// Schneller Zugriff von setField() auf den deklarierten Typ eines States (siehe dort).
+// DE: Schneller Zugriff von setField() auf den deklarierten Typ eines States (siehe dort).
+// EN: Fast lookup for setField() of a state's declared type (see there).
 const STATE_DEF_BY_ID = new Map(STATE_DEFS.map(def => [def.id, def]));
 
-// IDs, deren "string"-Wert tatsächlich ein JSON-*Array* enthält - liefert den korrekten
+// DE: IDs, deren "string"-Wert tatsächlich ein JSON-*Array* enthält - liefert den korrekten
 // Leerwert "[]" für resetAllStates() (alle anderen "string"-States werden auf null
 // gesetzt). einsatz.json.current, debug.lastEvent und debug.normalizedPosition sind
 // trotz eines inhaltlich einzelnen Objekts ebenfalls Arrays (mit maximal einem Element)
@@ -351,6 +431,15 @@ const STATE_DEF_BY_ID = new Map(STATE_DEFS.map(def => [def.id, def]));
 // und debug.monitorAudit stehen ebenfalls hier, obwohl sie nicht bei jedem Neustart
 // zurückgesetzt werden (siehe RESET_EXCLUDED_STATE_IDS) - resetAllStates() braucht den
 // korrekten Leerwert trotzdem, um sie bei einer frischen Installation zu initialisieren.
+// EN: IDs whose "string" value actually holds a JSON *array* - this yields the correct
+// empty value "[]" for resetAllStates() (every other "string" state is reset to null).
+// einsatz.json.current, debug.lastEvent and debug.normalizedPosition are arrays too
+// (with at most one element) despite conceptually holding a single object - VIS table
+// widgets always expect an array at the root, see persistEinsatzSnapshot() and the
+// corresponding setState() calls in handleAlarm()/connect(). einsatz.json.history10 and
+// debug.monitorAudit are listed here too even though they aren't reset on every restart
+// (see RESET_EXCLUDED_STATE_IDS) - resetAllStates() still needs the correct empty value
+// to initialize them on a fresh install.
 const JSON_ARRAY_STATE_IDS = new Set([
     'einsatz.json.current',
     'einsatz.json.routen',
@@ -363,19 +452,28 @@ const JSON_ARRAY_STATE_IDS = new Set([
     'debug.normalizedPosition',
 ]);
 
-// "number"-States, bei denen 0 ein irreführender "leerer" Wert wäre (Einsatz-ID,
+// DE: "number"-States, bei denen 0 ein irreführender "leerer" Wert wäre (Einsatz-ID,
 // Koordinaten - 0/0 wäre eine reale, aber falsche Position) - resetAllStates() setzt
 // diese auf null statt 0 zurück.
+// EN: "number" states where 0 would be a misleading "empty" value (incident ID,
+// coordinates - 0/0 would be a real but wrong position) - resetAllStates() resets
+// these to null instead of 0.
 const NULLABLE_NUMBER_STATE_IDS = new Set(['einsatz.id', 'einsatz.latitude', 'einsatz.longitude']);
 
-// States, die resetAllStates() bei einem *bestehenden* Wert bewusst NICHT bei jedem
+// DE: States, die resetAllStates() bei einem *bestehenden* Wert bewusst NICHT bei jedem
 // Adapter-Start überschreibt - die Historie der letzten Einsätze (einsatz.json.history10)
 // und das Verbindungs-/Registrierungs-Audit-Log (debug.monitorAudit) sollen über
 // Neustarts hinweg erhalten bleiben. Existiert noch KEIN Wert (frische Installation),
 // werden sie trotzdem einmalig initialisiert - siehe initStateIfMissing().
+// EN: States that resetAllStates() deliberately does NOT overwrite on every adapter
+// start if a value already exists - the history of the last incidents
+// (einsatz.json.history10) and the connection/registration audit log
+// (debug.monitorAudit) are meant to survive restarts. If NO value exists yet (fresh
+// install), they're still initialized once - see initStateIfMissing().
 const RESET_EXCLUDED_STATE_IDS = new Set(['einsatz.json.history10', 'debug.monitorAudit']);
 
-/* Prüft ob eine monitorID gültig ist (nicht-leer). */
+/* DE: Prüft ob eine monitorID gültig ist (nicht-leer).
+   EN: Checks whether a monitorID is valid (non-empty). */
 function isValidMonitor(mon) {
     if (mon === undefined || mon === null) {
         return false;
@@ -384,9 +482,13 @@ function isValidMonitor(mon) {
 }
 
 /*
- Robust: akzeptiert Geometry-Objekt oder JSON-String, Feature oder Geometry,
+ DE: Robust: akzeptiert Geometry-Objekt oder JSON-String, Feature oder Geometry,
  und handhabt Fälle, in denen geometry.geometry als String kodiert ist.
  Gibt null zurück, wenn keine valide Position gefunden oder 0/0 ermittelt wurde.
+
+ EN: Robust: accepts a geometry object or JSON string, Feature or Geometry, and
+ handles cases where geometry.geometry is encoded as a string.
+ Returns null if no valid position was found or 0/0 was determined.
 */
 function getCenterFromGeometry(g) {
     try {
@@ -398,7 +500,7 @@ function getCenterFromGeometry(g) {
             try {
                 parsed = JSON.parse(parsed);
             } catch {
-                /* leave as string */
+                /* DE: als String belassen / EN: leave as string */
             }
         }
         const geomCandidate = parsed?.geometry ?? parsed;
@@ -410,7 +512,7 @@ function getCenterFromGeometry(g) {
             try {
                 geom = JSON.parse(geom);
             } catch {
-                /* cannot parse */
+                /* DE: nicht parsbar / EN: cannot parse */
             }
         }
         if (!geom || !geom.type || !geom.coordinates) {
@@ -494,25 +596,35 @@ function getCenterFromGeometry(g) {
 }
 
 /*
- Normalisiert Payload:
+ DE: Normalisiert Payload:
  - priorisiert wgs84_x/wgs84_y (wenn nicht 0/0),
  - akzeptiert data.position falls nicht 0/0,
  - fällt auf geometry (auch stringified) zurück.
  - entfernt roh-geo Felder und setzt position nur, wenn valide.
+
+ EN: Normalizes the payload:
+ - prioritizes wgs84_x/wgs84_y (if not 0/0),
+ - accepts data.position if not 0/0,
+ - falls back to geometry (also if stringified).
+ - removes raw geo fields and only sets position if valid.
 */
 function normalizeData(obj) {
     try {
         if (!obj || typeof obj !== 'object') {
             return obj;
         }
-        const data = JSON.parse(JSON.stringify(obj)); // deep clone
+        const data = JSON.parse(JSON.stringify(obj)); // DE: Deep Clone / EN: deep clone
         let center = null;
 
         if (data.wgs84_x !== undefined && data.wgs84_y !== undefined) {
-            // WAIP-Server-Konvention (bestätigt über client_waip.js des offiziellen
+            // DE: WAIP-Server-Konvention (bestätigt über client_waip.js des offiziellen
             // Frontends: "const lat = data.wgs84_x; const lng = data.wgs84_y;"):
             // wgs84_x = Breitengrad, wgs84_y = Längengrad - NICHT die übliche
             // GIS-Konvention (x=Länge/y=Breite). Absichtlich so übernommen.
+            // EN: WAIP server convention (confirmed via client_waip.js of the official
+            // frontend: "const lat = data.wgs84_x; const lng = data.wgs84_y;"):
+            // wgs84_x = latitude, wgs84_y = longitude - NOT the usual GIS convention
+            // (x=longitude/y=latitude). Deliberately adopted as-is.
             const lat = Number(data.wgs84_x);
             const lon = Number(data.wgs84_y);
             if (!isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)) {
@@ -553,9 +665,12 @@ function normalizeData(obj) {
     }
 }
 
-/* Dekodiert die auf der /waip/-Übersichtsseite vorkommenden HTML-Entities (teils
+/* DE: Dekodiert die auf der /waip/-Übersichtsseite vorkommenden HTML-Entities (teils
    benannt wie &auml;, teils numerisch) und normalisiert Whitespace. Für die dynamische
-   Monitor-Auswahl im Admin (siehe fetchMonitorList). */
+   Monitor-Auswahl im Admin (siehe fetchMonitorList).
+   EN: Decodes the HTML entities found on the /waip/ overview page (some named like
+   &auml;, some numeric) and normalizes whitespace. For the dynamic monitor selection
+   in the admin UI (see fetchMonitorList). */
 function decodeHtmlEntities(str) {
     if (!str) {
         return str;
@@ -596,7 +711,7 @@ class WaipWeb extends utils.Adapter {
 
         this.socket = null;
         this.currentMonitor = '';
-        this.monitorName = null; // Anzeigename des konfigurierten Monitors, siehe refreshMonitorName()
+        this.monitorName = null; // DE: Anzeigename des konfigurierten Monitors, siehe refreshMonitorName() / EN: display name of the configured monitor, see refreshMonitorName()
         this.connecting = false;
         this.registrationPending = false;
         this.registrationTimer = null;
@@ -607,7 +722,7 @@ class WaipWeb extends utils.Adapter {
         this.sessionCookie = null;
         this.currentEinsatzUuid = null;
         this.currentEinsatzSnapshot = null; // -> einsatz.json.current/.routen/.rueckmeldungen/...
-        this._restzeitZeroSince = null; // -> Watchdog gegen verpasstes io.standby, siehe restzeitInterval
+        this._restzeitZeroSince = null; // DE: -> Watchdog gegen verpasstes io.standby, siehe restzeitInterval / EN: -> watchdog for a missed io.standby, see restzeitInterval
         this._recurringFailureKeys = new Set(); // -> logRecurringFailure()/logRecovered()
         this._wrongMonitorWindowStart = 0; // -> checkWrongMonitorRate()
         this._wrongMonitorWindowCount = 0;
@@ -615,7 +730,7 @@ class WaipWeb extends utils.Adapter {
 
         this._lastDisconnectMsg = null;
         this._lastDisconnectTs = 0;
-        this._warnCache = new Map(); // Nachricht -> zuletzt geloggt (ms), siehe safeLog()
+        this._warnCache = new Map(); // DE: Nachricht -> zuletzt geloggt (ms), siehe safeLog() / EN: message -> last logged (ms), see safeLog()
         this._lastRestzeit = null;
         this._lastDebugEvent = { event: null, ts: 0 };
 
@@ -626,9 +741,13 @@ class WaipWeb extends utils.Adapter {
     async onReady() {
         this.REGISTRATION_TIMEOUT_MS = (Number(this.config.registrationTimeoutSec) || 10) * 1000;
         this.RECONNECT_DELAY_MS = (Number(this.config.reconnectDelaySec) || 5) * 1000;
-        // Obergrenze für das Session-Keepalive-Intervall - bewusst nicht konfigurierbar,
+        // DE: Obergrenze für das Session-Keepalive-Intervall - bewusst nicht konfigurierbar,
         // analog zum fest einprogrammierten Wert in /js/session_keepalive.js der Website
         // selbst. Das tatsächliche Intervall wird adaptiv ermittelt (siehe refreshSessionCookie).
+        // EN: Upper bound for the session keepalive interval - deliberately not
+        // configurable, matching the hardcoded value in the site's own
+        // /js/session_keepalive.js. The actual interval is determined adaptively
+        // (see refreshSessionCookie).
         this.SESSION_KEEPALIVE_MS = DEFAULT_SESSION_KEEPALIVE_SEC * 1000;
         this.url = (this.config.url || DEFAULT_URL).trim();
         this.monitorID =
@@ -636,9 +755,12 @@ class WaipWeb extends utils.Adapter {
                 ? String(this.config.monitorID).trim()
                 : '';
         this.rdKeywordDecodingEnabled = !!this.config.rdKeywordDecodingEnabled;
-        // Beschriftungen für decodeRettungsdienstStichwort() - konfigurierbar statt fest im
+        // DE: Beschriftungen für decodeRettungsdienstStichwort() - konfigurierbar statt fest im
         // Code, damit sie sich in jede Sprache übersetzen/anpassen lassen. Leerer/fehlender
         // Konfigurationswert fällt auf die deutschen Defaults zurück (siehe io-package.json).
+        // EN: Labels for decodeRettungsdienstStichwort() - configurable instead of hardcoded,
+        // so they can be translated/adjusted for any language. An empty/missing config
+        // value falls back to the German defaults (see io-package.json).
         this.rdLabels = {
             r: (this.config.rdLabelR || '').trim() || DEFAULT_RD_LABEL_R,
             n: (this.config.rdLabelN || '').trim() || DEFAULT_RD_LABEL_N,
@@ -646,11 +768,16 @@ class WaipWeb extends utils.Adapter {
             f: (this.config.rdLabelF || '').trim() || DEFAULT_RD_LABEL_F,
             nt: (this.config.rdLabelNT || '').trim() || DEFAULT_RD_LABEL_NT,
         };
-        // Normalisiert einmalig beim Start (statt bei jedem Lookup): trim + lowercase für den
+        // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): trim + lowercase für den
         // späteren case-insensitiven Vergleich, alphabetisch nach Muster sortiert. Die Reihenfolge
         // hat für lookupStichwortBeschreibung() selbst keine Bedeutung mehr (dort gewinnt das
         // längste/spezifischste passende Muster, nicht die Tabellenposition) - die Sortierung
         // dient nur der Übersichtlichkeit/Nachvollziehbarkeit.
+        // EN: Normalized once at startup (instead of on every lookup): trim + lowercase for
+        // the later case-insensitive comparison, sorted alphabetically by pattern. The order
+        // no longer matters to lookupStichwortBeschreibung() itself (there, the
+        // longest/most specific matching pattern wins, not the table position) - the sort
+        // is purely for readability/traceability.
         this.stichwortMapping = Array.isArray(this.config.stichwortMapping)
             ? this.config.stichwortMapping
                   .filter(e => e && typeof e.stichwort === 'string' && e.stichwort.trim() !== '')
@@ -666,12 +793,15 @@ class WaipWeb extends utils.Adapter {
         await this.migrateObjectTypes();
         await this.initObjects();
         await this.resetAllStates();
-        // Session-Cookie holen, bevor die erste Socket.IO-Verbindung aufgebaut wird
+        // DE: Session-Cookie holen, bevor die erste Socket.IO-Verbindung aufgebaut wird
+        // EN: Fetch the session cookie before the first Socket.IO connection is established
         await this.refreshSessionCookie();
         this.startSessionKeepalive();
         this.startRestzeitInterval();
-        // Nicht awaiten - der Alarm-Empfang soll nicht auf diesen (rein informativen)
+        // DE: Nicht awaiten - der Alarm-Empfang soll nicht auf diesen (rein informativen)
         // Namens-Lookup warten müssen.
+        // EN: Not awaited - alarm reception shouldn't have to wait for this (purely
+        // informational) name lookup.
         this.refreshMonitorName().catch(() => {});
         this.connect();
     }
@@ -701,14 +831,23 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Entfernt State-Objekte aus früheren Versionen (vis.*, json.*, geo.*, rueckmeldung.counts.*, ...),
+    /* DE: Entfernt State-Objekte aus früheren Versionen (vis.*, json.*, geo.*, rueckmeldung.counts.*, ...),
        die durch die Umstrukturierung in 0.4.0 ersetzt wurden. setObjectNotExistsAsync legt neue
        Objekte an, löscht aber nie alte - das übernehmen wir hier einmalig beim Start.
        obj.type === 'state' (nicht obj.common.type, das ist der Werttyp) prüft dabei explizit,
        dass wirklich noch das alte State-Blatt vorliegt - relevant für IDs wie einsatz.json, die
        bei der Umstrukturierung in 0.7.15 von State zu Channel gewechselt sind, aber dieselbe ID
        behalten haben: ohne diese Prüfung würde hier sonst bei jedem Neustart der inzwischen
-       längst korrekt angelegte Channel wieder gelöscht und von initObjects() neu erzeugt. */
+       längst korrekt angelegte Channel wieder gelöscht und von initObjects() neu erzeugt.
+
+       EN: Removes state objects left over from earlier versions (vis.*, json.*, geo.*,
+       rueckmeldung.counts.*, ...) that were superseded by the 0.4.0 restructuring.
+       setObjectNotExistsAsync creates new objects but never deletes old ones - we handle
+       that here once at startup. obj.type === 'state' (not obj.common.type, which is the
+       value type) explicitly checks that this is really still the old state leaf - relevant
+       for IDs like einsatz.json, which changed from state to channel in the 0.7.15
+       restructuring but kept the same ID: without this check, the by-now correctly created
+       channel would otherwise get deleted and recreated by initObjects() on every restart. */
     async cleanupObsoleteObjects() {
         for (const id of OBSOLETE_OBJECT_IDS) {
             try {
@@ -718,19 +857,27 @@ class WaipWeb extends utils.Adapter {
                     this.log.info(`Removed obsolete state object from a previous version: ${id}`);
                 }
             } catch {
-                /* ignore - Objekt existierte vermutlich nicht */
+                /* DE: ignorieren - Objekt existierte vermutlich nicht / EN: ignore - object probably didn't exist */
             }
         }
     }
 
-    /* Löscht bestehende State-Objekte, deren common.type oder common.role nicht mehr zur
+    /* DE: Löscht bestehende State-Objekte, deren common.type oder common.role nicht mehr zur
        aktuellen STATE_DEFS-Definition passt (z.B. weil sich herausstellt, dass der Server
        ein Feld als Zahl statt als String schickt - siehe einsatz.id/einsatz.sondersignal
        in 0.4.3 -, oder weil sich eine Rolle als falsch gewählt herausstellt - siehe
        debug.lastError in 0.7.15, das trotz role "json" meist nur einen reinen Fehlertext
        enthält). setObjectNotExistsAsync legt danach in initObjects() ein frisches Objekt
        mit der korrekten Definition an. Generisch für alle künftigen Typ-/Rollen-
-       Korrekturen, nicht nur diese. */
+       Korrekturen, nicht nur diese.
+
+       EN: Deletes existing state objects whose common.type or common.role no longer
+       matches the current STATE_DEFS definition (e.g. because it turns out the server
+       sends a field as a number instead of a string - see einsatz.id/einsatz.sondersignal
+       in 0.4.3 -, or because a role turns out to have been chosen wrong - see
+       debug.lastError in 0.7.15, which despite role "json" usually only holds a plain
+       error text). setObjectNotExistsAsync then creates a fresh object with the correct
+       definition in initObjects(). Generic for all future type/role fixes, not just these. */
     async migrateObjectTypes() {
         for (const def of STATE_DEFS) {
             try {
@@ -748,7 +895,7 @@ class WaipWeb extends utils.Adapter {
                     );
                 }
             } catch {
-                /* ignore - Objekt existierte vermutlich noch nicht */
+                /* DE: ignorieren - Objekt existierte vermutlich noch nicht / EN: ignore - object probably didn't exist yet */
             }
         }
     }
@@ -778,7 +925,7 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Setzt bei jedem Adapter-Start aktiv alle States (außer RESET_EXCLUDED_STATE_IDS) auf
+    /* DE: Setzt bei jedem Adapter-Start aktiv alle States (außer RESET_EXCLUDED_STATE_IDS) auf
        ihren "leeren" Wert zurück - anders als initObjects()/setObjectNotExistsAsync(), das
        einen bereits vorhandenen Wert unangetastet lässt. Sorgt dafür, dass jeder Neustart
        mit einem sauber initialisierten Zustand beginnt, unabhängig vom Stand davor. Läuft
@@ -786,7 +933,17 @@ class WaipWeb extends utils.Adapter {
        Für RESET_EXCLUDED_STATE_IDS wird ein *bestehender* Wert nie überschrieben, aber bei
        einer frischen Installation (noch nie ein Wert gesetzt) trotzdem einmalig
        initialisiert - siehe initStateIfMissing(). Sonst bliebe z.B. einsatz.json.history10
-       nach der Installation dauerhaft auf null stehen statt auf "[]". */
+       nach der Installation dauerhaft auf null stehen statt auf "[]".
+
+       EN: Actively resets all states (except RESET_EXCLUDED_STATE_IDS) to their "empty"
+       value on every adapter start - unlike initObjects()/setObjectNotExistsAsync(), which
+       leaves an already-existing value untouched. Ensures every restart begins with a
+       cleanly initialized state, regardless of what came before. Runs after initObjects(),
+       so the states must already exist.
+       For RESET_EXCLUDED_STATE_IDS, an *existing* value is never overwritten, but on a
+       fresh install (no value ever set) it's still initialized once - see
+       initStateIfMissing(). Otherwise e.g. einsatz.json.history10 would stay at null
+       forever after installation instead of "[]". */
     async resetAllStates() {
         const tasks = [];
         for (const def of STATE_DEFS) {
@@ -805,7 +962,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Liefert den "leeren" Wert, den resetAllStates() für einen State-Def schreibt. */
+    /* DE: Liefert den "leeren" Wert, den resetAllStates() für einen State-Def schreibt.
+       EN: Returns the "empty" value that resetAllStates() writes for a given state def. */
     computeEmptyStateValue(def) {
         if (def.type === 'boolean') {
             return false;
@@ -819,9 +977,12 @@ class WaipWeb extends utils.Adapter {
         return null;
     }
 
-    /* Schreibt emptyValue nur, falls für id noch gar kein State-Wert existiert (frische
+    /* DE: Schreibt emptyValue nur, falls für id noch gar kein State-Wert existiert (frische
        Installation) - lässt einen bereits vorhandenen Wert unangetastet. Für die
-       RESET_EXCLUDED_STATE_IDS-Ausnahmen in resetAllStates() genutzt. */
+       RESET_EXCLUDED_STATE_IDS-Ausnahmen in resetAllStates() genutzt.
+       EN: Writes emptyValue only if no state value exists yet for id (fresh install) -
+       leaves an already-existing value untouched. Used for the RESET_EXCLUDED_STATE_IDS
+       exceptions in resetAllStates(). */
     async initStateIfMissing(id, emptyValue) {
         try {
             const st = await this.getStateAsync(id);
@@ -833,7 +994,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Einfacher HTTP(S)-GET ohne zusätzliche Dependency; optional mit Cookie-Header. */
+    /* DE: Einfacher HTTP(S)-GET ohne zusätzliche Dependency; optional mit Cookie-Header.
+       EN: Simple HTTP(S) GET without an extra dependency; optionally with a cookie header. */
     httpGet(targetUrl, cookie) {
         return new Promise((resolve, reject) => {
             let parsed;
@@ -860,9 +1022,12 @@ class WaipWeb extends utils.Adapter {
         });
     }
 
-    /* Holt die öffentliche Monitor-Übersichtsseite (/waip/) der übergebenen WAIP-Web-
+    /* DE: Holt die öffentliche Monitor-Übersichtsseite (/waip/) der übergebenen WAIP-Web-
        Instanz und parst daraus die verfügbaren Monitor-IDs für die Admin-Dropdown-Auswahl
-       (siehe onMessage/'getMonitorList'). Rein lesend, erfordert keine Session/Cookie. */
+       (siehe onMessage/'getMonitorList'). Rein lesend, erfordert keine Session/Cookie.
+       EN: Fetches the given WAIP-Web instance's public monitor overview page (/waip/) and
+       parses the available monitor IDs from it for the admin dropdown selection (see
+       onMessage/'getMonitorList'). Read-only, requires no session/cookie. */
     async fetchMonitorList(baseUrl) {
         const clean = String(baseUrl || '').replace(/\/+$/, '');
         if (!clean) {
@@ -888,9 +1053,12 @@ class WaipWeb extends utils.Adapter {
             return out;
         };
 
-        // "alle Wachalarme" ist ein eigener Link außerhalb der kategorisierten Listen -
+        // DE: "alle Wachalarme" ist ein eigener Link außerhalb der kategorisierten Listen -
         // wird unabhängig vom Parsing-Erfolg der übrigen Seite immer als erste Option angeboten.
         // Label beginnt jeweils mit der eigentlichen Monitor-ID (z.B. "4 - Leitstelle: Lausitz").
+        // EN: "all dispatch monitors" is a separate link outside the categorized lists -
+        // always offered as the first option regardless of whether parsing the rest of the
+        // page succeeds. Each label starts with the actual monitor ID (e.g. "4 - Leitstelle: Lausitz").
         const result = [{ value: '0', label: '0 - Alle Wachalarme' }];
         const seen = new Set(['0']);
 
@@ -916,8 +1084,10 @@ class WaipWeb extends utils.Adapter {
                 }
             }
         } else {
-            // Keine der bekannten Überschriften gefunden -> gesamte Seite unkategorisiert parsen,
+            // DE: Keine der bekannten Überschriften gefunden -> gesamte Seite unkategorisiert parsen,
             // damit die Auswahl auch bei abweichend strukturierten WAIP-Web-Instanzen funktioniert.
+            // EN: None of the known headings found -> parse the whole page uncategorized, so
+            // the selection also works for differently structured WAIP-Web instances.
             for (const link of extractLinks(html)) {
                 if (!seen.has(link.value)) {
                     seen.add(link.value);
@@ -926,19 +1096,27 @@ class WaipWeb extends utils.Adapter {
             }
         }
 
-        // Nach numerischer Monitor-ID sortiert statt in der (je nach Kategorie/Instanz
+        // DE: Nach numerischer Monitor-ID sortiert statt in der (je nach Kategorie/Instanz
         // unterschiedlichen) Reihenfolge der Quellseite - '0' (Alle Wachalarme) landet
         // dabei automatisch an erster Stelle, da alle echten Monitor-IDs größer sind.
+        // EN: Sorted by numeric monitor ID instead of the source page's order (which varies
+        // by category/instance) - '0' (all dispatch monitors) automatically ends up first,
+        // since every real monitor ID is greater.
         result.sort((a, b) => Number(a.value) - Number(b.value));
 
         return result;
     }
 
-    /* Löst this.monitorID einmalig zu einem Anzeigenamen ohne ID auf (z.B. "Leitstelle:
+    /* DE: Löst this.monitorID einmalig zu einem Anzeigenamen ohne ID auf (z.B. "Leitstelle:
        Lausitz" statt "4 - Leitstelle: Lausitz") und schreibt ihn nach status.registered-
        MonitorName. Wird nur einmal beim Start aufgerufen (nicht bei jedem Reconnect) - das
        Ergebnis wird in this.monitorName gecacht und von onSocketConnect() bei jedem
-       (Re-)Connect erneut in den State geschrieben, ohne die Übersichtsseite erneut zu holen. */
+       (Re-)Connect erneut in den State geschrieben, ohne die Übersichtsseite erneut zu holen.
+       EN: Resolves this.monitorID once to a display name without the ID (e.g. "Leitstelle:
+       Lausitz" instead of "4 - Leitstelle: Lausitz") and writes it to
+       status.registeredMonitorName. Called only once at startup (not on every reconnect) -
+       the result is cached in this.monitorName and re-written to the state by
+       onSocketConnect() on every (re)connect, without fetching the overview page again. */
     async refreshMonitorName() {
         const monStr = isValidMonitor(this.monitorID) ? this.monitorID : '0';
         try {
@@ -952,8 +1130,10 @@ class WaipWeb extends utils.Adapter {
         await this.setField('status.registeredMonitorName', this.monitorName);
     }
 
-    /* Reagiert auf sendTo-Nachrichten aus dem Admin (aktuell nur 'getMonitorList' für das
-       dynamische Monitor-Dropdown, siehe admin/jsonConfig.json). */
+    /* DE: Reagiert auf sendTo-Nachrichten aus dem Admin (aktuell nur 'getMonitorList' für das
+       dynamische Monitor-Dropdown, siehe admin/jsonConfig.json).
+       EN: Handles sendTo messages from the admin UI (currently only 'getMonitorList' for
+       the dynamic monitor dropdown, see admin/jsonConfig.json). */
     async onMessage(obj) {
         if (!obj || typeof obj !== 'object') {
             return;
@@ -974,7 +1154,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Baut aus einem oder mehreren Set-Cookie-Headern einen sendefertigen Cookie-Header (name=value; name2=value2). */
+    /* DE: Baut aus einem oder mehreren Set-Cookie-Headern einen sendefertigen Cookie-Header (name=value; name2=value2).
+       EN: Builds a ready-to-send cookie header (name=value; name2=value2) from one or more Set-Cookie headers. */
     extractCookieHeader(setCookieHeader) {
         const arr = Array.isArray(setCookieHeader) ? setCookieHeader : setCookieHeader ? [setCookieHeader] : [];
         const pairs = arr.map(c => c.split(';')[0].trim()).filter(Boolean);
@@ -982,7 +1163,7 @@ class WaipWeb extends utils.Adapter {
     }
 
     /*
-     Holt bzw. erneuert den Session-Cookie über GET /session/keepalive (rolling session,
+     DE: Holt bzw. erneuert den Session-Cookie über GET /session/keepalive (rolling session,
      analog zum /js/session_keepalive.js der WAIP-Seite selbst). Ohne aktiven Cookie
      verbindet sich der Socket sonst anonym und die Session läuft ab, wodurch die
      Alarm-Zustellung stoppt.
@@ -1001,6 +1182,25 @@ class WaipWeb extends utils.Adapter {
      zeigt, dass die Lebensdauer per ENV konfigurierbar ist (Standard dort: 60s, diese
      Instanz nutzt offenbar 10 Min.), ein fest angenommenes Intervall wäre also für andere
      Instanzen potenziell falsch.
+
+     EN: Fetches/renews the session cookie via GET /session/keepalive (rolling session,
+     matching the WAIP page's own /js/session_keepalive.js). Without an active cookie the
+     socket would otherwise connect anonymously and the session expires, stopping alarm
+     delivery.
+
+     As long as the previous session is still valid, the server returns the same
+     connect.sid (only the expiry is extended). If the old session is no longer valid
+     server-side (e.g. because the last keepalive call exceeded the configured cookie
+     lifetime, or the server invalidated it for other reasons), we get a NEW cookie value
+     here - this is detected (isRotation) and tells the caller whether an existing
+     Socket.IO connection (still tied to the old session) should be rebuilt.
+
+     The actual cookie lifetime of this instance is also derived from the expiry the
+     server reports and stored in this.nextSessionKeepaliveDelayMs (see
+     scheduleSessionKeepalive) - the WAIP-Web project's server/app_cfg.js shows the
+     lifetime is configurable via an env var (default there: 60s, this instance
+     apparently uses 10 min.), so a fixed assumed interval could potentially be wrong for
+     other instances.
     */
     async refreshSessionCookie() {
         const previousCookie = this.sessionCookie;
@@ -1016,7 +1216,7 @@ class WaipWeb extends utils.Adapter {
                 try {
                     expires = JSON.parse(res.body).expires || null;
                 } catch {
-                    /* ignore, body war kein JSON */
+                    /* DE: ignorieren, body war kein JSON / EN: ignore, body wasn't JSON */
                 }
                 if (expires) {
                     try {
@@ -1028,9 +1228,12 @@ class WaipWeb extends utils.Adapter {
                     if (!isNaN(expiresMs)) {
                         const observedMaxAgeMs = expiresMs - requestStartedAt;
                         if (observedMaxAgeMs > 0) {
-                            // gleiche Klammerung wie /js/session_keepalive.js: 80% der
+                            // DE: gleiche Klammerung wie /js/session_keepalive.js: 80% der
                             // beobachteten Laufzeit, mindestens SESSION_KEEPALIVE_MIN_MS,
                             // höchstens die konfigurierte Obergrenze (this.SESSION_KEEPALIVE_MS)
+                            // EN: same clamping as /js/session_keepalive.js: 80% of the
+                            // observed lifetime, at least SESSION_KEEPALIVE_MIN_MS, at most
+                            // the configured upper bound (this.SESSION_KEEPALIVE_MS)
                             const ceiling = Math.max(this.SESSION_KEEPALIVE_MS, SESSION_KEEPALIVE_MIN_MS);
                             this.nextSessionKeepaliveDelayMs = Math.min(
                                 Math.max(observedMaxAgeMs * 0.8, SESSION_KEEPALIVE_MIN_MS),
@@ -1040,8 +1243,10 @@ class WaipWeb extends utils.Adapter {
                     }
                 }
                 if (isRotation) {
-                    // Teil des normalen, selbstheilenden Session-Zyklus dieser Instanz
+                    // DE: Teil des normalen, selbstheilenden Session-Zyklus dieser Instanz
                     // (siehe refreshSessionCookie-Kommentar oben) -> info statt warn.
+                    // EN: Part of this instance's normal, self-healing session cycle (see
+                    // the refreshSessionCookie comment above) -> info instead of warn.
                     this.log.info(
                         'Session cookie was reissued by the server (old session was invalid) – forcing reconnect',
                     );
@@ -1069,11 +1274,16 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Erzwingt einen Socket-Reconnect, falls gerade eine Verbindung aktiv/im Aufbau ist
+    /* DE: Erzwingt einen Socket-Reconnect, falls gerade eine Verbindung aktiv/im Aufbau ist
        (z.B. weil der Session-Cookie rotiert ist oder der Server laut io.version neu
        gestartet wurde). Läuft gerade kein Socket (z.B. während der Wartezeit vor einem
        geplanten Reconnect), ist nichts zu tun - der nächste connect() erledigt das
-       ohnehin mit den dann aktuellen Daten (Cookie etc.). */
+       ohnehin mit den dann aktuellen Daten (Cookie etc.).
+       EN: Forces a socket reconnect if a connection is currently active/being established
+       (e.g. because the session cookie rotated or the server reported a restart via
+       io.version). If no socket is currently running (e.g. during the wait before a
+       scheduled reconnect), there's nothing to do - the next connect() will handle it
+       anyway with the then-current data (cookie etc.). */
     forceReconnect(reason) {
         if (this.connecting) {
             this.log.debug(`forceReconnect(${reason}): connect() is already running, skipping the forced reconnect`);
@@ -1089,16 +1299,22 @@ class WaipWeb extends utils.Adapter {
         this.connect(true);
     }
 
-    /* Startet die adaptive Keepalive-Kette. Nutzt this.nextSessionKeepaliveDelayMs, falls
+    /* DE: Startet die adaptive Keepalive-Kette. Nutzt this.nextSessionKeepaliveDelayMs, falls
        aus einer vorherigen refreshSessionCookie()-Antwort bereits eine reale Cookie-Laufzeit
        bekannt ist (z.B. aus dem initialen Aufruf in onReady()), sonst die konfigurierte
-       Obergrenze als vorsichtigen Startwert. */
+       Obergrenze als vorsichtigen Startwert.
+       EN: Starts the adaptive keepalive chain. Uses this.nextSessionKeepaliveDelayMs if a
+       real cookie lifetime is already known from a previous refreshSessionCookie() response
+       (e.g. from the initial call in onReady()), otherwise the configured upper bound as a
+       cautious starting value. */
     startSessionKeepalive() {
         this.scheduleSessionKeepalive(this.nextSessionKeepaliveDelayMs || this.SESSION_KEEPALIVE_MS);
     }
 
-    /* setTimeout statt setInterval, weil sich das Intervall von Aufruf zu Aufruf ändern
-       kann (adaptiv aus der vom Server gemeldeten Cookie-Laufzeit abgeleitet). */
+    /* DE: setTimeout statt setInterval, weil sich das Intervall von Aufruf zu Aufruf ändern
+       kann (adaptiv aus der vom Server gemeldeten Cookie-Laufzeit abgeleitet).
+       EN: setTimeout instead of setInterval, since the interval can change from call to
+       call (derived adaptively from the cookie lifetime the server reports). */
     scheduleSessionKeepalive(delayMs) {
         if (this.sessionKeepaliveTimer) {
             this.clearTimeout(this.sessionKeepaliveTimer);
@@ -1112,12 +1328,17 @@ class WaipWeb extends utils.Adapter {
         }, delayMs);
     }
 
-    /* Sicheres, deduplizierendes Logging. level ist 'error'/'warn'/'info'/'debug' -
+    /* DE: Sicheres, deduplizierendes Logging. level ist 'error'/'warn'/'info'/'debug' -
        je unerwarteter/handlungsbedürftiger ein Fall ist, desto höher das Level.
        safeWarn() bleibt als Kurzform für den (weitaus häufigsten) warn-Fall erhalten.
        Dedupe ist pro Nachricht (nicht nur die zuletzt geloggte) - sonst würden sich
        abwechselnde unterschiedliche Meldungen gegenseitig die Deduplizierung einer
-       jeweils wiederkehrenden Meldung verhindern. */
+       jeweils wiederkehrenden Meldung verhindern.
+       EN: Safe, deduplicating logging. level is 'error'/'warn'/'info'/'debug' - the more
+       unexpected/actionable a case is, the higher the level. safeWarn() remains as a
+       shorthand for the (by far most common) warn case. Deduplication is per message (not
+       just the last one logged) - otherwise alternating different messages would prevent
+       each other's deduplication of a recurring message. */
     safeLog(level, context, err) {
         try {
             const now = Date.now();
@@ -1141,21 +1362,30 @@ class WaipWeb extends utils.Adapter {
         this.safeLog('warn', context, err);
     }
 
-    /* Loggt einen wiederkehrbaren Fehler nach dem offiziellen ioBroker-Logging-Muster
+    /* DE: Loggt einen wiederkehrbaren Fehler nach dem offiziellen ioBroker-Logging-Muster
        ("first occurrence at warn/error, repetitions at debug, recovery once at info" -
        siehe Adapter-Entwicklerdoku, Abschnitt "Logging"): beim ersten Auftreten auf
        `level`, bei jedem weiteren (bis zur Erholung via logRecovered()) nur noch auf
        debug. Für tatsächlich wiederkehrende Zustände (Session-Cookie, Registrierung,
-       Verbindungsaufbau) gedacht, nicht für einmalige State-Write-Fehler. */
+       Verbindungsaufbau) gedacht, nicht für einmalige State-Write-Fehler.
+       EN: Logs a recurring failure following the official ioBroker logging pattern
+       ("first occurrence at warn/error, repetitions at debug, recovery once at info" -
+       see the adapter dev docs, "Logging" section): on first occurrence at `level`, on
+       every subsequent occurrence (until recovery via logRecovered()) only at debug.
+       Meant for genuinely recurring conditions (session cookie, registration, connection
+       setup), not for one-off state-write failures. */
     logRecurringFailure(key, level, context, err) {
         const isFirst = !this._recurringFailureKeys.has(key);
         this._recurringFailureKeys.add(key);
         this.safeLog(isFirst ? level : 'debug', context, err);
     }
 
-    /* Meldet die Erholung von einem zuvor über logRecurringFailure() gemeldeten Fehler -
+    /* DE: Meldet die Erholung von einem zuvor über logRecurringFailure() gemeldeten Fehler -
        loggt einmalig auf info, aber nur falls der Fehler unter diesem key tatsächlich
-       aktiv war (sonst kein Log, kein unnötiges Rauschen bei jedem erfolgreichen Versuch). */
+       aktiv war (sonst kein Log, kein unnötiges Rauschen bei jedem erfolgreichen Versuch).
+       EN: Reports recovery from a failure previously reported via logRecurringFailure() -
+       logs once at info, but only if a failure under this key was actually active
+       (otherwise no log, no unnecessary noise on every successful attempt). */
     logRecovered(key, msg) {
         if (this._recurringFailureKeys.delete(key)) {
             this.log.info(msg);
@@ -1163,7 +1393,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Dedupliziertes Info-Logging für Disconnects. */
+    /* DE: Dedupliziertes Info-Logging für Disconnects.
+       EN: Deduplicated info-level logging for disconnects. */
     logDisconnect(msg) {
         try {
             const now = Date.now();
@@ -1178,7 +1409,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Hängt einen Eintrag an das Monitor-Audit-Log an (max. 200 Einträge). */
+    /* DE: Hängt einen Eintrag an das Monitor-Audit-Log an (max. 200 Einträge).
+       EN: Appends an entry to the monitor audit log (max. 200 entries). */
     async appendMonitorAudit(entry) {
         try {
             const st = await this.getStateAsync('debug.monitorAudit');
@@ -1194,7 +1426,8 @@ class WaipWeb extends utils.Adapter {
             }
             await this.setStateAsync('debug.monitorAudit', JSON.stringify(arr), true);
         } catch (e) {
-            // betrifft nur das interne Audit-Log, keine echten Einsatzdaten -> debug statt warn
+            // DE: betrifft nur das interne Audit-Log, keine echten Einsatzdaten -> debug statt warn
+            // EN: only affects the internal audit log, not real incident data -> debug instead of warn
             this.safeLog('debug', 'appendMonitorAudit', e);
         }
     }
@@ -1205,17 +1438,24 @@ class WaipWeb extends utils.Adapter {
             .catch(() => {});
     }
 
-    /* Eskaliert wiederholte "Event für anderen Monitor"-Meldungen auf warn, wenn sie
+    /* DE: Eskaliert wiederholte "Event für anderen Monitor"-Meldungen auf warn, wenn sie
        innerhalb eines Zeitfensters (WRONG_MONITOR_WARN_WINDOW_MS) einen Schwellwert
        (WRONG_MONITOR_WARN_THRESHOLD) überschreiten - Hinweis auf eine falsch
        konfigurierte Monitor-ID, statt dauerhaft nur auf info zu bleiben. Nutzt
        logRecurringFailure()/logRecovered() für das übliche warn-einmal/debug-danach/
-       info-bei-Erholung-Muster. */
+       info-bei-Erholung-Muster.
+       EN: Escalates repeated "event for a different monitor" messages to warn if they
+       exceed a threshold (WRONG_MONITOR_WARN_THRESHOLD) within a time window
+       (WRONG_MONITOR_WARN_WINDOW_MS) - a hint at a misconfigured monitor ID, instead of
+       staying at info level indefinitely. Uses logRecurringFailure()/logRecovered() for
+       the usual warn-once/debug-afterwards/info-on-recovery pattern. */
     checkWrongMonitorRate() {
         const now = Date.now();
         if (now - this._wrongMonitorWindowStart > WRONG_MONITOR_WARN_WINDOW_MS) {
-            // Fenster abgelaufen, ohne dass es nochmal den Schwellwert erreicht hat ->
+            // DE: Fenster abgelaufen, ohne dass es nochmal den Schwellwert erreicht hat ->
             // falls zuvor eskaliert wurde, gilt die Rate jetzt als erholt.
+            // EN: Window expired without reaching the threshold again -> if it was
+            // escalated before, the rate is now considered recovered.
             this.logRecovered('wrongMonitor', 'Wrong-monitor event rate returned to normal');
             this._wrongMonitorWindowStart = now;
             this._wrongMonitorWindowCount = 0;
@@ -1233,7 +1473,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Setzt einen State; Objekte/Arrays werden JSON-stringifiziert. */
+    /* DE: Setzt einen State; Objekte/Arrays werden JSON-stringifiziert.
+       EN: Sets a state; objects/arrays are JSON-stringified. */
     async setField(path, val) {
         try {
             let toSet;
@@ -1241,10 +1482,14 @@ class WaipWeb extends utils.Adapter {
             if (val === null) {
                 toSet = null;
             } else if (def && def.type === 'string') {
-                // Der State ist als "string" deklariert (z.B. role "json") - unabhängig vom
+                // DE: Der State ist als "string" deklariert (z.B. role "json") - unabhängig vom
                 // tatsächlichen JS-Typ der Serverantwort (etwa ein rohes Boolean/Number-Flag)
                 // muss "val" den deklarierten Typ einhalten, sonst schlägt die
                 // ioBroker-Objektstrukturprüfung fehl (E3005).
+                // EN: The state is declared as "string" (e.g. role "json") - regardless of
+                // the actual JS type of the server's response (e.g. a raw boolean/number
+                // flag), "val" must match the declared type, otherwise the ioBroker object
+                // structure check fails (E3005).
                 toSet = typeof val === 'string' ? val : JSON.stringify(val);
             } else if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
                 toSet = val;
@@ -1257,9 +1502,12 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Schreibt ein flaches Array (routen/rueckmeldungen/emAlarmiert/emWeitere) in einen
+    /* DE: Schreibt ein flaches Array (routen/rueckmeldungen/emAlarmiert/emWeitere) in einen
        einsatz.json.*-State. Wandelt Nicht-Arrays defensiv in ein leeres Array um, damit
-       Tabellen-Widgets nie auf einen unerwarteten Werttyp treffen. */
+       Tabellen-Widgets nie auf einen unerwarteten Werttyp treffen.
+       EN: Writes a flat array (routen/rueckmeldungen/emAlarmiert/emWeitere) into an
+       einsatz.json.* state. Defensively converts non-arrays into an empty array, so table
+       widgets never encounter an unexpected value type. */
     async writeJsonArrayState(id, value) {
         try {
             await this.setStateAsync(id, JSON.stringify(Array.isArray(value) ? value : []), true);
@@ -1268,9 +1516,12 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Löst das verschachtelte position-Objekt eines Routen-Eintrags zu flachen lat/lon-Feldern
+    /* DE: Löst das verschachtelte position-Objekt eines Routen-Eintrags zu flachen lat/lon-Feldern
        auf (siehe einsatz.json.routen) - Tabellen-Widgets können nur eine Verschachtelungsebene
-       abflachen, position{lat,lon} wäre bereits eine Ebene zu viel. */
+       abflachen, position{lat,lon} wäre bereits eine Ebene zu viel.
+       EN: Resolves a route entry's nested position object into flat lat/lon fields (see
+       einsatz.json.routen) - table widgets can only flatten one level of nesting,
+       position{lat,lon} would already be one level too many. */
     flattenRoutenEntry(r) {
         if (!r || typeof r !== 'object') {
             return r;
@@ -1283,12 +1534,20 @@ class WaipWeb extends utils.Adapter {
         };
     }
 
-    /* Dekodiert Rettungsdienst-Stichwörter nach dem Schema "R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]"
+    /* DE: Dekodiert Rettungsdienst-Stichwörter nach dem Schema "R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]"
        - von mehreren Leitstellen verwendet, dokumentiertes Beispiel:
        https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/
        (z.B. "R1N0" = 1 RTW, kein NEF). Nur aktiv, wenn rdKeywordDecodingEnabled gesetzt ist
        (Default aus, da nicht jede Leitstelle/WAIP-Web-Instanz dieses Schema verwendet).
-       Liefert null, falls das Stichwort nicht diesem Muster entspricht. */
+       Liefert null, falls das Stichwort nicht diesem Muster entspricht.
+       EN: Decodes rescue-service keywords following the scheme
+       "R<ambulance count>N<physician-vehicle count>[p][f][-NT]" - used by several dispatch
+       centers, documented example:
+       https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/
+       (e.g. "R1N0" = 1 ambulance, no physician vehicle). Only active if
+       rdKeywordDecodingEnabled is set (default off, since not every dispatch
+       center/WAIP-Web instance uses this scheme). Returns null if the keyword doesn't
+       match this pattern. */
     decodeRettungsdienstStichwort(stichwort) {
         const m = /^R(\d+)N(\d+)([a-z]*)(-NT)?$/i.exec(String(stichwort || '').trim());
         if (!m) {
@@ -1311,14 +1570,22 @@ class WaipWeb extends utils.Adapter {
         return parts.join(', ');
     }
 
-    /* Ermittelt die Beschreibung zu einem Stichwort: zuerst die Rettungsdienst-Dekodierung (falls
+    /* DE: Ermittelt die Beschreibung zu einem Stichwort: zuerst die Rettungsdienst-Dekodierung (falls
        aktiviert und das Muster passt), sonst die manuelle Stammdaten-Tabelle (this.stichwortMapping,
        case-insensitiv, startsWith/contains je Eintrag). Bei mehreren passenden Einträgen gewinnt
        der mit dem LÄNGSTEN Muster (spezifischste Übereinstimmung) - unabhängig von der
        Tabellenreihenfolge, damit die Admin-Tabelle gefahrlos alphabetisch sortiert werden kann
        (z.B. "B:Wald groß/WSP" schlägt automatisch das kürzere "B:Wald", ganz gleich welche der
        beiden Zeilen zuerst in der Tabelle steht). Bei gleicher Musterlänge entscheidet die
-       Tabellenreihenfolge als Tiebreaker. Liefert null, wenn nichts passt (kein Fehler). */
+       Tabellenreihenfolge als Tiebreaker. Liefert null, wenn nichts passt (kein Fehler).
+       EN: Determines the description for a keyword: first the rescue-service decoder (if
+       enabled and the pattern matches), otherwise the manual keyword table
+       (this.stichwortMapping, case-insensitive, startsWith/contains per entry). If several
+       entries match, the one with the LONGEST pattern (most specific match) wins -
+       independent of table order, so the admin table can be sorted alphabetically without
+       risk (e.g. "B:Wald groß/WSP" automatically beats the shorter "B:Wald", regardless of
+       which of the two rows comes first in the table). If patterns tie in length, table
+       order decides as a tiebreaker. Returns null if nothing matches (not an error). */
     lookupStichwortBeschreibung(stichwort) {
         if (!stichwort) {
             return null;
@@ -1344,7 +1611,7 @@ class WaipWeb extends utils.Adapter {
         return best ? best.beschreibung : null;
     }
 
-    /* Extrahiert aus einem Einsatz-Snapshot nur die flachen Einsatzstamm-Felder
+    /* DE: Extrahiert aus einem Einsatz-Snapshot nur die flachen Einsatzstamm-Felder
        (ALLOWED_EINSATZ_FIELDS + lat/lon aus position), ergänzt um den zum Aufrufzeitpunkt
        registrierten Monitor - ohne routen/rueckmeldungen/emAlarmiert/emWeitere. Gemeinsam
        genutzt von persistEinsatzSnapshot() (einsatz.json.current) und
@@ -1353,7 +1620,16 @@ class WaipWeb extends utils.Adapter {
        nachvollziehbar, auf welchen Monitor der Adapter zum Zeitpunkt des jeweiligen
        Einsatzes konfiguriert war (kann sich über die Zeit ändern) - bei current sind sie
        redundant zu status.registeredMonitor/.registeredMonitorName, aber harmlos, da
-       beide Schemas identisch bleiben sollen. */
+       beide Schemas identisch bleiben sollen.
+       EN: Extracts only the flat incident-master fields (ALLOWED_EINSATZ_FIELDS + lat/lon
+       from position) from an incident snapshot, adding the monitor registered at call
+       time - without routen/rueckmeldungen/emAlarmiert/emWeitere. Shared by
+       persistEinsatzSnapshot() (einsatz.json.current) and pushEinsatzToHistory()
+       (einsatz.json.history10) so both are guaranteed to have the same schema.
+       registeredMonitor/registeredMonitorName let history10 entries show which monitor
+       the adapter was configured for at the time of that incident (can change over time) -
+       for current they're redundant with status.registeredMonitor/.registeredMonitorName,
+       but harmless, since both schemas should stay identical. */
     buildFlatEinsatzJson(snapshot) {
         const src = snapshot || {};
         const flat = {};
@@ -1362,8 +1638,11 @@ class WaipWeb extends utils.Adapter {
         }
         flat.lat = src.position && typeof src.position.lat === 'number' ? src.position.lat : null;
         flat.lon = src.position && typeof src.position.lon === 'number' ? src.position.lon : null;
-        // beschreibung kommt nicht vom Server (daher nicht in ALLOWED_EINSATZ_FIELDS), sondern
-        // wird von handleAlarm() lokal ermittelt und im Snapshot mitgeführt (siehe
+        // DE: beschreibung kommt nicht vom Server (daher nicht in ALLOWED_EINSATZ_FIELDS),
+        // sondern wird von handleAlarm() lokal ermittelt und im Snapshot mitgeführt (siehe
+        // lookupStichwortBeschreibung()).
+        // EN: beschreibung doesn't come from the server (hence not in ALLOWED_EINSATZ_FIELDS),
+        // but is determined locally by handleAlarm() and carried along in the snapshot (see
         // lookupStichwortBeschreibung()).
         flat.beschreibung = Object.prototype.hasOwnProperty.call(src, 'beschreibung') ? src.beschreibung : null;
         flat.registeredMonitor = this.currentMonitor || null;
@@ -1371,9 +1650,12 @@ class WaipWeb extends utils.Adapter {
         return flat;
     }
 
-    /* Löst eine vom Server per io.playtts gesendete TTS-URL zu einer vollständigen absoluten
+    /* DE: Löst eine vom Server per io.playtts gesendete TTS-URL zu einer vollständigen absoluten
        URL auf. Bereits absolute URLs (http(s)://...) bleiben unverändert, relative Pfade
-       (z.B. "/tts/xyz.mp3") werden mit der konfigurierten WAIP-Server-URL zusammengesetzt. */
+       (z.B. "/tts/xyz.mp3") werden mit der konfigurierten WAIP-Server-URL zusammengesetzt.
+       EN: Resolves a TTS URL sent by the server via io.playtts to a full absolute URL.
+       Already-absolute URLs (http(s)://...) are left unchanged, relative paths (e.g.
+       "/tts/xyz.mp3") are combined with the configured WAIP server URL. */
     resolveTtsUrl(raw) {
         if (typeof raw !== 'string' || !raw) {
             return raw;
@@ -1386,12 +1668,13 @@ class WaipWeb extends utils.Adapter {
         return `${base}${path}`;
     }
 
-    /* Prüft ob eine eingehende Payload eindeutig einem Monitor zuordenbar ist und mit currentMonitor übereinstimmt. */
+    /* DE: Prüft ob eine eingehende Payload eindeutig einem Monitor zuordenbar ist und mit currentMonitor übereinstimmt.
+       EN: Checks whether an incoming payload can be unambiguously attributed to a monitor and matches currentMonitor. */
     payloadMonitorMatch(p) {
         if (!p || typeof p !== 'object') {
             return null;
         }
-        // wache_nr/wache_id/wacheId bewusst NICHT hier: server/waip.js sendet io.new_rmld-
+        // DE: wache_nr/wache_id/wacheId bewusst NICHT hier: server/waip.js sendet io.new_rmld-
         // Events mit einem realen "wache_nr"-Feld (Wachennummer der zurückmeldenden Einsatz-
         // kraft aus der waip_rueckmeldungen-Tabelle) - das hat nichts mit der Monitor-/
         // Leitstellen-ID zu tun, wurde hier aber fälschlich so behandelt und hat dadurch
@@ -1400,6 +1683,15 @@ class WaipWeb extends utils.Adapter {
         // wache_id/wacheId kommen in keiner geprüften Server-Tabelle (waip_einsaetze,
         // waip_rueckmeldungen, Routen) überhaupt vor - ebenso unbegründete Kandidaten mit
         // demselben Kollisionsrisiko, daher ebenfalls entfernt.
+        // EN: wache_nr/wache_id/wacheId deliberately NOT here: server/waip.js sends
+        // io.new_rmld events with a real "wache_nr" field (the responding unit's station
+        // number, from the waip_rueckmeldungen table) - that has nothing to do with the
+        // monitor/dispatch-center ID, but was mistakenly treated as if it did, which
+        // caused practically every feedback event to be discarded as "wrong monitor"
+        // whenever the station number differed from the registered monitor ID (found/fixed
+        // in 0.7.19). wache_id/wacheId don't appear in any checked server table
+        // (waip_einsaetze, waip_rueckmeldungen, routes) at all - equally unfounded
+        // candidates with the same collision risk, hence also removed.
         const keys = [
             'monitor',
             'monitorID',
@@ -1427,11 +1719,11 @@ class WaipWeb extends utils.Adapter {
                 return false;
             }
         }
-        return null; // no monitor-identifying field found
+        return null; // DE: kein Monitor-Kennungsfeld gefunden / EN: no monitor-identifying field found
     }
 
     /*
-     Handler-Wrapper: prüft Monitor-Match bevor der eigentliche Handler ausgeführt wird.
+     DE: Handler-Wrapper: prüft Monitor-Match bevor der eigentliche Handler ausgeführt wird.
 
      WICHTIG (siehe client_waip.js des offiziellen Frontends): Die Monitor-Zuordnung
      passiert vollständig serverseitig über eine Socket.IO-Room-Registrierung
@@ -1446,6 +1738,22 @@ class WaipWeb extends utils.Adapter {
      die komplette Alarm-Zustellung nach dem Timeout stillschweigend gestoppt. Jetzt
      gilt: jedes empfangene Event bestätigt die Registrierung und wird verarbeitet,
      außer das Payload nennt EXPLIZIT eine andere Monitor-Kennung (match === false).
+
+     EN: Handler wrapper: checks the monitor match before the actual handler runs.
+
+     IMPORTANT (see the official frontend's client_waip.js): Monitor attribution happens
+     entirely server-side via a Socket.IO room registration (triggered by
+     emit('WAIP', monitorId) in onSocketConnect). Not a single real event
+     (io.new_waip/io.new_rmld/io.routes/io.playtts/io.standby) carries its own
+     monitor-identifying field in the payload - the official frontend doesn't check
+     anything on receipt either. payloadMonitorMatch() therefore practically always
+     returns null for real payloads.
+
+     An earlier version discarded events without a monitor field as "unknownMonitor"
+     once the registration timeout expired - for every non-global monitor ID (≠ '0')
+     this silently stopped all alarm delivery after the timeout. Now: every received
+     event confirms the registration and gets processed, unless the payload EXPLICITLY
+     names a different monitor identifier (match === false).
     */
     wrapHandlerWithMonitorCheck(handler) {
         return payload => {
@@ -1453,10 +1761,14 @@ class WaipWeb extends utils.Adapter {
                 const match = this.payloadMonitorMatch(payload);
 
                 if (match === false) {
-                    // Reine, erwartete Filterlogik (kein Fehler) - Häufigkeit ist über
+                    // DE: Reine, erwartete Filterlogik (kein Fehler) - Häufigkeit ist über
                     // debug.ignoredCount messbar; checkWrongMonitorRate() eskaliert bei
                     // dauerhaft hoher Anzahl auf warn (Hinweis auf falsch konfigurierte
                     // Monitor-ID), bleibt sonst bei info.
+                    // EN: Plain, expected filtering logic (not an error) - frequency is
+                    // measurable via debug.ignoredCount; checkWrongMonitorRate() escalates to
+                    // warn when the count stays persistently high (a hint at a misconfigured
+                    // monitor ID), otherwise stays at info.
                     this.safeLog(
                         'info',
                         'ignoredEvent.wrongMonitor',
@@ -1467,8 +1779,10 @@ class WaipWeb extends utils.Adapter {
                     return;
                 }
 
-                // match === true (Monitor-Feld passt) oder match === null (kein
+                // DE: match === true (Monitor-Feld passt) oder match === null (kein
                 // Monitor-Feld im Payload, der Normalfall) -> Registrierung bestätigt.
+                // EN: match === true (monitor field matches) or match === null (no monitor
+                // field in the payload, the normal case) -> registration confirmed.
                 if (this.registrationPending || match === true) {
                     this.setState('status.registrationAccepted', true, true);
                     this.setState('status.registeredMonitor', this.currentMonitor, true);
@@ -1484,8 +1798,10 @@ class WaipWeb extends utils.Adapter {
                 try {
                     handler(payload);
                 } catch (e) {
-                    // Ein empfangenes Event konnte nicht verarbeitet werden -> echter
+                    // DE: Ein empfangenes Event konnte nicht verarbeitet werden -> echter
                     // Datenverlust, daher error statt warn.
+                    // EN: A received event couldn't be processed -> actual data loss, hence
+                    // error instead of warn.
                     this.safeLog('error', 'handler.exec', e);
                 }
             } catch (e) {
@@ -1494,22 +1810,29 @@ class WaipWeb extends utils.Adapter {
         };
     }
 
-    /* Schreibt this.currentEinsatzSnapshot komplett (inkl. verschachtelter Arrays) nach einsatz.json. */
+    /* DE: Schreibt this.currentEinsatzSnapshot komplett (inkl. verschachtelter Arrays) nach einsatz.json.
+       EN: Writes this.currentEinsatzSnapshot in full (including nested arrays) to einsatz.json. */
     async persistEinsatzSnapshot() {
         try {
             const flat = this.buildFlatEinsatzJson(this.currentEinsatzSnapshot);
-            // Als Array mit einem Element speichern (nicht das nackte Objekt) - VIS-Tabellen-
+            // DE: Als Array mit einem Element speichern (nicht das nackte Objekt) - VIS-Tabellen-
             // Widgets erwarten am Root immer ein Array, sonst liefern sie keine Zeile.
+            // EN: Store as an array with one element (not the bare object) - VIS table widgets
+            // always expect an array at the root, otherwise they render no row.
             await this.setStateAsync('einsatz.json.current', JSON.stringify([flat]), true);
         } catch (e) {
             this.safeWarn('persistEinsatzSnapshot', e);
         }
     }
 
-    /* Legt den aktuellen Einsatz-Snapshot als abgeschlossenen Eintrag vorne in einsatz.json.history10 ab
+    /* DE: Legt den aktuellen Einsatz-Snapshot als abgeschlossenen Eintrag vorne in einsatz.json.history10 ab
        (z.B. bei io.standby oder wenn ein neuer Einsatz beginnt, ohne dass zuvor io.standby kam).
        Dedupliziert über die uuid, damit derselbe Einsatz nicht doppelt eingetragen wird, falls
-       sowohl io.standby als auch der nächste io.new_waip diese Methode auslösen. */
+       sowohl io.standby als auch der nächste io.new_waip diese Methode auslösen.
+       EN: Records the current incident snapshot as a completed entry at the front of
+       einsatz.json.history10 (e.g. on io.standby, or when a new incident starts without a
+       preceding io.standby). Deduplicates by uuid so the same incident isn't recorded twice
+       if both io.standby and the next io.new_waip trigger this method. */
     async pushEinsatzToHistory() {
         try {
             if (!this.currentEinsatzSnapshot || !this.currentEinsatzSnapshot.uuid) {
@@ -1525,8 +1848,10 @@ class WaipWeb extends utils.Adapter {
             if (arr.length && arr[0] && arr[0].uuid === this.currentEinsatzSnapshot.uuid) {
                 return;
             }
-            // Nur den flachen Einsatzstamm archivieren - Routen/Rückmeldungen/Alarmierungen
+            // DE: Nur den flachen Einsatzstamm archivieren - Routen/Rückmeldungen/Alarmierungen
             // gelten nur für den jeweils aktuellen Einsatz und werden nicht historisiert.
+            // EN: Only archive the flat incident master data - routes/feedback/alerting only
+            // apply to the current incident and aren't kept in history.
             arr.unshift(this.buildFlatEinsatzJson(this.currentEinsatzSnapshot));
             if (arr.length > this.HISTORY_SIZE) {
                 arr = arr.slice(0, this.HISTORY_SIZE);
@@ -1537,9 +1862,12 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Berechnet aus den im Snapshot gesammelten Rückmeldungen die Zähler pro Rolle/Fähigkeit
+    /* DE: Berechnet aus den im Snapshot gesammelten Rückmeldungen die Zähler pro Rolle/Fähigkeit
        (analog zu den Badges EK/GF/ZF/VF/AGT/FZF/MA/MED/Gesamt der Weboberfläche) und
-       aktualisiert einsatz.rueckmeldungAnzahl.* sowie einsatz.rueckmeldungGesamt. */
+       aktualisiert einsatz.rueckmeldungAnzahl.* sowie einsatz.rueckmeldungGesamt.
+       EN: Computes the per-role/skill counters from the feedback entries collected in the
+       snapshot (mirroring the EK/GF/ZF/VF/AGT/FZF/MA/MED/total badges of the web UI) and
+       updates einsatz.rueckmeldungAnzahl.* as well as einsatz.rueckmeldungGesamt. */
     async updateRueckmeldungCounts() {
         const list = (this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen) || [];
         const counts = { ek: 0, gf: 0, zf: 0, vf: 0, agt: 0, fzf: 0, ma: 0, med: 0 };
@@ -1578,7 +1906,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Handler für eingehende Alarme (io.new_waip). */
+    /* DE: Handler für eingehende Alarme (io.new_waip).
+       EN: Handler for incoming alarms (io.new_waip). */
     async handleAlarm(incoming) {
         try {
             try {
@@ -1589,9 +1918,12 @@ class WaipWeb extends utils.Adapter {
 
             const data = normalizeData(incoming || {});
             try {
-                // Flach halten (lat/lon statt eines verschachtelten position-Objekts) und als
+                // DE: Flach halten (lat/lon statt eines verschachtelten position-Objekts) und als
                 // Array mit einem Element speichern (nicht das nackte Objekt) - VIS-Tabellen-
                 // Widgets erwarten am Root immer ein Array, sonst liefern sie keine Zeile.
+                // EN: Keep it flat (lat/lon instead of a nested position object) and store as
+                // an array with one element (not the bare object) - VIS table widgets always
+                // expect an array at the root, otherwise they render no row.
                 await this.setStateAsync(
                     'debug.normalizedPosition',
                     JSON.stringify([
@@ -1606,22 +1938,33 @@ class WaipWeb extends utils.Adapter {
                 /* ignore */
             }
 
-            // Neuer Einsatz (andere uuid als der aktuell verfolgte) -> vorherigen Snapshot (falls
+            // DE: Neuer Einsatz (andere uuid als der aktuell verfolgte) -> vorherigen Snapshot (falls
             // noch nicht per io.standby archiviert) sichern und mit leeren Listen neu beginnen.
             // Bei einer bloßen Aktualisierung desselben Einsatzes (gleiche uuid, z.B. Korrektur
             // der Besonderheiten) bleiben bereits erfasste Routen/Rückmeldungen bewusst erhalten -
             // anders als die Live-Webseite, die bei JEDEM io.new_waip zurücksetzt.
+            // EN: New incident (different uuid than the one currently tracked) -> save the
+            // previous snapshot (if not already archived via io.standby) and start over with
+            // empty lists. For a mere update of the same incident (same uuid, e.g. a
+            // correction to the special remarks), already-captured routes/feedback are
+            // deliberately kept - unlike the live website, which resets on EVERY io.new_waip.
             const isNewEinsatz = data.uuid && data.uuid !== this.currentEinsatzUuid;
             if (isNewEinsatz) {
                 await this.pushEinsatzToHistory();
                 this.currentEinsatzUuid = data.uuid;
                 this.currentEinsatzSnapshot = { routen: [], rueckmeldungen: [] };
-                // Sofort leeren statt auf das nächste io.routes/io.new_rmld für den neuen
+                // DE: Sofort leeren statt auf das nächste io.routes/io.new_rmld für den neuen
                 // Einsatz zu warten - sonst zeigen diese States/Zähler bis dahin noch die
                 // Routen/Rückmeldungen des alten Einsatzes (z.B. relevant, wenn zwischen
                 // beiden Einsätzen ein io.standby verpasst wurde). einsatz.json.current und
                 // .emAlarmiert/.emWeitere werden weiter unten in dieser Methode ohnehin
                 // unbedingt neu geschrieben, brauchen hier keine gesonderte Behandlung.
+                // EN: Clear immediately instead of waiting for the next io.routes/io.new_rmld
+                // for the new incident - otherwise these states/counters would still show the
+                // old incident's routes/feedback until then (e.g. relevant if an io.standby
+                // was missed between the two incidents). einsatz.json.current and
+                // .emAlarmiert/.emWeitere get unconditionally rewritten further down in this
+                // method anyway, so they need no special handling here.
                 await this.writeJsonArrayState('einsatz.json.routen', []);
                 await this.writeJsonArrayState('einsatz.json.rueckmeldungen', []);
                 try {
@@ -1673,7 +2016,8 @@ class WaipWeb extends utils.Adapter {
                 this.safeWarn('einsatz.alarmAktiv.setState', e);
             }
 
-            // flache Felder setzen und gleichzeitig im Snapshot mitführen
+            // DE: flache Felder setzen und gleichzeitig im Snapshot mitführen
+            // EN: set flat fields and carry them along in the snapshot at the same time
             const tasks = [];
             for (const k of this.ALLOWED_EINSATZ_FIELDS) {
                 if (Object.prototype.hasOwnProperty.call(data, k)) {
@@ -1688,8 +2032,10 @@ class WaipWeb extends utils.Adapter {
                 this.currentEinsatzSnapshot.emWeitere = data.em_weitere;
             }
 
-            // Beschreibung zum Stichwort lokal ermitteln (kommt nicht vom Server) und wie die
+            // DE: Beschreibung zum Stichwort lokal ermitteln (kommt nicht vom Server) und wie die
             // übrigen flachen Felder setzen/im Snapshot mitführen.
+            // EN: Determine the keyword's description locally (doesn't come from the server)
+            // and set/carry it along like the other flat fields.
             const beschreibung = this.lookupStichwortBeschreibung(this.currentEinsatzSnapshot.stichwort);
             this.currentEinsatzSnapshot.beschreibung = beschreibung;
             tasks.push(this.setField('einsatz.beschreibung', beschreibung));
@@ -1705,13 +2051,16 @@ class WaipWeb extends utils.Adapter {
             await this.writeJsonArrayState('einsatz.json.emAlarmiert', this.currentEinsatzSnapshot.emAlarmiert);
             await this.writeJsonArrayState('einsatz.json.emWeitere', this.currentEinsatzSnapshot.emWeitere);
         } catch (e) {
-            // Ein Alarm-Event konnte nicht verarbeitet werden -> echter Datenverlust.
+            // DE: Ein Alarm-Event konnte nicht verarbeitet werden -> echter Datenverlust.
+            // EN: An alarm event couldn't be processed -> actual data loss.
             this.safeLog('error', 'handleAlarm', e);
         }
     }
 
-    /* Handler für Rückmeldungen (io.new_rmld). Werden im Snapshot des aktuellen Einsatzes
-       gesammelt (dedupliziert über rmld_uuid) statt in einem separaten "letzte Rückmeldung"-State. */
+    /* DE: Handler für Rückmeldungen (io.new_rmld). Werden im Snapshot des aktuellen Einsatzes
+       gesammelt (dedupliziert über rmld_uuid) statt in einem separaten "letzte Rückmeldung"-State.
+       EN: Handler for feedback events (io.new_rmld). Collected in the current incident's
+       snapshot (deduplicated by rmld_uuid) rather than in a separate "last feedback" state. */
     async handleRueckmeldung(incoming) {
         try {
             const data = normalizeData(incoming || {});
@@ -1723,7 +2072,8 @@ class WaipWeb extends utils.Adapter {
                 this.currentEinsatzSnapshot.rueckmeldungen = [];
             }
 
-            // Rückmeldungen für einen anderen (alten) Einsatz nicht mit aufnehmen.
+            // DE: Rückmeldungen für einen anderen (alten) Einsatz nicht mit aufnehmen.
+            // EN: Don't include feedback for a different (old) incident.
             if (data.waip_uuid && this.currentEinsatzUuid && data.waip_uuid !== this.currentEinsatzUuid) {
                 this.log.debug(
                     `Ignoring feedback for a different incident ${data.waip_uuid} (current=${this.currentEinsatzUuid})`,
@@ -1747,22 +2097,33 @@ class WaipWeb extends utils.Adapter {
             await this.writeJsonArrayState('einsatz.json.rueckmeldungen', this.currentEinsatzSnapshot.rueckmeldungen);
             await this.updateRueckmeldungCounts();
         } catch (e) {
-            // Eine Rückmeldung konnte nicht verarbeitet werden -> echter Datenverlust.
+            // DE: Eine Rückmeldung konnte nicht verarbeitet werden -> echter Datenverlust.
+            // EN: A feedback event couldn't be processed -> actual data loss.
             this.safeLog('error', 'handleRueckmeldung', e);
         }
     }
 
-    /* Handler für Standby (io.standby) - Einsatz beendet / Monitor im Ruhezustand.
+    /* DE: Handler für Standby (io.standby) - Einsatz beendet / Monitor im Ruhezustand.
        Analog zum offiziellen Frontend (client_waip.js leert dabei Stichwort, Ortsdaten,
        Besonderheiten etc. und setzt die Karte zurück): der abgeschlossene Einsatz wird
        zuerst archiviert (einsatz.json.history10), danach werden alle auf den aktuellen Einsatz
        bezogenen States geleert - so bleibt alarmAktiv ein verlässlicher Schalter dafür, ob
        einsatz.* gerade echte Live-Daten enthält, statt still den letzten (beendeten)
-       Einsatz weiter anzuzeigen. */
-    /* Schließt den aktuellen Einsatz ab: alarmAktiv=false, Archivierung nach
+       Einsatz weiter anzuzeigen.
+       EN: Handler for standby (io.standby) - incident ended / monitor idle. Mirroring the
+       official frontend (client_waip.js clears keyword, location data, special remarks etc.
+       and resets the map in this case): the completed incident is archived first
+       (einsatz.json.history10), then all states related to the current incident are cleared -
+       that way alarmAktiv stays a reliable switch for whether einsatz.* currently holds real
+       live data, instead of silently continuing to show the last (finished) incident. */
+    /* DE: Schließt den aktuellen Einsatz ab: alarmAktiv=false, Archivierung nach
        einsatz.json.history10, Leeren aller einsatz.*-States. Gemeinsam genutzt von einem
        echten io.standby (handleStandby()) und vom Watchdog in restzeitInterval, falls
-       io.standby verpasst wurde (siehe dort). */
+       io.standby verpasst wurde (siehe dort).
+       EN: Concludes the current incident: alarmAktiv=false, archival to
+       einsatz.json.history10, clearing of all einsatz.* states. Shared by a real io.standby
+       (handleStandby()) and the watchdog in restzeitInterval in case io.standby was missed
+       (see there). */
     async finalizeCurrentEinsatz() {
         try {
             await this.setStateAsync('einsatz.alarmAktiv', false, true);
@@ -1780,15 +2141,20 @@ class WaipWeb extends utils.Adapter {
             this.appendMonitorAudit({ ts: new Date().toISOString(), event: 'standby' }).catch(() => {});
             await this.finalizeCurrentEinsatz();
         } catch (e) {
-            // Standby konnte nicht verarbeitet werden -> Historie/States ggf. inkonsistent.
+            // DE: Standby konnte nicht verarbeitet werden -> Historie/States ggf. inkonsistent.
+            // EN: Standby couldn't be processed -> history/states may be inconsistent.
             this.safeLog('error', 'handleStandby', e);
         }
     }
 
-    /* Leert alle States, die sich auf den aktuellen (jetzt beendeten) Einsatz beziehen -
+    /* DE: Leert alle States, die sich auf den aktuellen (jetzt beendeten) Einsatz beziehen -
        flache einsatz.*-Felder, einsatz.json.current/.routen/.rueckmeldungen/.emAlarmiert/
        .emWeitere sowie alle abgeleiteten Zähler. Wird nach pushEinsatzToHistory() aufgerufen,
-       der abgeschlossene Einsatz bleibt also weiterhin über einsatz.json.history10 abrufbar. */
+       der abgeschlossene Einsatz bleibt also weiterhin über einsatz.json.history10 abrufbar.
+       EN: Clears all states related to the current (now finished) incident - flat einsatz.*
+       fields, einsatz.json.current/.routen/.rueckmeldungen/.emAlarmiert/.emWeitere, and all
+       derived counters. Called after pushEinsatzToHistory(), so the completed incident
+       remains retrievable via einsatz.json.history10. */
     async clearCurrentEinsatzStates() {
         const tasks = this.ALLOWED_EINSATZ_FIELDS.map(k => this.setStateAsync(`einsatz.${k}`, null, true));
         tasks.push(this.setStateAsync('einsatz.beschreibung', null, true));
@@ -1809,16 +2175,23 @@ class WaipWeb extends utils.Adapter {
 
         this.currentEinsatzUuid = null;
         this.currentEinsatzSnapshot = null;
-        // rueckmeldungGesamt/rueckmeldungAnzahl.* liest aus this.currentEinsatzSnapshot,
+        // DE: rueckmeldungGesamt/rueckmeldungAnzahl.* liest aus this.currentEinsatzSnapshot,
         // ist jetzt also null -> alle Zähler werden konsistent auf 0 zurückgesetzt.
+        // EN: rueckmeldungGesamt/rueckmeldungAnzahl.* reads from this.currentEinsatzSnapshot,
+        // which is now null -> all counters get consistently reset to 0.
         await this.updateRueckmeldungCounts();
     }
 
-    /* Handler für Server-Fehlermeldungen (io.error). Das bekannte "Fehler beim Erneuern
+    /* DE: Handler für Server-Fehlermeldungen (io.error). Das bekannte "Fehler beim Erneuern
        der Session"-Muster gehört zum normalen, selbstheilenden ~10-Minuten-Session-Zyklus
        dieser Instanz (Reconnect erfolgt automatisch über refreshSessionCookie/forceReconnect)
        und wird deshalb nur als info geloggt. Alle anderen, unbekannten io.error-Inhalte
-       bleiben warn, da dort nicht bekannt ist, ob sie folgenlos sind. */
+       bleiben warn, da dort nicht bekannt ist, ob sie folgenlos sind.
+       EN: Handler for server error messages (io.error). The known "Fehler beim Erneuern der
+       Session" (error renewing the session) pattern is part of this instance's normal,
+       self-healing ~10-minute session cycle (reconnect happens automatically via
+       refreshSessionCookie/forceReconnect) and is therefore only logged as info. All other,
+       unknown io.error content stays warn, since it's unknown whether it's consequence-free. */
     async handleServerError(data) {
         try {
             const msg = typeof data === 'string' ? data : JSON.stringify(data);
@@ -1830,19 +2203,28 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Handler für io.version - Server-Identität/Version. Ändert sich die vom Server
+    /* DE: Handler für io.version - Server-Identität/Version. Ändert sich die vom Server
        gemeldete ID zur Laufzeit, ist der Server vermutlich neu gestartet (das offizielle
        Frontend lädt in diesem Fall die Seite komplett neu). Laut server/auth.js des
        WAIP-Web-Projekts werden Sessions persistent (SQLite) gespeichert, ein Neustart
        löscht sie also normalerweise NICHT automatisch - trotzdem ist ein Server-Neustart
        ein guter genereller Anlass, Cookie und Verbindung vorsorglich aufzufrischen (billige
-       Absicherung gegen jede Art von serverseitiger Zustandsänderung, nicht nur Sessions). */
+       Absicherung gegen jede Art von serverseitiger Zustandsänderung, nicht nur Sessions).
+       EN: Handler for io.version - server identity/version. If the ID reported by the server
+       changes at runtime, the server has likely restarted (the official frontend does a full
+       page reload in that case). Per the WAIP-Web project's server/auth.js, sessions are
+       stored persistently (SQLite), so a restart normally does NOT delete them automatically -
+       still, a server restart is a good general occasion to proactively refresh the cookie
+       and connection (a cheap safeguard against any kind of server-side state change, not
+       just sessions). */
     async handleServerVersion(serverId) {
         try {
             await this.setStateAsync('debug.serverVersion', String(serverId), true);
             if (this.lastServerVersion && this.lastServerVersion !== serverId) {
-                // Wird bereits automatisch behandelt (Session-Refresh + Reconnect) ->
+                // DE: Wird bereits automatisch behandelt (Session-Refresh + Reconnect) ->
                 // kein Handlungsbedarf, daher info statt warn.
+                // EN: Already handled automatically (session refresh + reconnect) -> no
+                // action needed, hence info instead of warn.
                 this.log.info(
                     `WAIP server reports a new version/instance ID (${this.lastServerVersion} -> ${serverId}) - likely a server restart`,
                 );
@@ -1863,9 +2245,12 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Handler für Routen (io.routes). Routen sind der aktuell gültige Satz für den laufenden
+    /* DE: Handler für Routen (io.routes). Routen sind der aktuell gültige Satz für den laufenden
        Einsatz (wird bei jedem Event ersetzt, nicht akkumuliert) und liegt daher als Array
-       innerhalb von einsatz.json.routen[]. */
+       innerhalb von einsatz.json.routen[].
+       EN: Handler for routes (io.routes). Routes are the currently valid set for the
+       ongoing incident (replaced on every event, not accumulated) and are therefore stored
+       as an array within einsatz.json.routen[]. */
     async handleRoutes(incoming) {
         try {
             let data = incoming;
@@ -1891,16 +2276,22 @@ class WaipWeb extends utils.Adapter {
                 this.safeWarn('einsatz.routenGesamt.setState', e);
             }
         } catch (e) {
-            // Ein Routen-Event konnte nicht verarbeitet werden -> echter Datenverlust.
+            // DE: Ein Routen-Event konnte nicht verarbeitet werden -> echter Datenverlust.
+            // EN: A routes event couldn't be processed -> actual data loss.
             this.safeLog('error', 'handleRoutes', e);
         }
     }
 
-    /* Handler für TTS-Events (io.playtts). Payload ist laut client_waip.js nur eine URL
+    /* DE: Handler für TTS-Events (io.playtts). Payload ist laut client_waip.js nur eine URL
        (direkt als audio.src verwendet) - im Browser funktioniert das auch als relativer
        Pfad, weil er implizit gegen die aktuelle Seiten-Origin aufgelöst wird. Für uns nicht
        (VIS/Automationen haben nicht zwangsläufig dieselbe Origin wie der WAIP-Server),
-       daher wird hier explizit zu einer vollständigen absoluten URL aufgelöst. */
+       daher wird hier explizit zu einer vollständigen absoluten URL aufgelöst.
+       EN: Handler for TTS events (io.playtts). Per client_waip.js the payload is just a URL
+       (used directly as audio.src) - in a browser that also works as a relative path
+       because it's implicitly resolved against the current page origin. Not for us (VIS/
+       automations don't necessarily share the same origin as the WAIP server), so it's
+       explicitly resolved to a full absolute URL here. */
     async handleTTS(incoming) {
         try {
             const data = normalizeData(incoming || {});
@@ -1908,18 +2299,25 @@ class WaipWeb extends utils.Adapter {
             await this.setField('einsatz.tts.last', this.resolveTtsUrl(data));
             await this.setField('einsatz.tts.lastTimestamp', ts);
         } catch (e) {
-            // Ein TTS-Event konnte nicht verarbeitet werden -> echter Datenverlust.
+            // DE: Ein TTS-Event konnte nicht verarbeitet werden -> echter Datenverlust.
+            // EN: A TTS event couldn't be processed -> actual data loss.
             this.safeLog('error', 'handleTTS', e);
         }
     }
 
-    /* Cleanup helper: schließt und entfernt eine vorhandene socket-Instanz vollständig. */
+    /* DE: Cleanup helper: schließt und entfernt eine vorhandene socket-Instanz vollständig.
+       EN: Cleanup helper: fully closes and removes an existing socket instance. */
     cleanupSocket() {
-        // Nur wenn tatsächlich ein Socket existierte, ist auch initObjects() bereits
+        // DE: Nur wenn tatsächlich ein Socket existierte, ist auch initObjects() bereits
         // gelaufen (this.socket wird ausschließlich in connect() gesetzt, das erst nach
         // initObjects() läuft) - sonst könnte onUnload() (ruft cleanupSocket() unbedingt
         // auf) die States unten setzen, bevor deren Objekte überhaupt angelegt wurden,
         // z.B. bei einem sehr schnellen Neustart der Instanz kurz nach der Installation.
+        // EN: Only if a socket actually existed has initObjects() also already run
+        // (this.socket is set exclusively in connect(), which only runs after
+        // initObjects()) - otherwise onUnload() (which unconditionally calls
+        // cleanupSocket()) could set the states below before their objects even exist,
+        // e.g. on a very fast instance restart shortly after installation.
         const hadSocket = !!this.socket;
         try {
             if (!this.socket) {
@@ -1943,7 +2341,8 @@ class WaipWeb extends utils.Adapter {
                 /* ignore */
             }
         } catch (e) {
-            // Reines Aufräumen der alten Socket-Instanz, kein Datenverlust -> debug statt warn.
+            // DE: Reines Aufräumen der alten Socket-Instanz, kein Datenverlust -> debug statt warn.
+            // EN: Plain cleanup of the old socket instance, no data loss -> debug instead of warn.
             this.safeLog('debug', 'cleanupSocket', e);
         } finally {
             this.socket = null;
@@ -1966,7 +2365,7 @@ class WaipWeb extends utils.Adapter {
         this.logRecovered('connection', 'Socket.IO connection recovered');
 
         try {
-            // Ein einzelner Emit reicht: Socket.IO liefert ab einem bestehenden 'connect'
+            // DE: Ein einzelner Emit reicht: Socket.IO liefert ab einem bestehenden 'connect'
             // bereits zuverlässig zu, und ein echter Verbindungsabbruch wird ohnehin über
             // onSocketDisconnect()/onSocketConnectError() samt Reconnect (und damit einem
             // frischen Emit) abgefangen. Bleibt die Registrierung trotzdem unbestätigt,
@@ -1974,6 +2373,14 @@ class WaipWeb extends utils.Adapter {
             // Versionen emittierten hier 3× - das führte nur dazu, dass der Server bei
             // jedem (redundanten) Emit erneut mit dem aktuellen Status antwortete
             // (io.standby/io.new_waip), ohne einen zusätzlichen Zuverlässigkeitsgewinn.
+            // EN: A single emit is enough: Socket.IO already delivers reliably once a
+            // 'connect' exists, and a real connection loss is caught anyway via
+            // onSocketDisconnect()/onSocketConnectError() plus reconnect (and thus a fresh
+            // emit). If the registration still remains unconfirmed, REGISTRATION_TIMEOUT_MS
+            // below acts as a safety net. Earlier versions emitted 3× here - that only
+            // caused the server to respond again with the current status
+            // (io.standby/io.new_waip) on every (redundant) emit, with no extra reliability
+            // gain.
             this.log.info(`socket.emit('WAIP', ${monStr})`);
             this.appendMonitorAudit({ ts: new Date().toISOString(), event: 'emit_WAIP', value: monStr }).catch(
                 () => {},
@@ -1985,8 +2392,10 @@ class WaipWeb extends utils.Adapter {
 
         this.registrationPending = true;
         this.setState('status.registeredMonitor', monStr, true);
-        // Gecachter Anzeigename (siehe refreshMonitorName) - keine erneute HTTP-Abfrage
+        // DE: Gecachter Anzeigename (siehe refreshMonitorName) - keine erneute HTTP-Abfrage
         // bei jedem (Re-)Connect, ist ggf. beim allerersten Connect noch null.
+        // EN: Cached display name (see refreshMonitorName) - no repeated HTTP request on
+        // every (re)connect; may still be null on the very first connect.
         this.setState('status.registeredMonitorName', this.monitorName, true);
         this.setState('status.registrationAccepted', false, true);
         this.setState('status.registrationPending', true, true);
@@ -2046,8 +2455,10 @@ class WaipWeb extends utils.Adapter {
         this.connecting = false;
         this.setState('status.connected', false, true);
         this.setState('info.connection', false, true);
-        // War zuvor doppelt geloggt (safeWarn zusätzlich zu logDisconnect für dasselbe
+        // DE: War zuvor doppelt geloggt (safeWarn zusätzlich zu logDisconnect für dasselbe
         // Event) - logDisconnect() unten reicht aus.
+        // EN: Used to be logged twice (safeWarn in addition to logDisconnect for the same
+        // event) - logDisconnect() below is sufficient.
         this.logDisconnect(`connect_error: ${String(err)}`);
         this.cleanupSocket();
         this.reconnectTimer = this.setTimeout(() => {
@@ -2060,11 +2471,17 @@ class WaipWeb extends utils.Adapter {
     }
 
     /*
-     Connect: verbindet zur socket.io-namespace '/waip' (über path '/socket.io'),
+     DE: Connect: verbindet zur socket.io-namespace '/waip' (über path '/socket.io'),
      registriert sich per emit('WAIP', monitor).
 
      WICHTIG: automatische reconnects deaktiviert (reconnection: false). Nach
      disconnect/connect_error wird manuell reconnect() nach RECONNECT_DELAY_MS aufgerufen.
+
+     EN: Connect: connects to the socket.io namespace '/waip' (via path '/socket.io'),
+     registers itself via emit('WAIP', monitor).
+
+     IMPORTANT: automatic reconnects are disabled (reconnection: false). After
+     disconnect/connect_error, reconnect() is called manually after RECONNECT_DELAY_MS.
     */
     async connect(force = false) {
         try {
@@ -2075,8 +2492,10 @@ class WaipWeb extends utils.Adapter {
                 return;
             }
 
-            // Falls (z.B. nach einem längeren Disconnect) noch kein/kein frischer
+            // DE: Falls (z.B. nach einem längeren Disconnect) noch kein/kein frischer
             // Session-Cookie vorliegt, vor dem (Re-)Connect einen holen.
+            // EN: If (e.g. after a longer disconnect) there's no/no fresh session cookie
+            // yet, fetch one before the (re)connect.
             if (!this.sessionCookie) {
                 await this.refreshSessionCookie();
             }
@@ -2098,8 +2517,11 @@ class WaipWeb extends utils.Adapter {
                 reconnection: false,
                 timeout: 20000,
                 query: { monitor: monStr },
-                // Session-Cookie mitschicken, damit die Verbindung nicht anonym/ohne
+                // DE: Session-Cookie mitschicken, damit die Verbindung nicht anonym/ohne
                 // Server-Session läuft (siehe refreshSessionCookie/startSessionKeepalive)
+                // EN: Send along the session cookie so the connection doesn't run
+                // anonymously/without a server session (see refreshSessionCookie/
+                // startSessionKeepalive)
                 extraHeaders: this.sessionCookie ? { Cookie: this.sessionCookie } : undefined,
             });
 
@@ -2107,10 +2529,14 @@ class WaipWeb extends utils.Adapter {
                 if (this.socket && this.socket.io && this.socket.io.engine) {
                     const eng = this.socket.io.engine;
                     this.log.debug(`engine pingInterval=${eng.pingInterval} pingTimeout=${eng.pingTimeout}`);
-                    // ping/pong/open/close wiederholen sich für die gesamte Verbindungsdauer
+                    // DE: ping/pong/open/close wiederholen sich für die gesamte Verbindungsdauer
                     // (alle pingInterval ms) ohne diagnostischen Mehrwert nach den ersten paar -
                     // deshalb hier begrenzt, anders als die Message-Preview darunter (jeweils
                     // anderer Inhalt, seltener, bleibt bewusst unbegrenzt).
+                    // EN: ping/pong/open/close repeat for the entire connection lifetime
+                    // (every pingInterval ms) with no diagnostic value after the first few -
+                    // hence capped here, unlike the message preview below (different content
+                    // each time, rarer, deliberately left uncapped).
                     let enginePingPongLogCount = 0;
                     eng.on('packet', pkt => {
                         try {
@@ -2138,7 +2564,8 @@ class WaipWeb extends utils.Adapter {
             this.socket.on('disconnect', reason => this.onSocketDisconnect(reason));
             this.socket.on('connect_error', err => this.onSocketConnectError(err));
 
-            // Diagnostik: erste eingehende Rohdaten als Preview loggen (max. 6 Events)
+            // DE: Diagnostik: erste eingehende Rohdaten als Preview loggen (max. 6 Events)
+            // EN: Diagnostics: log the first incoming raw data as a preview (max. 6 events)
             let firstCount = 0;
             const anyListener = (event, ...args) => {
                 try {
@@ -2174,8 +2601,10 @@ class WaipWeb extends utils.Adapter {
             this.socket.on('io.routes', this.wrapHandlerWithMonitorCheck(this.handleRoutes.bind(this)));
             this.socket.on('io.playtts', this.wrapHandlerWithMonitorCheck(this.handleTTS.bind(this)));
             this.socket.on('io.standby', this.wrapHandlerWithMonitorCheck(this.handleStandby.bind(this)));
-            // io.error/io.version sind serverweite, nicht monitor-gebundene Signale ->
+            // DE: io.error/io.version sind serverweite, nicht monitor-gebundene Signale ->
             // bewusst ohne wrapHandlerWithMonitorCheck registriert.
+            // EN: io.error/io.version are server-wide signals, not tied to a monitor ->
+            // deliberately registered without wrapHandlerWithMonitorCheck.
             this.socket.on('io.error', data => this.handleServerError(data));
             this.socket.on('io.version', serverId => this.handleServerVersion(serverId));
 
@@ -2184,9 +2613,12 @@ class WaipWeb extends utils.Adapter {
                     const now = Date.now();
                     if (event !== this._lastDebugEvent.event || now - this._lastDebugEvent.ts > 5000) {
                         this._lastDebugEvent = { event, ts: now };
-                        // Als Array mit einem Element speichern (nicht das nackte Objekt) -
+                        // DE: Als Array mit einem Element speichern (nicht das nackte Objekt) -
                         // VIS-Tabellen-Widgets erwarten am Root immer ein Array, sonst liefern
                         // sie keine Zeile.
+                        // EN: Store as an array with one element (not the bare object) - VIS
+                        // table widgets always expect an array at the root, otherwise they
+                        // render no row.
                         this.setField('debug.lastEvent', [
                             {
                                 event,
@@ -2205,7 +2637,8 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* Intervall: Restzeit bis Einsatzende. */
+    /* DE: Intervall: Restzeit bis Einsatzende.
+       EN: Interval: remaining time until the incident ends. */
     startRestzeitInterval() {
         this.restzeitInterval = this.setInterval(async () => {
             let rest = 0;
@@ -2225,11 +2658,16 @@ class WaipWeb extends utils.Adapter {
         }, 1000);
     }
 
-    /* Watchdog gegen ein verpasstes io.standby: steht einsatz.restzeit seit
+    /* DE: Watchdog gegen ein verpasstes io.standby: steht einsatz.restzeit seit
        MISSED_STANDBY_GRACE_MS auf 0, obwohl noch ein Einsatz als aktiv geführt wird, wird
        angenommen, dass io.standby verpasst wurde (z.B. durch einen Disconnect zum
        falschen Zeitpunkt) - der Einsatz wird dann automatisch abgeschlossen, statt
-       unbegrenzt mit veralteten Daten als "aktiv" stehen zu bleiben. */
+       unbegrenzt mit veralteten Daten als "aktiv" stehen zu bleiben.
+       EN: Watchdog against a missed io.standby: if einsatz.restzeit has been 0 for
+       MISSED_STANDBY_GRACE_MS while an incident is still tracked as active, it's assumed
+       that io.standby was missed (e.g. due to a disconnect at the wrong moment) - the
+       incident is then finalized automatically instead of remaining "active" indefinitely
+       with stale data. */
     async checkMissedStandby(rest) {
         if (rest > 0 || !this.currentEinsatzUuid || !this.currentEinsatzSnapshot) {
             this._restzeitZeroSince = null;
