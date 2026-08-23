@@ -229,13 +229,17 @@ first of two sources checked, in order (see
 **Rescue-service decoding** (admin checkbox, off by default): if the
 keyword matches the pattern `R<RTW-count>N<NEF-count>[p][f][-NT]`
 (e.g. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), a
-description is generated automatically. This scheme is used by
-several German dispatch centers, not just one specific instance (see
+description is generated automatically. Two spellings of the `p`/`f`/`NT`
+part are recognized: without a space and with a hyphen before `NT`
+(e.g. `R1N1p`, `R1N0-NT`, see
 [Leitstelle Lausitz's documented explanation](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
-of it) – only enable it if your dispatch center actually uses this
-pattern. The text for each part is itself configurable (5 additional
-text fields appear once the checkbox is enabled), since the adapter
-is multi-language and these labels aren't translated automatically:
+of it), and with a space and without a hyphen (e.g. `R1N1 p`, `R1N0 nt`,
+as used by the IRLS Brandenburg) – this scheme (in either spelling) is
+used by several German dispatch centers, not just these two – only
+enable it if your dispatch center actually uses one of these patterns.
+The text for each part is itself configurable (5 additional text
+fields appear once the checkbox is enabled), since the adapter is
+multi-language and these labels aren't translated automatically:
 
 | Part | Meaning | Default label |
 | --- | --- | --- |
@@ -243,7 +247,7 @@ is multi-language and these labels aren't translated automatically:
 | `N<n>` | Number of emergency vehicles (Notfalleinsatzfahrzeug) | `Notfalleinsatzfahrzeug` |
 | `p` suffix | Polytrauma | `Polytrauma` |
 | `f` suffix | First responder included | `First Responder` |
-| `-NT` suffix | Special ambulance transport | `Notfalltransport mit Notfallkrankenwagen` |
+| `-NT`/` nt` suffix | Special ambulance transport | `Notfalltransport mit Notfallkrankenwagen` |
 
 ### Keyword descriptions
 
@@ -403,6 +407,14 @@ message the adapter can produce, grouped by level, with its cause and an
 example.
 
 ## Changelog
+
+### 0.7.25 (2026-08-23)
+
+- Updated the admin UI text for the [rescue-service decoder](#rescue-service-keywords)
+  to reflect the two supported keyword spellings added in 0.7.23
+  (Leitstelle Lausitz `R1N1p`/`R1N0-NT` and IRLS Brandenburg `R1N1 p`/
+  `R1N0 nt`) - the checkbox label/help and the NT suffix label/help
+  previously only mentioned the hyphenated no-space form.
 
 ### 0.7.24 (2026-08-23)
 
