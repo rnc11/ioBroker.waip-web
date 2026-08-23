@@ -256,7 +256,7 @@ tab didn't match: a list of `{keyword pattern, description, match type}`
 rows – match type is `starts with` or `contains`, comparison is
 case-insensitive, and if several rows match, the **most specific
 (longest) pattern wins automatically** – row order has no effect on
-matching, so the table can be freely sorted by keyword (click the
+matching, so the table can be freely sorted by any column (click the
 column header) without changing behavior. The table is pre-filled
 with an example fire/rescue keyword list (`B:...`/`H:...`) as a
 starting point only – it is **not** confirmed to match any specific
@@ -407,6 +407,13 @@ message the adapter can produce, grouped by level, with its cause and an
 example.
 
 ## Changelog
+
+### 0.7.26 (2026-08-23)
+
+- [Keyword descriptions](#keyword-descriptions) tab: `Description` and
+  `Match` columns are now sortable too (previously only `Keyword /
+  pattern`), and the table's help text was moved above the table
+  instead of below - with many rows it used to sit far out of view.
 
 ### 0.7.25 (2026-08-23)
 
