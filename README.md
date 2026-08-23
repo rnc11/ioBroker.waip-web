@@ -404,6 +404,22 @@ example.
 
 ## Changelog
 
+### 0.7.23 (2026-08-23)
+
+- Extended the default [keyword table](#keyword-descriptions) with the
+  29 `K`/`V`/`M`/`S` keywords (Krankentransport, Verlegung, MANV,
+  Sonderstichwörter) from the IRLS Brandenburg rescue-service catalog
+  (v2.7) - previously only the `R<ambulance>N<physician-vehicle>`
+  scheme and the Brand/THL (`B:`/`H:`) table were covered, so
+  `einsatz.beschreibung` stayed `null` for these.
+- Fixed the [rescue-service keyword](#rescue-service-keywords) decoder
+  (`decodeRettungsdienstStichwort`): it only accepted the Leitstelle
+  Lausitz spelling without a space (`R1N1p`, `R1N0-NT`) and silently
+  returned `null` for the IRLS Brandenburg spelling with a space
+  (`R1N1 p`, `R1N0 nt`) - both are now recognized.
+- Only affects the shipped example table and the decoder logic for
+  new installs/upgrades - existing configured tables are untouched.
+
 ### 0.7.22 (2026-08-23)
 
 - Extended the default [keyword table](#keyword-descriptions) with
