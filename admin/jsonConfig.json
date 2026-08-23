@@ -67,8 +67,8 @@
             "items": {
                 "rdKeywordDecodingEnabled": {
                     "type": "checkbox",
-                    "label": "Automatically decode rescue-service keywords (R<RTW>N<NEF>[p][f][-NT])",
-                    "help": "Rescue-service keyword scheme (R<RTW>N<NEF>[p][f][-NT], e.g. \"R1N0\" = 1 ambulance, no emergency physician) used by several German dispatch centers (documented example: Leitstelle Lausitz) - only enable if your dispatch center actually uses this pattern. Takes priority over the table on the Keyword descriptions tab when a keyword matches.",
+                    "label": "Automatically decode rescue-service keywords (R<RTW>N<NEF>[p][f][-NT], with or without spaces)",
+                    "help": "Rescue-service keyword scheme R<RTW>N<NEF>, optionally followed by a p/f modifier and/or an NT suffix (e.g. \"R1N0\" = 1 ambulance, no emergency physician). Two spellings are recognized: without a space and with a hyphen before NT (Leitstelle Lausitz, e.g. \"R1N1p\", \"R1N0-NT\") and with a space and without a hyphen (Leitstelle Brandenburg/IRLS, e.g. \"R1N1 p\", \"R1N0 nt\") - only enable if your dispatch center actually uses one of these patterns. Takes priority over the table on the Keyword descriptions tab when a keyword matches.",
                     "xs": 12,
                     "sm": 12,
                     "md": 12,
@@ -121,8 +121,8 @@
                 },
                 "rdLabelNT": {
                     "type": "text",
-                    "label": "Label for suffix -NT (special ambulance transport)",
-                    "help": "Text appended when the keyword ends in \"-NT\".",
+                    "label": "Label for suffix -NT / nt (special ambulance transport)",
+                    "help": "Text appended when the keyword ends in \"-NT\" or \" nt\".",
                     "hidden": "!data.rdKeywordDecodingEnabled",
                     "xs": 12,
                     "sm": 6,

@@ -228,14 +228,18 @@ unter [Stichwort-Stammdaten](#stichwort-stammdaten)):
 **Rettungsdienst-Dekodierung** (Admin-Checkbox, standardmäßig aus):
 passt das Stichwort auf das Muster `R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]`
 (z.B. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), wird
-automatisch eine Beschreibung erzeugt. Dieses Schema wird von
-mehreren Leitstellen verwendet, nicht nur einer einzelnen Instanz
-(siehe [die dokumentierte Erklärung der Leitstelle Lausitz](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
-dazu) – nur aktivieren, wenn eure Leitstelle dieses Muster tatsächlich
-verwendet. Der Text für jeden Teil ist selbst konfigurierbar (5
-zusätzliche Textfelder erscheinen, sobald die Checkbox aktiviert
-ist), da der Adapter mehrsprachig ist und diese Bezeichnungen nicht
-automatisch übersetzt werden:
+automatisch eine Beschreibung erzeugt. Zwei Schreibweisen des
+`p`/`f`/`NT`-Teils werden erkannt: ohne Leerzeichen und mit Bindestrich
+vor `NT` (z.B. `R1N1p`, `R1N0-NT`, siehe
+[die dokumentierte Erklärung der Leitstelle Lausitz](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
+dazu) sowie mit Leerzeichen und ohne Bindestrich (z.B. `R1N1 p`,
+`R1N0 nt`, wie von der IRLS Brandenburg verwendet) – dieses Schema
+(in beiden Schreibweisen) wird von mehreren Leitstellen verwendet,
+nicht nur diesen beiden – nur aktivieren, wenn eure Leitstelle eines
+dieser Muster tatsächlich verwendet. Der Text für jeden Teil ist
+selbst konfigurierbar (5 zusätzliche Textfelder erscheinen, sobald
+die Checkbox aktiviert ist), da der Adapter mehrsprachig ist und
+diese Bezeichnungen nicht automatisch übersetzt werden:
 
 | Teil | Bedeutung | Default-Bezeichnung |
 | --- | --- | --- |
@@ -243,7 +247,7 @@ automatisch übersetzt werden:
 | `N<n>` | Anzahl Notfalleinsatzfahrzeuge | `Notfalleinsatzfahrzeug` |
 | Suffix `p` | Polytrauma | `Polytrauma` |
 | Suffix `f` | First Responder einbezogen | `First Responder` |
-| Suffix `-NT` | Notfalltransport mit Notfallkrankenwagen | `Notfalltransport mit Notfallkrankenwagen` |
+| Suffix `-NT`/` nt` | Notfalltransport mit Notfallkrankenwagen | `Notfalltransport mit Notfallkrankenwagen` |
 
 ### Stichwort-Stammdaten
 
