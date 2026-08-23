@@ -1,5 +1,18 @@
 # Older changes
 
+### 0.7.16 (2026-08-22)
+
+- Fixed two stale-data gaps around incident transitions:
+  - When a new incident starts before its own routes/feedback events
+    arrive, `einsatz.json.routen`/`.rueckmeldungen` and the feedback
+    counters are now cleared immediately instead of waiting for those
+    events.
+  - Added a watchdog that automatically finalizes an incident
+    (archives it, clears live fields) if its `ablaufzeit` is exceeded
+    by more than 60s without a matching `io.standby` ever arriving -
+    previously a missed `io.standby` (e.g. due to a disconnect at the
+    wrong moment) could leave stale "active" data indefinitely.
+
 ### 0.7.15 (2026-08-22)
 
 - Restructured `einsatz.json` into a channel with flat,

@@ -25,9 +25,11 @@ open.
 - [About WAIP-Web](#about-waip-web)
 - [Practical use cases](#practical-use-cases)
 - [Features](#features)
-  - [Why a session cookie is needed](#why-a-session-cookie-is-needed)
 - [Configuration](#configuration)
-  - [Alarm keyword descriptions](#alarm-keyword-descriptions)
+  - [Connection](#connection)
+  - [Why a session cookie is needed](#why-a-session-cookie-is-needed)
+  - [Rescue-service keywords](#rescue-service-keywords)
+  - [Keyword descriptions](#keyword-descriptions)
 - [States (under `waip-web.0.*`)](#states-under-waip-web0)
   - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
     [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
@@ -89,13 +91,20 @@ adapter provides – typical use in a fire station/EMS environment:
   automatically, without anyone having to keep a browser tab open on that
   screen (which is the whole reason this adapter exists in the first
   place).
+- **Plain-language keyword on displays and notifications.**
+  `einsatz.beschreibung` turns a cryptic dispatch code (`B:Wald groß/WSP`,
+  `R1N0`) into a readable description ("Wald-/Getreidefeldbrand (groß)",
+  "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0") – bind it next to
+  `einsatz.stichwort` on the wall display or include it in the push
+  notification/TTS announcement, so members don't have to memorize every
+  keyword.
 - **Trigger automations the instant an alarm comes in.** Watch
   `einsatz.alarmAktiv` (or `info.connection` together with it) in a
   script/blockly rule to switch on lights in the vehicle hall, open a
   gate/door, send a push notification (e.g. via a Telegram/Pushover
-  adapter) with `einsatz.stichwort` + `einsatz.ort`, or flash a
-  smart-light scene – all a few seconds after the actual pager alert,
-  no polling required since ioBroker state changes fire instantly.
+  adapter) with `einsatz.stichwort`/`einsatz.beschreibung` + `einsatz.ort`,
+  or flash a smart-light scene – all a few seconds after the actual pager
+  alert, no polling required since ioBroker state changes fire instantly.
 - **Announce the alarm out loud.** `einsatz.tts.last` is a ready-to-play
   absolute mp3 URL; point a `sonos`/`snapcast`/`text2speech`-style
   automation at it (or just play the URL directly) to have the incident
@@ -164,10 +173,30 @@ adapter provides – typical use in a fire station/EMS environment:
   concurrently active incidents can currently only be viewed via the
   WAIP-Web instance's own dashboard
 - Optional plain-language description for `einsatz.stichwort`
-  (`einsatz.beschreibung`), resolved locally from a user-maintained,
-  export-/importable keyword table plus an optional decoder for the
-  `R<RTW>N<NEF>` rescue-service keyword scheme used by several dispatch
-  centers - see [Alarm keyword descriptions](#alarm-keyword-descriptions)
+  (`einsatz.beschreibung`), resolved locally from a user-maintained
+  keyword table plus an optional decoder for the `R<RTW>N<NEF>`
+  rescue-service keyword scheme used by several dispatch
+  centers - see [Rescue-service keywords](#rescue-service-keywords)
+
+## Configuration
+
+In the admin UI of the adapter instance, settings are grouped across
+three tabs: **Connection**, **Rescue-service keywords** and **Keyword
+descriptions** – see below for all three.
+
+### Connection
+
+| Field | Description | Default |
+| --- | --- | --- |
+| WAIP server URL | Base URL of the WAIP-Web instance | `https://wachalarm.leitstelle-lausitz.de` |
+| Monitor ID | Picked from a live dropdown, fetched from the configured server's `/waip/` overview page and grouped by Leitstelle/Kreis/Träger/Wache; manual entry stays possible if the server can't be reached. Empty/`0` = global monitor (all incidents) | *(empty)* |
+| Registration timeout (s) | Time until a missing registration confirmation is logged | `10` |
+| Reconnect delay (s) | Wait time before a manual reconnect after disconnect/error | `5` |
+
+The session keepalive interval is **not configurable** – it's derived
+fully automatically on every renewal from the cookie lifetime the server
+reports (min. 55s, max. 5 min., matching `/js/session_keepalive.js` on
+the site itself).
 
 ### Why a session cookie is needed
 
@@ -187,63 +216,56 @@ observed lifetime, at least 55 seconds, at most a fixed 5-minute ceiling)
 – the exact same clamping that `/js/session_keepalive.js` on the site
 itself uses.
 
-## Configuration
-
-In the admin UI of the adapter instance:
-
-| Field | Description | Default |
-| --- | --- | --- |
-| WAIP server URL | Base URL of the WAIP-Web instance | `https://wachalarm.leitstelle-lausitz.de` |
-| Monitor ID | Picked from a live dropdown, fetched from the configured server's `/waip/` overview page and grouped by Leitstelle/Kreis/Träger/Wache; manual entry stays possible if the server can't be reached. Empty/`0` = global monitor (all incidents) | *(empty)* |
-| Registration timeout (s) | Time until a missing registration confirmation is logged | `10` |
-| Reconnect delay (s) | Wait time before a manual reconnect after disconnect/error | `5` |
-
-The session keepalive interval is **not configurable** – it's derived
-fully automatically on every renewal from the cookie lifetime the server
-reports (min. 55s, max. 5 min., matching `/js/session_keepalive.js` on
-the site itself).
-
-### Alarm keyword descriptions
+### Rescue-service keywords
 
 `einsatz.stichwort` is passed through unchanged from the server as a
 bare code (e.g. `B2`, `H:VU mit P`) – WAIP-Web itself doesn't explain
 what it means, and there is no nationwide standard: every dispatch
 center uses its own keyword catalog. `einsatz.beschreibung` fills that
-gap **entirely locally**, no data is sent anywhere:
+gap **entirely locally**, no data is sent anywhere. This tab is the
+first of two sources checked, in order (see
+[Keyword descriptions](#keyword-descriptions) for the second):
 
-1. **Rescue-service decoding** (admin checkbox, off by default): if the
-   keyword matches the pattern `R<RTW-count>N<NEF-count>[p][f][-NT]`
-   (e.g. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), a
-   description is generated automatically. This scheme is used by
-   several German dispatch centers, not just one specific instance (see
-   [Leitstelle Lausitz's documented explanation](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
-   of it) – only enable it if your dispatch center actually uses this
-   pattern. The text for each part is itself configurable (5 additional
-   text fields appear once the checkbox is enabled), since the adapter
-   is multi-language and these labels aren't translated automatically:
+**Rescue-service decoding** (admin checkbox, off by default): if the
+keyword matches the pattern `R<RTW-count>N<NEF-count>[p][f][-NT]`
+(e.g. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), a
+description is generated automatically. This scheme is used by
+several German dispatch centers, not just one specific instance (see
+[Leitstelle Lausitz's documented explanation](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
+of it) – only enable it if your dispatch center actually uses this
+pattern. The text for each part is itself configurable (5 additional
+text fields appear once the checkbox is enabled), since the adapter
+is multi-language and these labels aren't translated automatically:
 
-   | Part | Meaning | Default label |
-   | --- | --- | --- |
-   | `R<n>` | Number of ambulances (Rettungswagen) | `Rettungswagen` |
-   | `N<n>` | Number of emergency vehicles (Notfalleinsatzfahrzeug) | `Notfalleinsatzfahrzeug` |
-   | `p` suffix | Polytrauma | `Polytrauma` |
-   | `f` suffix | First responder included | `First Responder` |
-   | `-NT` suffix | Special ambulance transport | `Notfalltransport mit Notfallkrankenwagen` |
-2. **Keyword table** (admin table, checked only if step 1 didn't
-   match): a list of `{keyword pattern, description, match type}`
-   rows – match type is `starts with` or `contains`, comparison is
-   case-insensitive, and if several rows match, the **most specific
-   (longest) pattern wins automatically** – row order has no effect on
-   matching, so the table can be freely sorted by keyword (click the
-   column header) without changing behavior. The table is pre-filled
-   with an example fire/rescue keyword list (`B:...`/`H:...`) as a
-   starting point only – it is **not** confirmed to match any specific
-   dispatch center's real catalog, edit or fully replace it as needed.
-   The table can be exported/imported as CSV via the buttons above it
-   in the admin UI.
+| Part | Meaning | Default label |
+| --- | --- | --- |
+| `R<n>` | Number of ambulances (Rettungswagen) | `Rettungswagen` |
+| `N<n>` | Number of emergency vehicles (Notfalleinsatzfahrzeug) | `Notfalleinsatzfahrzeug` |
+| `p` suffix | Polytrauma | `Polytrauma` |
+| `f` suffix | First responder included | `First Responder` |
+| `-NT` suffix | Special ambulance transport | `Notfalltransport mit Notfallkrankenwagen` |
 
-If neither step produces a match, `einsatz.beschreibung` is simply
-`null` - not an error.
+### Keyword descriptions
+
+Checked only if the decoder on the [Rescue-service keywords](#rescue-service-keywords)
+tab didn't match: a list of `{keyword pattern, description, match type}`
+rows – match type is `starts with` or `contains`, comparison is
+case-insensitive, and if several rows match, the **most specific
+(longest) pattern wins automatically** – row order has no effect on
+matching, so the table can be freely sorted by keyword (click the
+column header) without changing behavior. The table is pre-filled
+with an example fire/rescue keyword list (`B:...`/`H:...`) as a
+starting point only – it is **not** confirmed to match any specific
+dispatch center's real catalog, edit or fully replace it as needed.
+To back up or transfer this table, use ioBroker's standard instance
+configuration export/import (JSON). After using that import,
+**reload the Admin page** before checking this table – the open
+config dialog doesn't refresh it from an external import
+automatically (a state-sync limitation of the Admin table component
+itself, not something this adapter controls).
+
+If neither this table nor the decoder above match, `einsatz.beschreibung`
+is simply `null` - not an error.
 
 ## States (under `waip-web.0.*`)
 
@@ -305,7 +327,7 @@ The most recently finished incident remains available via
 | `uuid` | string | Unique incident UUID (also used to associate feedback) |
 | `einsatzart` | string | e.g. "Brandeinsatz" (fire), "Hilfeleistungseinsatz" (technical assistance), "Rettungseinsatz" (rescue/EMS), "Krankentransport" (patient transport) |
 | `stichwort` | string | Alarm keyword |
-| `beschreibung` | string | Description for `stichwort`, resolved locally (not sent by the server) - see [Alarm keyword descriptions](#alarm-keyword-descriptions) below. `null` if nothing matched |
+| `beschreibung` | string | Description for `stichwort`, resolved locally (not sent by the server) - see [Rescue-service keywords](#rescue-service-keywords)/[Keyword descriptions](#keyword-descriptions) below. `null` if nothing matched |
 | `ort` | string | Location/town |
 | `ortsteil` | string | District (if different from `ort`) |
 | `zeitstempel` | string (date) | Alarm time |
@@ -381,6 +403,27 @@ message the adapter can produce, grouped by level, with its cause and an
 example.
 
 ## Changelog
+
+### 0.7.21 (2026-08-23)
+
+- Removed the keyword table's CSV export/import: a bug in ioBroker
+  Admin's own `table` component corrupted German umlauts on CSV
+  import (e.g. `Ã¤`/`Ã` instead of `ä`/`ß`) - confirmed to be entirely
+  inside the Admin UI, not this adapter's code. Use ioBroker's
+  standard instance configuration export/import (JSON) instead - see
+  [Keyword descriptions](#keyword-descriptions) for the reload caveat
+  after using it.
+- Split the admin configuration UI into 3 tabs -
+  [Connection](#connection), [Rescue-service
+  keywords](#rescue-service-keywords),
+  [Keyword descriptions](#keyword-descriptions) - each with a
+  matching icon, replacing the single combined settings page.
+- Documentation: restructured the configuration section of the
+  README to mirror the 3 admin tabs, fixed a stale reference to the
+  removed CSV feature, and added a couple of small clarifications
+  (mentioned `einsatz.beschreibung` in the practical-use-cases
+  section, mentioned the 3-tab structure up front). All code comments
+  in `main.js` are now bilingual (German + English).
 
 ### 0.7.20 (2026-08-22)
 
@@ -462,19 +505,6 @@ example.
   section, a known-limitation note (only the single most recently active
   incident is shown - see [`einsatz`](#einsatz)), and enforced the
   changelog's own 5-entry limit.
-
-### 0.7.16 (2026-08-22)
-
-- Fixed two stale-data gaps around incident transitions:
-  - When a new incident starts before its own routes/feedback events
-    arrive, `einsatz.json.routen`/`.rueckmeldungen` and the feedback
-    counters are now cleared immediately instead of waiting for those
-    events.
-  - Added a watchdog that automatically finalizes an incident
-    (archives it, clears live fields) if its `ablaufzeit` is exceeded
-    by more than 60s without a matching `io.standby` ever arriving -
-    previously a missed `io.standby` (e.g. due to a disconnect at the
-    wrong moment) could leave stale "active" data indefinitely.
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md).
 

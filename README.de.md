@@ -16,9 +16,11 @@ ohne dass ein Browser-Tab dauerhaft offen sein muss.
 - [Über WAIP-Web](#über-waip-web)
 - [Praktische Anwendungsfälle](#praktische-anwendungsfälle)
 - [Funktionen](#funktionen)
-  - [Warum ein Session-Cookie nötig ist](#warum-ein-session-cookie-nötig-ist)
 - [Konfiguration](#konfiguration)
-  - [Stichwort-Beschreibungen](#stichwort-beschreibungen)
+  - [Verbindung](#verbindung)
+  - [Warum ein Session-Cookie nötig ist](#warum-ein-session-cookie-nötig-ist)
+  - [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter)
+  - [Stichwort-Stammdaten](#stichwort-stammdaten)
 - [States (unter `waip-web.0.*`)](#states-unter-waip-web0)
   - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
     [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
@@ -81,14 +83,21 @@ Rettungsdienst-Wache:
   und alarmierte Einsatzmittel erscheinen automatisch, ohne dass dort
   dauerhaft ein Browser-Tab offen gehalten werden muss (genau dafür
   existiert dieser Adapter).
+- **Klartext-Stichwort auf Anzeigen und Benachrichtigungen.**
+  `einsatz.beschreibung` macht aus einem kryptischen Alarmierungscode
+  (`B:Wald groß/WSP`, `R1N0`) eine lesbare Beschreibung
+  ("Wald-/Getreidefeldbrand (groß)", "Rettungswagen: 1,
+  Notfalleinsatzfahrzeug: 0") – neben `einsatz.stichwort` auf der
+  Wandanzeige einblenden oder in Push-Benachrichtigung/TTS-Ansage mit
+  aufnehmen, damit nicht jeder alle Stichwörter auswendig kennen muss.
 - **Automationen direkt bei Alarmeingang auslösen.** `einsatz.alarmAktiv`
   (ggf. zusammen mit `info.connection`) in einem Script/einer Blockly-Regel
   beobachten, um bei Alarm Licht in der Fahrzeughalle einzuschalten, ein
   Tor/eine Tür zu öffnen, eine Push-Benachrichtigung (z. B. über einen
-  Telegram-/Pushover-Adapter) mit `einsatz.stichwort` + `einsatz.ort` zu
-  versenden oder eine Lichtszene auszulösen – wenige Sekunden nach der
-  eigentlichen Alarmierung, da ioBroker-State-Änderungen sofort feuern und
-  kein Polling nötig ist.
+  Telegram-/Pushover-Adapter) mit `einsatz.stichwort`/`einsatz.beschreibung`
+  + `einsatz.ort` zu versenden oder eine Lichtszene auszulösen – wenige
+  Sekunden nach der eigentlichen Alarmierung, da ioBroker-State-Änderungen
+  sofort feuern und kein Polling nötig ist.
 - **Alarm laut ansagen.** `einsatz.tts.last` ist eine fertige, absolute
   mp3-URL; eine `sonos`-/`snapcast`-/`text2speech`-Automation darauf
   ansetzen (oder die URL direkt abspielen), um den Einsatz über
@@ -161,11 +170,31 @@ Rettungsdienst-Wache:
   laufende Einsätze sind aktuell nur über das Dashboard der
   WAIP-Web-Instanz selbst einsehbar
 - Optionale Klartext-Beschreibung zu `einsatz.stichwort`
-  (`einsatz.beschreibung`), lokal ermittelt aus einer selbst pflegbaren,
-  export-/importierbaren Stichwort-Tabelle sowie einem optionalen
-  Dekoder für das von mehreren Leitstellen verwendete
-  Rettungsdienst-Stichwortschema (`R<RTW>N<NEF>`) - siehe
-  [Stichwort-Beschreibungen](#stichwort-beschreibungen)
+  (`einsatz.beschreibung`), lokal ermittelt aus einer selbst pflegbaren
+  Stichwort-Tabelle sowie einem optionalen Dekoder für das von
+  mehreren Leitstellen verwendete Rettungsdienst-Stichwortschema
+  (`R<RTW>N<NEF>`) - siehe
+  [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter)
+
+## Konfiguration
+
+In der Admin-Oberfläche der Adapterinstanz sind die Einstellungen auf
+drei Tabs verteilt: **Verbindung**, **Rettungsdienst-Stichwörter** und
+**Stichwort-Stammdaten** – alle drei unten näher beschrieben.
+
+### Verbindung
+
+| Feld | Beschreibung | Default |
+| --- | --- | --- |
+| WAIP-Server-URL | Basis-URL der WAIP-Web-Instanz | `https://wachalarm.leitstelle-lausitz.de` |
+| Monitor-ID | Auswahl per Live-Dropdown, geladen von der `/waip/`-Übersichtsseite des konfigurierten Servers und gruppiert nach Leitstelle/Kreis/Träger/Wache; manuelle Eingabe bleibt möglich, falls der Server nicht erreichbar ist. Leer/`0` = globaler Monitor (alle Einsätze) | *(leer)* |
+| Registrierungs-Timeout (s) | Zeit bis eine ausbleibende Registrierungsbestätigung geloggt wird | `10` |
+| Wiederverbindungs-Verzögerung (s) | Wartezeit vor manuellem Reconnect nach Disconnect/Fehler | `5` |
+
+Das Session-Keepalive-Intervall ist **nicht konfigurierbar** – es wird bei
+jeder Erneuerung vollautomatisch aus der vom Server gemeldeten Cookie-
+Laufzeit abgeleitet (min. 55s, max. 5 Min., analog zu
+`/js/session_keepalive.js` der Website selbst).
 
 ### Warum ein Session-Cookie nötig ist
 
@@ -185,65 +214,60 @@ Laufzeit, mindestens 55 Sekunden, höchstens die konfigurierte Obergrenze) –
 genau die gleiche Klammerung, die auch `/js/session_keepalive.js` der
 Website selbst verwendet.
 
-## Konfiguration
-
-In der Admin-Oberfläche der Adapterinstanz:
-
-| Feld | Beschreibung | Default |
-| --- | --- | --- |
-| WAIP-Server-URL | Basis-URL der WAIP-Web-Instanz | `https://wachalarm.leitstelle-lausitz.de` |
-| Monitor-ID | Auswahl per Live-Dropdown, geladen von der `/waip/`-Übersichtsseite des konfigurierten Servers und gruppiert nach Leitstelle/Kreis/Träger/Wache; manuelle Eingabe bleibt möglich, falls der Server nicht erreichbar ist. Leer/`0` = globaler Monitor (alle Einsätze) | *(leer)* |
-| Registrierungs-Timeout (s) | Zeit bis eine ausbleibende Registrierungsbestätigung geloggt wird | `10` |
-| Wiederverbindungs-Verzögerung (s) | Wartezeit vor manuellem Reconnect nach Disconnect/Fehler | `5` |
-
-Das Session-Keepalive-Intervall ist **nicht konfigurierbar** – es wird bei
-jeder Erneuerung vollautomatisch aus der vom Server gemeldeten Cookie-
-Laufzeit abgeleitet (min. 55s, max. 5 Min., analog zu
-`/js/session_keepalive.js` der Website selbst).
-
-### Stichwort-Beschreibungen
+### Rettungsdienst-Stichwörter
 
 `einsatz.stichwort` wird unverändert vom Server als bloßer Code
 übernommen (z.B. `B2`, `H:VU mit P`) – WAIP-Web selbst erklärt nicht,
 was das bedeutet, und es gibt kein bundesweit einheitliches Schema:
 jede Leitstelle nutzt ihr eigenes Stichwortverzeichnis.
 `einsatz.beschreibung` schließt diese Lücke **vollständig lokal**, es
-werden dabei keine Daten irgendwohin gesendet:
+werden dabei keine Daten irgendwohin gesendet. Dieser Tab ist die erste
+von zwei Quellen, die der Reihe nach geprüft werden (die zweite steht
+unter [Stichwort-Stammdaten](#stichwort-stammdaten)):
 
-1. **Rettungsdienst-Dekodierung** (Admin-Checkbox, standardmäßig aus):
-   passt das Stichwort auf das Muster `R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]`
-   (z.B. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), wird
-   automatisch eine Beschreibung erzeugt. Dieses Schema wird von
-   mehreren Leitstellen verwendet, nicht nur einer einzelnen Instanz
-   (siehe [die dokumentierte Erklärung der Leitstelle Lausitz](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
-   dazu) – nur aktivieren, wenn eure Leitstelle dieses Muster tatsächlich
-   verwendet. Der Text für jeden Teil ist selbst konfigurierbar (5
-   zusätzliche Textfelder erscheinen, sobald die Checkbox aktiviert
-   ist), da der Adapter mehrsprachig ist und diese Bezeichnungen nicht
-   automatisch übersetzt werden:
+**Rettungsdienst-Dekodierung** (Admin-Checkbox, standardmäßig aus):
+passt das Stichwort auf das Muster `R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]`
+(z.B. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), wird
+automatisch eine Beschreibung erzeugt. Dieses Schema wird von
+mehreren Leitstellen verwendet, nicht nur einer einzelnen Instanz
+(siehe [die dokumentierte Erklärung der Leitstelle Lausitz](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
+dazu) – nur aktivieren, wenn eure Leitstelle dieses Muster tatsächlich
+verwendet. Der Text für jeden Teil ist selbst konfigurierbar (5
+zusätzliche Textfelder erscheinen, sobald die Checkbox aktiviert
+ist), da der Adapter mehrsprachig ist und diese Bezeichnungen nicht
+automatisch übersetzt werden:
 
-   | Teil | Bedeutung | Default-Bezeichnung |
-   | --- | --- | --- |
-   | `R<n>` | Anzahl Rettungswagen | `Rettungswagen` |
-   | `N<n>` | Anzahl Notfalleinsatzfahrzeuge | `Notfalleinsatzfahrzeug` |
-   | Suffix `p` | Polytrauma | `Polytrauma` |
-   | Suffix `f` | First Responder einbezogen | `First Responder` |
-   | Suffix `-NT` | Notfalltransport mit Notfallkrankenwagen | `Notfalltransport mit Notfallkrankenwagen` |
-2. **Stichwort-Tabelle** (Admin-Tabelle, wird nur geprüft, falls Schritt 1
-   nicht gegriffen hat): eine Liste von `{Stichwort-Muster, Beschreibung,
-   Abgleich-Typ}`-Zeilen – Abgleich-Typ ist `beginnt mit` oder `enthält`,
-   der Vergleich ist case-insensitiv, und passen mehrere Zeilen, gewinnt
-   automatisch das **spezifischste (längste) Muster** – die Zeilenreihenfolge
-   hat keinen Einfluss auf den Abgleich, die Tabelle kann also gefahrlos
-   nach Stichwort sortiert werden (Klick auf die Spaltenüberschrift). Die
-   Tabelle ist mit einer beispielhaften Feuerwehr-/Rettungsdienst-
-   Stichwortliste (`B:...`/`H:...`) als Startpunkt vorbefüllt – das ist
-   **nicht** für irgendeine bestimmte Leitstelle bestätigt, bei Bedarf
-   anpassen oder komplett ersetzen. Die Tabelle lässt sich über die
-   Buttons oberhalb davon als CSV exportieren/importieren.
+| Teil | Bedeutung | Default-Bezeichnung |
+| --- | --- | --- |
+| `R<n>` | Anzahl Rettungswagen | `Rettungswagen` |
+| `N<n>` | Anzahl Notfalleinsatzfahrzeuge | `Notfalleinsatzfahrzeug` |
+| Suffix `p` | Polytrauma | `Polytrauma` |
+| Suffix `f` | First Responder einbezogen | `First Responder` |
+| Suffix `-NT` | Notfalltransport mit Notfallkrankenwagen | `Notfalltransport mit Notfallkrankenwagen` |
 
-Passt weder Schritt 1 noch 2, bleibt `einsatz.beschreibung` einfach
-`null` – kein Fehler.
+### Stichwort-Stammdaten
+
+Wird nur geprüft, falls der Dekoder auf dem Tab
+[Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter) nicht gegriffen
+hat: eine Liste von `{Stichwort-Muster, Beschreibung, Abgleich-Typ}`-Zeilen
+– Abgleich-Typ ist `beginnt mit` oder `enthält`, der Vergleich ist
+case-insensitiv, und passen mehrere Zeilen, gewinnt automatisch das
+**spezifischste (längste) Muster** – die Zeilenreihenfolge hat keinen
+Einfluss auf den Abgleich, die Tabelle kann also gefahrlos nach Stichwort
+sortiert werden (Klick auf die Spaltenüberschrift). Die Tabelle ist mit
+einer beispielhaften Feuerwehr-/Rettungsdienst-Stichwortliste
+(`B:...`/`H:...`) als Startpunkt vorbefüllt – das ist **nicht** für
+irgendeine bestimmte Leitstelle bestätigt, bei Bedarf anpassen oder
+komplett ersetzen. Zum Sichern/Übertragen dieser Tabelle die
+Standard-Instanzkonfiguration von ioBroker exportieren/importieren
+(JSON). Nach einem solchen Import **die Admin-Seite neu laden**, bevor
+du diese Tabelle prüfst – der offene Konfigurationsdialog aktualisiert
+sie bei einem externen Import nicht automatisch (eine
+State-Sync-Einschränkung der Admin-Tabellenkomponente selbst, nicht
+etwas, das dieser Adapter beeinflussen kann).
+
+Passt weder diese Tabelle noch der Dekoder oben, bleibt
+`einsatz.beschreibung` einfach `null` – kein Fehler.
 
 ## States (unter `waip-web.0.*`)
 
@@ -306,7 +330,7 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `uuid` | string | Eindeutige Einsatz-UUID (dient auch der Zuordnung von Rückmeldungen) |
 | `einsatzart` | string | z. B. „Brandeinsatz", „Hilfeleistungseinsatz", „Rettungseinsatz", „Krankentransport" |
 | `stichwort` | string | Alarmstichwort |
-| `beschreibung` | string | Beschreibung zu `stichwort`, lokal ermittelt (wird nicht vom Server gesendet) - siehe [Stichwort-Beschreibungen](#stichwort-beschreibungen) unten. `null` falls nichts passte |
+| `beschreibung` | string | Beschreibung zu `stichwort`, lokal ermittelt (wird nicht vom Server gesendet) - siehe [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter)/[Stichwort-Stammdaten](#stichwort-stammdaten) unten. `null` falls nichts passte |
 | `ort` | string | Ort |
 | `ortsteil` | string | Ortsteil (falls abweichend vom Ort) |
 | `zeitstempel` | string (date) | Alarmzeit |
