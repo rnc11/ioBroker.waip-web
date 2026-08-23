@@ -698,6 +698,27 @@ function decodeHtmlEntities(str) {
         .trim();
 }
 
+/* DE: Normalisiert ein Stichwort/Muster für den Abgleich in lookupStichwortBeschreibung():
+   lowercase, getrimmt, und jede Folge aus Leerzeichen und/oder Bindestrichen wird zu genau
+   einem Leerzeichen zusammengefasst. Dadurch werden Leitstellen-Schreibvarianten wie
+   "H:VU mit P", "H:VU-mit-P" und "H:VU - mit - P" als identisch behandelt, ohne dass für
+   jede Variante eine eigene Tabellenzeile gepflegt werden muss. Wird sowohl beim Aufbau von
+   this.stichwortMapping (auf das Tabellen-Muster) als auch bei jedem Lookup (auf das
+   eingehende Stichwort) angewendet, damit beide Seiten konsistent normalisiert sind.
+   EN: Normalizes a keyword/pattern for the comparison in lookupStichwortBeschreibung():
+   lowercase, trimmed, and any run of spaces and/or hyphens is collapsed to a single space.
+   This makes dispatch-center spelling variants like "H:VU mit P", "H:VU-mit-P" and
+   "H:VU - mit - P" compare as identical, without needing a separate table row per variant.
+   Applied both when building this.stichwortMapping (to the table pattern) and on every
+   lookup (to the incoming keyword), so both sides are normalized consistently. */
+function normalizeStichwortForMatch(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, ' ')
+        .trim();
+}
+
 class WaipWeb extends utils.Adapter {
     constructor(options) {
         super({
@@ -768,21 +789,22 @@ class WaipWeb extends utils.Adapter {
             f: (this.config.rdLabelF || '').trim() || DEFAULT_RD_LABEL_F,
             nt: (this.config.rdLabelNT || '').trim() || DEFAULT_RD_LABEL_NT,
         };
-        // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): trim + lowercase für den
-        // späteren case-insensitiven Vergleich, alphabetisch nach Muster sortiert. Die Reihenfolge
-        // hat für lookupStichwortBeschreibung() selbst keine Bedeutung mehr (dort gewinnt das
+        // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): normalizeStichwortForMatch()
+        // sorgt für case-insensitiven Vergleich UND behandelt Leerzeichen/Bindestriche als identisch
+        // (siehe deren Kommentar), alphabetisch nach Muster sortiert. Die Reihenfolge hat für
+        // lookupStichwortBeschreibung() selbst keine Bedeutung mehr (dort gewinnt das
         // längste/spezifischste passende Muster, nicht die Tabellenposition) - die Sortierung
         // dient nur der Übersichtlichkeit/Nachvollziehbarkeit.
-        // EN: Normalized once at startup (instead of on every lookup): trim + lowercase for
-        // the later case-insensitive comparison, sorted alphabetically by pattern. The order
-        // no longer matters to lookupStichwortBeschreibung() itself (there, the
-        // longest/most specific matching pattern wins, not the table position) - the sort
-        // is purely for readability/traceability.
+        // EN: Normalized once at startup (instead of on every lookup): normalizeStichwortForMatch()
+        // handles case-insensitive comparison AND treats spaces/hyphens as equivalent (see its
+        // comment), sorted alphabetically by pattern. The order no longer matters to
+        // lookupStichwortBeschreibung() itself (there, the longest/most specific matching pattern
+        // wins, not the table position) - the sort is purely for readability/traceability.
         this.stichwortMapping = Array.isArray(this.config.stichwortMapping)
             ? this.config.stichwortMapping
                   .filter(e => e && typeof e.stichwort === 'string' && e.stichwort.trim() !== '')
                   .map(e => ({
-                      pattern: e.stichwort.trim().toLowerCase(),
+                      pattern: normalizeStichwortForMatch(e.stichwort),
                       beschreibung: typeof e.beschreibung === 'string' ? e.beschreibung : '',
                       matchType: e.matchType === 'contains' ? 'contains' : 'startsWith',
                   }))
@@ -1584,20 +1606,22 @@ class WaipWeb extends utils.Adapter {
 
     /* DE: Ermittelt die Beschreibung zu einem Stichwort: zuerst die Rettungsdienst-Dekodierung (falls
        aktiviert und das Muster passt), sonst die manuelle Stammdaten-Tabelle (this.stichwortMapping,
-       case-insensitiv, startsWith/contains je Eintrag). Bei mehreren passenden Einträgen gewinnt
-       der mit dem LÄNGSTEN Muster (spezifischste Übereinstimmung) - unabhängig von der
-       Tabellenreihenfolge, damit die Admin-Tabelle gefahrlos alphabetisch sortiert werden kann
-       (z.B. "B:Wald groß/WSP" schlägt automatisch das kürzere "B:Wald", ganz gleich welche der
-       beiden Zeilen zuerst in der Tabelle steht). Bei gleicher Musterlänge entscheidet die
-       Tabellenreihenfolge als Tiebreaker. Liefert null, wenn nichts passt (kein Fehler).
+       case-insensitiv, Leerzeichen/Bindestriche äquivalent - siehe normalizeStichwortForMatch(),
+       startsWith/contains je Eintrag). Bei mehreren passenden Einträgen gewinnt der mit dem
+       LÄNGSTEN Muster (spezifischste Übereinstimmung) - unabhängig von der Tabellenreihenfolge,
+       damit die Admin-Tabelle gefahrlos alphabetisch sortiert werden kann (z.B. "B:Wald groß/WSP"
+       schlägt automatisch das kürzere "B:Wald", ganz gleich welche der beiden Zeilen zuerst in der
+       Tabelle steht). Bei gleicher Musterlänge entscheidet die Tabellenreihenfolge als Tiebreaker.
+       Liefert null, wenn nichts passt (kein Fehler).
        EN: Determines the description for a keyword: first the rescue-service decoder (if
        enabled and the pattern matches), otherwise the manual keyword table
-       (this.stichwortMapping, case-insensitive, startsWith/contains per entry). If several
-       entries match, the one with the LONGEST pattern (most specific match) wins -
-       independent of table order, so the admin table can be sorted alphabetically without
-       risk (e.g. "B:Wald groß/WSP" automatically beats the shorter "B:Wald", regardless of
-       which of the two rows comes first in the table). If patterns tie in length, table
-       order decides as a tiebreaker. Returns null if nothing matches (not an error). */
+       (this.stichwortMapping, case-insensitive, spaces/hyphens equivalent - see
+       normalizeStichwortForMatch(), startsWith/contains per entry). If several entries match,
+       the one with the LONGEST pattern (most specific match) wins - independent of table order,
+       so the admin table can be sorted alphabetically without risk (e.g. "B:Wald groß/WSP"
+       automatically beats the shorter "B:Wald", regardless of which of the two rows comes first
+       in the table). If patterns tie in length, table order decides as a tiebreaker. Returns
+       null if nothing matches (not an error). */
     lookupStichwortBeschreibung(stichwort) {
         if (!stichwort) {
             return null;
@@ -1608,7 +1632,7 @@ class WaipWeb extends utils.Adapter {
                 return decoded;
             }
         }
-        const value = String(stichwort).trim().toLowerCase();
+        const value = normalizeStichwortForMatch(stichwort);
         if (!value) {
             return null;
         }
