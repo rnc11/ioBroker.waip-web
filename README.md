@@ -404,6 +404,17 @@ example.
 
 ## Changelog
 
+### 0.7.22 (2026-08-23)
+
+- Extended the default [keyword table](#keyword-descriptions) with
+  `H:Person-TMR` (technical human rescue) and corrected three entries
+  whose pattern didn't match the actual dispatch keyword:
+  `H:Flugunfall` → `H:Flugzeugunfall` (`klein`/`groß`), `H:Öl Wasser`
+  → `H:Öl auf Wasser`, `H:Rettung aus Höhen/Tiefen` → `H:Rettung aus
+  Höhen und Tiefen` (source: Regionalleitstellen Brandenburg keyword
+  list, v7.1). Only affects the shipped example table for new
+  installs - existing configured tables are untouched.
+
 ### 0.7.21 (2026-08-23)
 
 - Removed the keyword table's CSV export/import: a bug in ioBroker
