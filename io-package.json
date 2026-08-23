@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "waip-web",
-    "version": "0.7.22",
+    "version": "0.7.23",
     "news": {
+      "0.7.23": {
+        "en": "Extended the default keyword table with the 29 Krankentransport (K), Verlegung (V), MANV (M) and Sonderstichwort (S) keywords from the IRLS Brandenburg rescue-service catalog (v2.7) - previously only the R<ambulance>N<physician-vehicle> scheme and the Brand/THL (B:/H:) table were covered, so einsatz.beschreibung stayed null for these. Also fixed the R-scheme decoder (decodeRettungsdienstStichwort): it only accepted the Leitstelle Lausitz spelling without a space (\"R1N1p\", \"R1N0-NT\") and silently returned null for the IRLS Brandenburg spelling with a space (\"R1N1 p\", \"R1N0 nt\") - both are now recognized. Only affects the shipped example table and the decoder logic for new installs/upgrades - existing configured tables are untouched.",
+        "de": "Die Default-Stichwort-Tabelle um die 29 Krankentransport- (K), Verlegungs- (V), MANV- (M) und Sonderstichworte (S) aus dem Rettungsdienst-Katalog der IRLS Brandenburg (v2.7) ergänzt - bisher waren nur das Schema R<RTW>N<NEF> sowie die Brand/THL-Tabelle (B:/H:) abgedeckt, für diese Stichworte blieb einsatz.beschreibung also null. Außerdem den R-Schema-Dekoder (decodeRettungsdienstStichwort) korrigiert: er akzeptierte bisher nur die Schreibweise der Leitstelle Lausitz ohne Leerzeichen (\"R1N1p\", \"R1N0-NT\") und lieferte für die Schreibweise der IRLS Brandenburg mit Leerzeichen (\"R1N1 p\", \"R1N0 nt\") stillschweigend null - beide werden jetzt erkannt. Betrifft nur die mitgelieferte Beispieltabelle und die Dekoder-Logik bei Neuinstallationen/Updates - bereits konfigurierte Tabellen bleiben unverändert.",
+        "es": "Se amplió la tabla de palabras clave predeterminada con las 29 palabras clave de Krankentransport (K), Verlegung (V), MANV (M) y Sonderstichwort (S) del catálogo de servicios de rescate de la IRLS Brandeburgo (v2.7) - anteriormente solo estaban cubiertos el esquema R<ambulancia>N<vehículo médico> y la tabla Brand/THL (B:/H:), por lo que einsatz.beschreibung permanecía en null para estas. También se corrigió el decodificador del esquema R (decodeRettungsdienstStichwort): antes solo aceptaba la escritura de la central de Lausitz sin espacio (\"R1N1p\", \"R1N0-NT\") y devolvía silenciosamente null para la escritura de la IRLS Brandeburgo con espacio (\"R1N1 p\", \"R1N0 nt\") - ahora se reconocen ambas. Solo afecta a la tabla de ejemplo incluida y a la lógica del decodificador en nuevas instalaciones/actualizaciones - las tablas ya configuradas no se modifican.",
+        "fr": "Ajout des 29 mots-clés Krankentransport (K), Verlegung (V), MANV (M) et Sonderstichwort (S) du catalogue des services de secours de l'IRLS Brandebourg (v2.7) à la table de mots-clés par défaut - auparavant, seuls le schéma R<ambulance>N<véhicule médical> et la table Brand/THL (B:/H:) étaient couverts, si bien que einsatz.beschreibung restait à null pour ces mots-clés. Correction également du décodeur du schéma R (decodeRettungsdienstStichwort) : il n'acceptait auparavant que l'écriture du centre de Lausitz sans espace (\"R1N1p\", \"R1N0-NT\") et renvoyait silencieusement null pour l'écriture de l'IRLS Brandebourg avec espace (\"R1N1 p\", \"R1N0 nt\") - les deux sont désormais reconnues. Ne concerne que la table d'exemple fournie et la logique du décodeur pour les nouvelles installations/mises à jour - les tables déjà configurées restent inchangées.",
+        "it": "Ampliata la tabella delle parole chiave predefinita con le 29 parole chiave Krankentransport (K), Verlegung (V), MANV (M) e Sonderstichwort (S) del catalogo dei servizi di soccorso dell'IRLS Brandeburgo (v2.7) - in precedenza erano coperti solo lo schema R<ambulanza>N<veicolo medico> e la tabella Brand/THL (B:/H:), quindi einsatz.beschreibung rimaneva null per queste voci. Corretto anche il decodificatore dello schema R (decodeRettungsdienstStichwort): prima accettava solo la grafia della centrale di Lausitz senza spazio (\"R1N1p\", \"R1N0-NT\") e restituiva silenziosamente null per la grafia dell'IRLS Brandeburgo con spazio (\"R1N1 p\", \"R1N0 nt\") - ora vengono riconosciute entrambe. Riguarda solo la tabella di esempio fornita e la logica del decodificatore per le nuove installazioni/aggiornamenti - le tabelle già configurate restano invariate.",
+        "nl": "De standaard trefwoordentabel uitgebreid met de 29 Krankentransport- (K), Verlegung- (V), MANV- (M) en Sonderstichwort-trefwoorden (S) uit de reddingsdienstcatalogus van de IRLS Brandenburg (v2.7) - voorheen waren alleen het schema R<ambulance>N<artsvoertuig> en de Brand/THL-tabel (B:/H:) gedekt, waardoor einsatz.beschreibung voor deze trefwoorden null bleef. Ook de R-schema-decoder (decodeRettungsdienstStichwort) gecorrigeerd: deze accepteerde voorheen alleen de schrijfwijze van de meldkamer Lausitz zonder spatie (\"R1N1p\", \"R1N0-NT\") en gaf stilzwijgend null terug voor de schrijfwijze van de IRLS Brandenburg met spatie (\"R1N1 p\", \"R1N0 nt\") - beide worden nu herkend. Betreft alleen de meegeleverde voorbeeldtabel en de decoderlogica bij nieuwe installaties/updates - reeds geconfigureerde tabellen blijven ongewijzigd.",
+        "pl": "Rozszerzono domyślną tabelę słów kluczowych o 29 słów kluczowych Krankentransport (K), Verlegung (V), MANV (M) i Sonderstichwort (S) z katalogu służb ratowniczych IRLS Brandenburgii (v2.7) - wcześniej obejmowano tylko schemat R<karetka>N<pojazd lekarski> oraz tabelę Brand/THL (B:/H:), więc dla tych słów einsatz.beschreibung pozostawało null. Poprawiono również dekoder schematu R (decodeRettungsdienstStichwort): wcześniej akceptował tylko zapis centrali Lausitz bez spacji (\"R1N1p\", \"R1N0-NT\") i po cichu zwracał null dla zapisu IRLS Brandenburgii ze spacją (\"R1N1 p\", \"R1N0 nt\") - teraz oba są rozpoznawane. Dotyczy tylko dołączonej przykładowej tabeli oraz logiki dekodera przy nowych instalacjach/aktualizacjach - już skonfigurowane tabele pozostają bez zmian.",
+        "pt": "A tabela padrão de palavras-chave foi ampliada com as 29 palavras-chave Krankentransport (K), Verlegung (V), MANV (M) e Sonderstichwort (S) do catálogo de serviços de resgate da IRLS Brandemburgo (v2.7) - anteriormente apenas o esquema R<ambulância>N<veículo médico> e a tabela Brand/THL (B:/H:) eram cobertos, portanto einsatz.beschreibung permanecia null para essas entradas. Também foi corrigido o decodificador do esquema R (decodeRettungsdienstStichwort): antes ele aceitava apenas a grafia da central de Lausitz sem espaço (\"R1N1p\", \"R1N0-NT\") e retornava silenciosamente null para a grafia da IRLS Brandemburgo com espaço (\"R1N1 p\", \"R1N0 nt\") - agora ambas são reconhecidas. Afeta apenas a tabela de exemplo fornecida e a lógica do decodificador em novas instalações/atualizações - tabelas já configuradas permanecem inalteradas.",
+        "ru": "Стандартная таблица ключевых слов дополнена 29 ключевыми словами категорий Krankentransport (K), Verlegung (V), MANV (M) и Sonderstichwort (S) из каталога службы спасения IRLS Бранденбурга (v2.7) - ранее были охвачены только схема R<машина скорой помощи>N<врачебный автомобиль> и таблица Brand/THL (B:/H:), поэтому для этих слов einsatz.beschreibung оставалось null. Также исправлен декодер R-схемы (decodeRettungsdienstStichwort): раньше он принимал только написание диспетчерской Lausitz без пробела (\"R1N1p\", \"R1N0-NT\") и молча возвращал null для написания IRLS Бранденбурга с пробелом (\"R1N1 p\", \"R1N0 nt\") - теперь распознаются оба варианта. Затрагивает только прилагаемую примерную таблицу и логику декодера при новых установках/обновлениях - уже настроенные таблицы остаются без изменений.",
+        "uk": "Стандартну таблицю ключових слів розширено 29 ключовими словами категорій Krankentransport (K), Verlegung (V), MANV (M) та Sonderstichwort (S) з каталогу рятувальної служби IRLS Бранденбургу (v2.7) - раніше охоплювалися лише схема R<машина швидкої>N<лікарський автомобіль> та таблиця Brand/THL (B:/H:), тому для цих слів einsatz.beschreibung залишалося null. Також виправлено декодер R-схеми (decodeRettungsdienstStichwort): раніше він приймав лише написання диспетчерської Lausitz без пробілу (\"R1N1p\", \"R1N0-NT\") і мовчки повертав null для написання IRLS Бранденбургу з пробілом (\"R1N1 p\", \"R1N0 nt\") - тепер розпізнаються обидва варіанти. Стосується лише прикладеної зразкової таблиці та логіки декодера для нових встановлень/оновлень - вже налаштовані таблиці залишаються без змін.",
+        "zh-cn": "在默认关键字表中新增了来自勃兰登堡州IRLS救援服务目录（v2.7版）的29个Krankentransport（K，病人转运）、Verlegung（V，转院）、MANV（M，大量伤员）和Sonderstichwort（S，特殊关键字）关键词——此前只覆盖了R<救护车>N<医生车辆>方案和Brand/THL（B:/H:）表，因此这些关键词的 einsatz.beschreibung 一直为 null。同时修复了R方案解码器（decodeRettungsdienstStichwort）：此前它只接受不带空格的勒鲁西茨调度中心写法（\"R1N1p\"、\"R1N0-NT\"），而对带空格的勃兰登堡IRLS写法（\"R1N1 p\"、\"R1N0 nt\"）会静默返回 null——现在两种写法均可识别。仅影响新安装/升级时随附的示例表及解码器逻辑 - 已配置的表格不受影响。"
+      },
       "0.7.22": {
         "en": "Extended the default keyword table with H:Person-TMR (technical human rescue) and corrected three entries whose pattern didn't match the actual dispatch keyword: H:Flugunfall -> H:Flugzeugunfall (klein/groß), H:Öl Wasser -> H:Öl auf Wasser, H:Rettung aus Höhen/Tiefen -> H:Rettung aus Höhen und Tiefen (source: Regionalleitstellen Brandenburg keyword list, v7.1). Only affects the shipped example table for new installs - existing configured tables are untouched.",
         "de": "Die Default-Stichwort-Tabelle um H:Person-TMR (technische Menschenrettung) ergänzt und drei Einträge korrigiert, deren Muster nicht zum tatsächlichen Leitstellen-Stichwort passte: H:Flugunfall -> H:Flugzeugunfall (klein/groß), H:Öl Wasser -> H:Öl auf Wasser, H:Rettung aus Höhen/Tiefen -> H:Rettung aus Höhen und Tiefen (Quelle: Stichwortliste der Regionalleitstellen Brandenburg, v7.1). Betrifft nur die mitgelieferte Beispieltabelle bei Neuinstallationen - bereits konfigurierte Tabellen bleiben unverändert.",
@@ -80,19 +93,6 @@
         "pl": "Naprawiono niepoprawne usuwanie i ponowne tworzenie kanału einsatz.json przy każdym ponownym uruchomieniu funkcji cleanupObsoleteObjects() (brak sprawdzania typu obj.type). Naprawiono fałszywe ostrzeżenie o oczekiwaniu na rejestrację, które mogło wystąpić, jeśli adapter zatrzymał się przed zakończeniem inicjalizacji obiektu. Zredukowano rejestrację WAIP z trzech emisji do jednej emisji, wykorzystując istniejący limit czasu rejestracji jako zabezpieczenie. uprawnienia w pliku einsatz.json.current/history10 są teraz zawsze ciągnione spójnie z samodzielnym stanem einsatz.permissions, a plik einsatz.json.current jest opakowany w tablicę (widżety tabeli VIS wymagają tablicy w katalogu głównym). Naprawiono opcję einsatz.json.history10/debug.monitorAudit pozostającą zerową zamiast [] w przypadku świeżej instalacji. Dodano pola RegisteredMonitor/registeredMonitorName do pliku einsatz.json.current/history10. Przerobione rejestrowanie: przetłumaczono cały pozostały niemiecki tekst dziennika na angielski, zaimplementowano oficjalny wzorzec ostrzegania o pierwszym wystąpieniu/powtórzeniu debugowania/informacji o odzyskiwaniu w przypadku powtarzających się błędów (plik cookie sesji, rejestracja, połączenie), ograniczono hałaśliwe rejestrowanie debugowania ping/ponga i eskalowano ciągły zalew zdarzeń nieprawidłowego monitorowania w celu ostrzeżenia. Do pliku README dodano plik LOGGING.md (pełne odniesienie do zdarzeń w dzienniku), spis treści, sekcję dotyczącą praktycznych przypadków użycia i notatkę o znanych ograniczeniach (pokazuje się tylko pojedyncze, ostatnio aktywne zdarzenie).",
         "uk": "Виправлено, коли метод cleanupObsoleteObjects() некоректно видаляв і повторно створював канал einsatz.json під час кожного перезапуску (відсутня перевірка obj.type). Виправлено фальшиве попередження про очікування реєстрації, яке могло виникнути, якщо адаптер зупинився до завершення ініціалізації об’єкта. Реєстрацію WAIP зменшено з трьох випромінювань до однієї випромінювання, покладаючись на існуючий час очікування реєстрації як мережу безпеки. дозволи всередині einsatz.json.current/history10 тепер завжди упорядковані в рядки відповідно до автономного стану einsatz.permissions, а einsatz.json.current загорнуто в масив (віджети таблиці VIS вимагають масиву в корені). Виправлено, коли einsatz.json.history10/debug.monitorAudit залишався нульовим замість [] під час нової інсталяції. Додано поля registeredMonitor/registeredMonitorName до einsatz.json.current/history10. Перероблено ведення журналу: увесь решту тексту журналу з німецької мови перекладено англійською мовою, реалізовано офіційний шаблон першої появи-попередження/повторного-налагодження/інформації про відновлення для повторюваних збоїв (файл cookie сеансу, реєстрація, з’єднання), обмежено шумове ведення журналу налагодження ping/pong і посилено тривалий потік подій неправильного моніторингу для попередження. До README додано LOGGING.md (повне посилання на події журналу), зміст, розділ практичних випадків використання та примітку про відомі обмеження (відображається лише один останній активний інцидент).",
         "zh-cn": "修复了 cleanupObsoleteObjects() 在每次重新启动时错误地删除和重新创建 einsatz.json 通道的问题（缺少 obj.type 检查）。修复了如果适配器在对象初始化完成之前停止则可能出现的虚假注册挂起警告。将 WAIP 注册从三个发射减少到单个发射，依靠现有的注册超时作为安全网。 einsatz.json.current/history10 内的权限现在始终与独立的 einsatz.permissions 状态一致地进行字符串化，并且 einsatz.json.current 包装在一个数组中（VIS 表小部件需要在根处有一个数组）。修复了 einsatz.json.history10/debug.monitorAudit 在全新安装时保持为 null 而不是 [] 的问题。添加了 RegisteredMonitor/registeredMonitorName 字段到 einsatz.json.current/history10。重新设计的日志记录：将所有剩余的德语日志文本翻译为英语，针对重复出现的故障（会话 cookie、注册、连接）实施官方的首次出现警告/重复调试/恢复信息模式，限制嘈杂的 ping/pong 调试日志记录，并升级持续大量的错误监控事件以发出警告。在自述文件中添加了 LOGGING.md（完整的日志事件参考）、目录、实际用例部分和已知限制注释（仅显示单个最近活动的事件）。"
-      },
-      "0.7.16": {
-        "en": "Fixed two stale-data gaps around incident transitions: when a new incident starts before its own routes/feedback events arrive, einsatz.json.routen/rueckmeldungen and the feedback counters are now cleared immediately instead of waiting for those events. Added a watchdog that automatically finalizes an incident (archives it, clears live fields) if its ablaufzeit is exceeded by more than 60s without a matching io.standby ever arriving - previously a missed io.standby (e.g. due to a disconnect at the wrong moment) could leave stale \"active\" data indefinitely.",
-        "de": "Zwei Lücken behoben, durch die bei Einsatzwechseln veraltete Daten stehen blieben: Beginnt ein neuer Einsatz, bevor dessen eigene Routen-/Rückmeldungs-Events eingetroffen sind, werden einsatz.json.routen/rueckmeldungen und die Rückmeldungs-Zähler jetzt sofort geleert, statt auf diese Events zu warten. Zusätzlich ein Watchdog ergänzt, der einen Einsatz automatisch abschließt (archiviert, Live-Felder geleert), wenn dessen ablaufzeit um mehr als 60s überschritten ist, ohne dass je ein passendes io.standby einging - vorher konnte ein verpasstes io.standby (z.B. durch einen Disconnect zum falschen Zeitpunkt) unbegrenzt veraltete \"aktiv\"-Daten hinterlassen.",
-        "ru": "Исправлены два пробела в устаревших данных при переходах инцидентов: когда новый инцидент начинается до того, как приходят его собственные события маршрутов/обратной связи, einsatz.json.routen/rueckmeldungen и счетчики обратной связи теперь очищаются немедленно, вместо ожидания этих событий. Добавлен сторожевой таймер, который автоматически завершает инцидент (архивирует его, очищает активные поля), если его время ablaufzeit превышает 60 секунд, а соответствующий io.standby никогда не поступает - ранее пропущенный io.standby (например, из-за отключения в неподходящий момент) мог оставлять устаревшие «активные» данные на неопределенный срок.",
-        "pt": "Foram corrigidas duas lacunas de dados obsoletos em torno de transições de incidentes: quando um novo incidente começa antes da chegada de suas próprias rotas/eventos de feedback, einsatz.json.routen/rueckmeldungen e os contadores de feedback agora são apagados imediatamente em vez de esperar por esses eventos. Adicionado um watchdog que finaliza automaticamente um incidente (arquiva-o, limpa campos ativos) se seu ablaufzeit for excedido em mais de 60s sem que um io.standby correspondente chegue - anteriormente, um io.standby perdido (por exemplo, devido a uma desconexão no momento errado) poderia deixar dados \"ativos\" obsoletos indefinidamente.",
-        "nl": "Er zijn twee hiaten in verouderde gegevens rond incidentovergangen opgelost: wanneer een nieuw incident begint voordat de eigen routes/feedbackgebeurtenissen arriveren, worden einsatz.json.routen/rueckmeldungen en de feedbacktellers nu onmiddellijk gewist in plaats van te wachten op die gebeurtenissen. Er is een waakhond toegevoegd die een incident automatisch beëindigt (archiveert, livevelden wist) als de ablaufzeit met meer dan 60 seconden wordt overschreden zonder dat er ooit een overeenkomende io.standby arriveert - voorheen kon een gemiste io.standby (bijvoorbeeld als gevolg van een verbroken verbinding op het verkeerde moment) voor onbepaalde tijd verouderde \"actieve\" gegevens achterlaten.",
-        "fr": "Correction de deux lacunes dans les données obsolètes autour des transitions d'incidents : lorsqu'un nouvel incident commence avant l'arrivée de ses propres itinéraires/événements de retour, einsatz.json.routen/rueckmeldungen et les compteurs de retours sont désormais effacés immédiatement au lieu d'attendre ces événements. Ajout d'un chien de garde qui finalise automatiquement un incident (l'archive, efface les champs en direct) si son ablaufzeit est dépassé de plus de 60 secondes sans qu'un io.standby correspondant n'arrive jamais - auparavant, un io.standby manqué (par exemple en raison d'une déconnexion au mauvais moment) pouvait laisser des données \"actives\" périmées indéfiniment.",
-        "it": "Risolte due lacune nei dati obsoleti relativi alle transizioni degli incidenti: quando un nuovo incidente inizia prima che arrivino i propri percorsi/eventi di feedback, einsatz.json.routen/rueckmeldungen e i contatori di feedback vengono ora cancellati immediatamente invece di attendere tali eventi. Aggiunto un watchdog che finalizza automaticamente un incidente (lo archivia, cancella i campi attivi) se il suo ablaufzeit viene superato per più di 60 secondi senza che arrivi mai un io.standby corrispondente - in precedenza un io.standby mancato (ad esempio a causa di una disconnessione nel momento sbagliato) poteva lasciare dati \"attivi\" obsoleti a tempo indeterminato.",
-        "es": "Se corrigieron dos brechas de datos obsoletos en torno a las transiciones de incidentes: cuando comienza un nuevo incidente antes de que lleguen sus propias rutas/eventos de retroalimentación, einsatz.json.routen/rueckmeldungen y los contadores de retroalimentación ahora se borran inmediatamente en lugar de esperar esos eventos. Se agregó un mecanismo de vigilancia que finaliza automáticamente un incidente (lo archiva, borra los campos activos) si su ablaufzeit se excede en más de 60 segundos sin que llegue nunca un io.standby coincidente; anteriormente, un io.standby perdido (por ejemplo, debido a una desconexión en el momento equivocado) podía dejar datos \"activos\" obsoletos indefinidamente.",
-        "pl": "Naprawiono dwie luki w nieaktualnych danych wokół przejść incydentów: gdy nowy incydent rozpoczyna się przed nadejściem własnych tras/zdarzeń opinii, einsatz.json.routen/rueckmeldungen i liczniki opinii są teraz natychmiast czyszczone, zamiast czekać na te zdarzenia. Dodano watchdog, który automatycznie finalizuje incydent (archiwizuje go, czyści pola na żywo), jeśli jego ablaufzeit zostanie przekroczony o więcej niż 60 sekund bez pojawienia się pasującego io.standby - wcześniej pominięte io.standby (np. z powodu rozłączenia w niewłaściwym momencie) mogło pozostawić nieaktualne „aktywne” dane na czas nieokreślony.",
-        "uk": "Виправлено два прогалини застарілих даних навколо переходів інцидентів: коли новий інцидент починається до надходження власних маршрутів/подій зворотного зв’язку, einsatz.json.routen/rueckmeldungen і лічильники зворотного зв’язку тепер очищаються негайно, а не чекають цих подій. Додано сторожовий таймер, який автоматично завершує інцидент (архівує його, очищає поточні поля), якщо його ablaufzeit перевищено більш ніж на 60 секунд, а відповідний io.standby ніколи не надходить - раніше пропущений io.standby (наприклад, через відключення в невідповідний момент) міг залишити застарілі «активні» дані на невизначений термін.",
-        "zh-cn": "修复了围绕事件转换的两个过时数据间隙：当新事件在其自己的路线/反馈事件到达之前开始时，einsatz.json.routen/rueckmeldungen 和反馈计数器现在立即被清除，而不是等待这些事件。添加了一个看门狗，如果事件的 ablaufzeit 超过 60 秒而没有匹配的 io.standby 到达，则自动完成事件（存档它，清除实时字段） - 以前错过的 io.standby （例如，由于在错误的时刻断开连接）可能会无限期地留下过时的“活动”数据。"
       }
     },
     "titleLang": {
@@ -377,6 +377,151 @@
       {
         "stichwort": "H:VU Schiff",
         "beschreibung": "Schiffsunfall",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "K1:KTW",
+        "beschreibung": "Krankentransport (sitzend/liegend, ggf. Sauerstoff)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "K2:KTW-Infektionsfahrt",
+        "beschreibung": "Krankentransport, Infektionsfahrt (z.B. MRSA)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "MAN-E",
+        "beschreibung": "Größere Zahl von Erkrankten (z.B. Lebensmittelvergiftung in einer Einrichtung)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "MANV-Groß",
+        "beschreibung": "Massenanfall von Verletzten, groß (mehr als 20 Verletzte/Erkrankte)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "MANV-Klein",
+        "beschreibung": "Massenanfall von Verletzten, klein (5-9 Verletzte/Erkrankte)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "MANV-Mittel",
+        "beschreibung": "Massenanfall von Verletzten, mittel (10-19 Verletzte/Erkrankte)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S1:Baby-NAW/Inkubator",
+        "beschreibung": "Baby-Notarztwagen, Fahrt mit Inkubator",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S10:COVID19",
+        "beschreibung": "Einsatz im Zusammenhang mit einer Corona-Erkrankung",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S2:Notfallseelsorge",
+        "beschreibung": "Notfallseelsorge nach Einsatzgeschehen",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S3:Org-Fahrten",
+        "beschreibung": "Organisatorische Fahrt/Werkstattfahrt",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S4:Polizeiliche-Einsatzlage",
+        "beschreibung": "Einsatz wird durch die Polizei geführt (KLEE-Einsatz)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S5:Ausnahmelage",
+        "beschreibung": "Information über eine Ausnahmelage (z.B. Unwetter)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S6:Polizei-übergeben",
+        "beschreibung": "Einsatz an die Polizei übergeben",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S61:COVID19 - Information/Übergabe",
+        "beschreibung": "Information/Einsatzübergabe zu 116117, Kassenarzt, Hausarzt oder Gesundheitsamt",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S62:COVID19 - Unterstützung Leitstelle",
+        "beschreibung": "Unterstützung des Gesundheitsamtes bzw. anderer Ämter/Institutionen",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S63:COVID19 - Einsatz Leitstelle",
+        "beschreibung": "Einsatz Regel-Rettungsdienst",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S7:Einsatz-Ablehung",
+        "beschreibung": "Ablehnung eines Einsatzes von ITH/RTH/V-NEF (keine Höher-/Niederstufung)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S8:AnforderungRettungshundestaffel",
+        "beschreibung": "Anforderung von Rettungshunden",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "S9:Polizei-erhalten",
+        "beschreibung": "Einsatz von der Polizei übernommen",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "ÜMANV-Sofort",
+        "beschreibung": "Eigene Maßnahmen bei MANV eines anderen Trägers",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V1N",
+        "beschreibung": "Verlegung, Primärtransport bodengebunden mit Notarztbegleitung",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V1R",
+        "beschreibung": "Verlegung, Primärtransport bodengebunden",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V2N",
+        "beschreibung": "Verlegung, Sekundärtransport bodengebunden mit Notarztbegleitung",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V2R",
+        "beschreibung": "Verlegung, Sekundärtransport bodengebunden",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V3N",
+        "beschreibung": "Verlegung, Sekundärtransport mit Luftrettungsmittel",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V4N",
+        "beschreibung": "Verlegung, Primärtransport mit Luftrettungsmittel",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V5R",
+        "beschreibung": "Verlegung, im Vorfeld genehmigter Transport (z.B. ADAC-Rücktransport)",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V6N-COVID19",
+        "beschreibung": "Verlegung/Transport infektiöser Covid-19-Patienten mit Arztbegleitung",
+        "matchType": "startsWith"
+      },
+      {
+        "stichwort": "V6R-COVID19",
+        "beschreibung": "Verlegung/Transport infektiöser Covid-19-Patienten (RTW/KTW)",
         "matchType": "startsWith"
       }
     ],

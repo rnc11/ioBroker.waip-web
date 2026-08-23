@@ -1537,19 +1537,31 @@ class WaipWeb extends utils.Adapter {
     /* DE: Dekodiert Rettungsdienst-Stichwörter nach dem Schema "R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]"
        - von mehreren Leitstellen verwendet, dokumentiertes Beispiel:
        https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/
-       (z.B. "R1N0" = 1 RTW, kein NEF). Nur aktiv, wenn rdKeywordDecodingEnabled gesetzt ist
-       (Default aus, da nicht jede Leitstelle/WAIP-Web-Instanz dieses Schema verwendet).
-       Liefert null, falls das Stichwort nicht diesem Muster entspricht.
+       (z.B. "R1N0" = 1 RTW, kein NEF). Toleriert dabei zwei Schreibweisen der Modifikatoren:
+       ohne Leerzeichen/mit Bindestrich vor NT (Lausitz, "R1N1p"/"R1N0-NT") sowie mit
+       Leerzeichen/ohne Bindestrich vor nt (Brandenburg/IRLS, "R1N1 p"/"R1N0 nt", siehe
+       Einsatzstichworte Rettungsdienst der IRLS des Landes Brandenburg). Nur aktiv, wenn
+       rdKeywordDecodingEnabled gesetzt ist (Default aus, da nicht jede Leitstelle/WAIP-Web-
+       Instanz dieses Schema verwendet). Liefert null, falls das Stichwort keinem der beiden
+       Muster entspricht.
        EN: Decodes rescue-service keywords following the scheme
        "R<ambulance count>N<physician-vehicle count>[p][f][-NT]" - used by several dispatch
        centers, documented example:
        https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/
-       (e.g. "R1N0" = 1 ambulance, no physician vehicle). Only active if
-       rdKeywordDecodingEnabled is set (default off, since not every dispatch
-       center/WAIP-Web instance uses this scheme). Returns null if the keyword doesn't
-       match this pattern. */
+       (e.g. "R1N0" = 1 ambulance, no physician vehicle). Tolerates two modifier spellings:
+       no space/with hyphen before NT (Lausitz, "R1N1p"/"R1N0-NT") and with a space/no hyphen
+       before nt (Brandenburg/IRLS, "R1N1 p"/"R1N0 nt", see Einsatzstichworte Rettungsdienst
+       der IRLS des Landes Brandenburg). Only active if rdKeywordDecodingEnabled is set
+       (default off, since not every dispatch center/WAIP-Web instance uses this scheme).
+       Returns null if the keyword matches neither pattern. */
     decodeRettungsdienstStichwort(stichwort) {
-        const m = /^R(\d+)N(\d+)([a-z]*)(-NT)?$/i.exec(String(stichwort || '').trim());
+        // DE: Zwei bekannte Schreibweisen der Modifikatoren toleriert: ohne Leerzeichen/mit
+        // Bindestrich vor NT (Leitstelle Lausitz, z.B. "R1N1p", "R1N0-NT") sowie mit Leerzeichen
+        // und ohne Bindestrich vor nt (Leitstelle Brandenburg/IRLS, z.B. "R1N1 p", "R1N0 nt").
+        // EN: Tolerates two known modifier spellings: no space/with hyphen before NT (Leitstelle
+        // Lausitz, e.g. "R1N1p", "R1N0-NT") and with a space and no hyphen before nt (Leitstelle
+        // Brandenburg/IRLS, e.g. "R1N1 p", "R1N0 nt").
+        const m = /^R(\d+)N(\d+)\s*([pf]*)\s*(-?nt)?$/i.exec(String(stichwort || '').trim());
         if (!m) {
             return null;
         }
