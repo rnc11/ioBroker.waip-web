@@ -257,8 +257,8 @@ hat: eine Liste von `{Stichwort-Muster, Beschreibung, Abgleich-Typ}`-Zeilen
 – Abgleich-Typ ist `beginnt mit` oder `enthält`, der Vergleich ist
 case-insensitiv, und passen mehrere Zeilen, gewinnt automatisch das
 **spezifischste (längste) Muster** – die Zeilenreihenfolge hat keinen
-Einfluss auf den Abgleich, die Tabelle kann also gefahrlos nach Stichwort
-sortiert werden (Klick auf die Spaltenüberschrift). Die Tabelle ist mit
+Einfluss auf den Abgleich, die Tabelle kann also gefahrlos nach jeder
+Spalte sortiert werden (Klick auf die Spaltenüberschrift). Die Tabelle ist mit
 einer beispielhaften Feuerwehr-/Rettungsdienst-Stichwortliste
 (`B:...`/`H:...`) als Startpunkt vorbefüllt – das ist **nicht** für
 irgendeine bestimmte Leitstelle bestätigt, bei Bedarf anpassen oder

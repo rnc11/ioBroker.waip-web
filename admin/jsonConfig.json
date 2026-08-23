@@ -137,10 +137,20 @@
             "label": "Keyword descriptions",
             "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMi41IiB5PSI0LjUiIHdpZHRoPSIxOSIgaGVpZ2h0PSIxNSIgcng9IjIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48bGluZSB4MT0iMi41IiB5MT0iOS41IiB4Mj0iMjEuNSIgeTI9IjkuNSIgc3Ryb2tlPSIjNWY2MzY4IiBzdHJva2Utd2lkdGg9IjEuNiIvPjxsaW5lIHgxPSIxMC41IiB5MT0iOS41IiB4Mj0iMTAuNSIgeTI9IjE5LjUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48L3N2Zz4=",
             "items": {
+                "stichwortMappingHelp": {
+                    "type": "staticText",
+                    "text": "Maps einsatz.stichwort to einsatz.beschreibung. If several rows match, the most specific (longest) pattern wins automatically - row order has no effect on matching, sort by any column freely. Pre-filled with an example fire/rescue keyword list as a starting point - it is not confirmed to match your own dispatch center's actual keywords, edit/replace as needed. To back up or transfer this table, use ioBroker's standard instance configuration export/import (JSON). After using that import, reload the Admin page before checking this table - the open config dialog doesn't refresh it from an external import automatically (a state-sync limitation of the Admin table component itself).",
+                    "newLine": true,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
                 "stichwortMapping": {
                     "type": "table",
                     "label": "Alarm keyword descriptions",
-                    "help": "Maps einsatz.stichwort to einsatz.beschreibung. If several rows match, the most specific (longest) pattern wins automatically - row order has no effect on matching, sort by keyword freely. Pre-filled with an example fire/rescue keyword list as a starting point - it is not confirmed to match your own dispatch center's actual keywords, edit/replace as needed. To back up or transfer this table, use ioBroker's standard instance configuration export/import (JSON). After using that import, reload the Admin page before checking this table - the open config dialog doesn't refresh it from an external import automatically (a state-sync limitation of the Admin table component itself).",
+                    "newLine": true,
                     "items": [
                         {
                             "type": "text",
@@ -153,13 +163,15 @@
                             "type": "text",
                             "attr": "beschreibung",
                             "title": "Description",
-                            "width": "45%"
+                            "width": "45%",
+                            "sort": true
                         },
                         {
                             "type": "select",
                             "attr": "matchType",
                             "title": "Match",
                             "width": "20%",
+                            "sort": true,
                             "options": [
                                 { "label": "starts with", "value": "startsWith" },
                                 { "label": "contains", "value": "contains" }
