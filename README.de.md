@@ -104,7 +104,7 @@ Rettungsdienst-Wache:
   ansetzen (oder die URL direkt abspielen), um den Einsatz über
   Gebäudelautsprecher anzusagen, sobald `io.playtts` feuert – hilfreich,
   wenn nicht alle Mitglieder gerade auf einen Bildschirm schauen.
-- **Live-Übersicht der Rückmeldungen.** Die `einsatz.rueckmeldungAnzahl.*`
+- **Live-Übersicht der Rückmeldungen.** Die `einsatz.rueckmeldungen.*`
   Zähler (`rollen.ek`/`.gf`/`.zf`/`.vf` pro Rolle, `funktionen.agt`/`.fzf`/
   `.ma`/`.med` pro Zusatzfunktion) aktualisieren sich in Echtzeit, sobald
   Einsatzkräfte per App zurückmelden – als Gauge- oder Zahlen-Widget
@@ -454,21 +454,21 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `beschreibung` | string | Beschreibung zu `stichwort`, lokal ermittelt (wird nicht vom Server gesendet) - siehe [Rettungsdienst](#rettungsdienst)/[Stichwort-Stammdaten](#stichwort-stammdaten) unten. `null` falls nichts passte |
 | `ort` | string | Ort |
 | `ortsteil` | string | Ortsteil (falls abweichend vom Ort) |
-| `zeitstempel` | string (date) | Alarmzeit |
+| `alarmierungszeit` | string (date) | Alarmzeit |
 | `ablaufzeit` | string (date) | Ende der Standby-Anzeigedauer, Basis für `restzeit` |
 | `sondersignal` | number | `1` = Sondersignal, sonst kein Sondersignal |
 | `latitude` / `longitude` | number | Position des Einsatzortes (normalisiert aus wgs84-Feldern oder GeoJSON-Mittelpunkt) |
 | `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Leer bis das Bild für den aktuellen Einsatz fertig ist; wird außerdem zu Beginn eines neuen Einsatzes, bei einem Fehlschlag der Erzeugung oder falls das OSM-Timeout überschritten wird geleert (bzw. bleibt leer), sowie - wie die übrigen Felder oben - bei `io.standby`. Die zugrundeliegende Bild-Datei selbst wird beim Leeren des States nicht gelöscht (nur das 10er-Rotationslimit entfernt Dateien, siehe [Einsatzkarte](#einsatzkarte)) |
 | `routenGesamt` | number | Anzahl Routen im aktuellen Einsatz |
-| `rueckmeldungGesamt` | number | Rückmeldungen gesamt im aktuellen Einsatz |
-| `rueckmeldungAnzahl.rollen.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |
-| `rueckmeldungAnzahl.rollen.gf` | number | Anzahl Rückmeldungen als Gruppenführer |
-| `rueckmeldungAnzahl.rollen.zf` | number | Anzahl Rückmeldungen als Zugführer |
-| `rueckmeldungAnzahl.rollen.vf` | number | Anzahl Rückmeldungen als Verbandsführer |
-| `rueckmeldungAnzahl.funktionen.agt` | number | Anzahl Rückmeldungen mit Atemschutz-Befähigung |
-| `rueckmeldungAnzahl.funktionen.fzf` | number | Anzahl Rückmeldungen als Fahrzeugführer |
-| `rueckmeldungAnzahl.funktionen.ma` | number | Anzahl Rückmeldungen als Maschinist |
-| `rueckmeldungAnzahl.funktionen.med` | number | Anzahl Rückmeldungen mit medizinischer Befähigung |
+| `rueckmeldungenGesamt` | number | Rückmeldungen gesamt im aktuellen Einsatz |
+| `rueckmeldungen.rollen.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |
+| `rueckmeldungen.rollen.gf` | number | Anzahl Rückmeldungen als Gruppenführer |
+| `rueckmeldungen.rollen.zf` | number | Anzahl Rückmeldungen als Zugführer |
+| `rueckmeldungen.rollen.vf` | number | Anzahl Rückmeldungen als Verbandsführer |
+| `rueckmeldungen.funktionen.agt` | number | Anzahl Rückmeldungen mit Atemschutz-Befähigung |
+| `rueckmeldungen.funktionen.fzf` | number | Anzahl Rückmeldungen als Fahrzeugführer |
+| `rueckmeldungen.funktionen.ma` | number | Anzahl Rückmeldungen als Maschinist |
+| `rueckmeldungen.funktionen.med` | number | Anzahl Rückmeldungen mit medizinischer Befähigung |
 
 ### einsatz.json
 
@@ -484,7 +484,7 @@ Abschnitt [`einsatz`](#einsatz).
 
 | State | Typ | Beschreibung |
 | --- | --- | --- |
-| `current` | string (JSON-Array) | Flache Daten des aktuellen Einsatzes: dieselben 12 Felder wie die einzelnen `einsatz.*`-States oben (`id` … `zeitstempel`, plus `beschreibung`, `lat`/`lon`), zusätzlich `registeredMonitor`/`registeredMonitorName` (der Monitor, auf den der Adapter zu diesem Zeitpunkt registriert war), gebündelt als ein Objekt innerhalb eines Arrays mit einem Element (`[]` falls kein Einsatz aktiv) – der Array-Wrapper ist nötig, weil die meisten Tabellen-Widgets am Root ein Array statt eines nackten Objekts erwarten |
+| `current` | string (JSON-Array) | Flache Daten des aktuellen Einsatzes: dieselben 12 Felder wie die einzelnen `einsatz.*`-States oben (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), zusätzlich `registeredMonitor`/`registeredMonitorName` (der Monitor, auf den der Adapter zu diesem Zeitpunkt registriert war), gebündelt als ein Objekt innerhalb eines Arrays mit einem Element (`[]` falls kein Einsatz aktiv) – der Array-Wrapper ist nötig, weil die meisten Tabellen-Widgets am Root ein Array statt eines nackten Objekts erwarten |
 | `history10` | string (JSON-Array) | Letzte 10 abgeschlossenen Einsätze, gleiches Schema wie `current`, ein Array-Eintrag pro Einsatz, geschrieben bei `io.standby` |
 | `routen` | string (JSON-Array) | Routen des aktuellen Einsatzes; jeder Eintrag hat `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` zu flachem `lat`/`lon` aufgelöst) |
 | `rueckmeldungen` | string (JSON-Array) | Rückmeldungen des aktuellen Einsatzes, wie vom Server empfangen |

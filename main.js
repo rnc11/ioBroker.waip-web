@@ -19,7 +19,7 @@
  * flache Arrays in einsatz.json.routen/.rueckmeldungen/.emAlarmiert/
  * .emWeitere - nur für den jeweils aktuellen Einsatz, nicht historisiert.
  * Ergänzt um schnell bindbare Zähler (einsatz.routenGesamt,
- * einsatz.rueckmeldungGesamt, einsatz.rueckmeldungAnzahl.*). Der frühere
+ * einsatz.rueckmeldungenGesamt, einsatz.rueckmeldungen.*). Der frühere
  * vis.*-Kanal entfällt komplett.
  *
  * EN: ioBroker.WAIP-Web
@@ -39,8 +39,8 @@
  * resources live as their own, likewise flat arrays in
  * einsatz.json.routen/.rueckmeldungen/.emAlarmiert/.emWeitere - only for
  * the currently running incident, not historized. Complemented by
- * quick-to-bind counters (einsatz.routenGesamt, einsatz.rueckmeldungGesamt,
- * einsatz.rueckmeldungAnzahl.*). The former vis.* channel is gone entirely.
+ * quick-to-bind counters (einsatz.routenGesamt, einsatz.rueckmeldungenGesamt,
+ * einsatz.rueckmeldungen.*). The former vis.* channel is gone entirely.
  */
 
 const https = require('node:https');
@@ -99,18 +99,25 @@ const ALLOWED_EINSATZ_FIELDS = [
     'ortsteil',
     'ablaufzeit',
     'sondersignal',
-    // DE: laut client_waip.js (offizielles Frontend) zusätzlich vorhandenes Feld:
-    // EN: additional field per client_waip.js (the official frontend):
-    'zeitstempel',
+    // DE: Das vom Server als "zeitstempel" gesendete Feld (laut client_waip.js, dem
+    // offiziellen Frontend, zusätzlich vorhanden) landet als einsatz.alarmierungszeit -
+    // bewusst NICHT hier, sondern wie beschreibung als Sonderfall in handleAlarm()
+    // behandelt, da der State-Name vom Server-Feldnamen abweicht.
+    // EN: The field the server sends as "zeitstempel" (per client_waip.js, the official
+    // frontend, an additional field) ends up as einsatz.alarmierungszeit - deliberately
+    // NOT listed here, but handled as a special case in handleAlarm() like beschreibung,
+    // since the state name differs from the server's field name.
 ];
-// DE: Rückmeldungs-Zähler sind seit 0.7.35 in zwei Unter-Kanäle gruppiert - "rollen" (aus
-// rmld_role abgeleitet) und "funktionen" (aus den rmld_capability_*-Flags abgeleitet), siehe
-// updateRueckmeldungCounts(). Vorher lagen alle acht Zähler flach direkt unter
-// einsatz.rueckmeldungAnzahl.
-// EN: Feedback counters have been grouped into two sub-channels since 0.7.35 - "rollen"
-// (derived from rmld_role) and "funktionen" (derived from the rmld_capability_* flags), see
-// updateRueckmeldungCounts(). Previously all eight counters lived flat directly under
-// einsatz.rueckmeldungAnzahl.
+// DE: Rückmeldungs-Zähler sind seit 0.7.35 in zwei Unter-Kanäle unter einsatz.rueckmeldungen
+// gruppiert - "rollen" (aus rmld_role abgeleitet) und "funktionen" (aus den
+// rmld_capability_*-Flags abgeleitet), siehe updateRueckmeldungCounts(). Vorher lagen alle
+// acht Zähler flach direkt unter einsatz.rueckmeldungAnzahl (0.7.35: einsatz.rueckmeldungAnzahl.
+// rollen/.funktionen; der Kanal selbst hieß erst ab 0.7.36 einsatz.rueckmeldungen).
+// EN: Feedback counters have been grouped into two sub-channels under einsatz.rueckmeldungen
+// since 0.7.35 - "rollen" (derived from rmld_role) and "funktionen" (derived from the
+// rmld_capability_* flags), see updateRueckmeldungCounts(). Previously all eight counters
+// lived flat directly under einsatz.rueckmeldungAnzahl (0.7.35: einsatz.rueckmeldungAnzahl.
+// rollen/.funktionen; the channel itself was only renamed to einsatz.rueckmeldungen in 0.7.36).
 const RUECKMELDUNG_ROLLEN_KEYS = ['ek', 'gf', 'zf', 'vf'];
 const RUECKMELDUNG_FUNKTIONEN_KEYS = ['agt', 'fzf', 'ma', 'med'];
 // DE: identische Disconnect-Logs 60s lang unterdrücken
@@ -286,6 +293,52 @@ const OBSOLETE_OBJECT_IDS = [
     'einsatz.rueckmeldungAnzahl.fzf',
     'einsatz.rueckmeldungAnzahl.ma',
     'einsatz.rueckmeldungAnzahl.med',
+    // DE: Umstrukturierung in 0.7.36: der Kanal einsatz.rueckmeldungAnzahl (inkl. seiner in
+    // 0.7.35 eingeführten Unter-Kanäle .rollen/.funktionen) heißt jetzt einsatz.rueckmeldungen,
+    // einsatz.rueckmeldungGesamt heißt jetzt einsatz.rueckmeldungenGesamt und einsatz.zeitstempel
+    // heißt jetzt einsatz.alarmierungszeit. Die acht State-Blätter aus 0.7.35
+    // (einsatz.rueckmeldungAnzahl.rollen.*/.funktionen.*) sind hier gelistet, damit sie beim
+    // Update von 0.7.35 entfernt werden; die dann leeren alten Ordner selbst werden von
+    // OBSOLETE_FOLDER_IDS unten erfasst (cleanupObsoleteObjects() löscht hier oben bewusst nur
+    // States, nie Channel/Folder, siehe dort).
+    // EN: Restructuring in 0.7.36: the einsatz.rueckmeldungAnzahl channel (including its
+    // .rollen/.funktionen sub-channels introduced in 0.7.35) is now einsatz.rueckmeldungen,
+    // einsatz.rueckmeldungGesamt is now einsatz.rueckmeldungenGesamt, and einsatz.zeitstempel is
+    // now einsatz.alarmierungszeit. The eight 0.7.35 state leaves
+    // (einsatz.rueckmeldungAnzahl.rollen.*/.funktionen.*) are listed here so they get removed
+    // when upgrading from 0.7.35; the then-empty old folders themselves are covered by
+    // OBSOLETE_FOLDER_IDS below (cleanupObsoleteObjects() deliberately only ever deletes states
+    // here, never channels/folders, see there).
+    'einsatz.rueckmeldungAnzahl.rollen.ek',
+    'einsatz.rueckmeldungAnzahl.rollen.gf',
+    'einsatz.rueckmeldungAnzahl.rollen.zf',
+    'einsatz.rueckmeldungAnzahl.rollen.vf',
+    'einsatz.rueckmeldungAnzahl.funktionen.agt',
+    'einsatz.rueckmeldungAnzahl.funktionen.fzf',
+    'einsatz.rueckmeldungAnzahl.funktionen.ma',
+    'einsatz.rueckmeldungAnzahl.funktionen.med',
+    'einsatz.rueckmeldungGesamt',
+    'einsatz.zeitstempel',
+];
+
+// DE: Wie OBSOLETE_OBJECT_IDS, aber für Channel-/Folder-Objekte, die bei einer Umbenennung
+// übrig bleiben würden: cleanupObsoleteObjects() löscht dort bewusst nur obj.type === 'state',
+// nie Channel/Folder, um ein absichtlich zum Channel gewordenes State-Blatt nicht versehentlich
+// zu löschen (siehe einsatz.json in 0.7.15). Diese Sorge gilt für die hier gelisteten IDs nicht,
+// da der jeweilige Pfad komplett aufgegeben wurde - STATE_DEFS/CHANNEL_DEFS definieren dort
+// nichts mehr, es kann also nie wieder legitim ein Objekt an dieser ID entstehen. Werden daher
+// unabhängig vom aktuellen obj.type gelöscht. Reihenfolge: Kind-Ordner vor Eltern-Ordner.
+// EN: Like OBSOLETE_OBJECT_IDS, but for channel/folder objects that would otherwise linger
+// after a rename: cleanupObsoleteObjects() deliberately only ever deletes obj.type === 'state'
+// there, never channels/folders, to avoid accidentally deleting a leaf that deliberately became
+// a channel (see einsatz.json in 0.7.15). That concern doesn't apply to the IDs listed here,
+// since the path itself has been abandoned entirely - STATE_DEFS/CHANNEL_DEFS no longer define
+// anything there, so a legitimate object can never reappear at this ID again. Deleted regardless
+// of their current obj.type. Order: child folders before the parent folder.
+const OBSOLETE_FOLDER_IDS = [
+    'einsatz.rueckmeldungAnzahl.rollen',
+    'einsatz.rueckmeldungAnzahl.funktionen',
+    'einsatz.rueckmeldungAnzahl',
 ];
 
 // DE: Übergeordnete Channel/Folder-Objekte, die für jeden State-Zweig existieren müssen.
@@ -297,9 +350,9 @@ const OBSOLETE_OBJECT_IDS = [
 const CHANNEL_DEFS = [
     { id: 'status', type: 'channel', name: 'Verbindungs- und Registrierungsstatus' },
     { id: 'einsatz', type: 'channel', name: 'Aktueller Einsatz' },
-    { id: 'einsatz.rueckmeldungAnzahl', type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
-    { id: 'einsatz.rueckmeldungAnzahl.rollen', type: 'folder', name: 'Rückmeldungen nach Rolle' },
-    { id: 'einsatz.rueckmeldungAnzahl.funktionen', type: 'folder', name: 'Rückmeldungen nach Funktion' },
+    { id: 'einsatz.rueckmeldungen', type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
+    { id: 'einsatz.rueckmeldungen.rollen', type: 'folder', name: 'Rückmeldungen nach Rolle' },
+    { id: 'einsatz.rueckmeldungen.funktionen', type: 'folder', name: 'Rückmeldungen nach Funktion' },
     { id: 'einsatz.json', type: 'folder', name: 'Einsatzdaten als flache JSON-Objekte/Arrays für Tabellen-Widgets' },
     { id: 'einsatz.tts', type: 'folder', name: 'TTS-Ansage des aktuellen Einsatzes' },
     { id: 'debug', type: 'channel', name: 'Diagnose- und Debug-Informationen' },
@@ -378,7 +431,7 @@ const STATE_DEFS = [
     },
     { id: 'einsatz.ort', type: 'string', role: 'text', name: 'Ort' },
     { id: 'einsatz.ortsteil', type: 'string', role: 'text', name: 'Ortsteil' },
-    { id: 'einsatz.zeitstempel', type: 'string', role: 'date', name: 'Alarmzeitstempel' },
+    { id: 'einsatz.alarmierungszeit', type: 'string', role: 'date', name: 'Alarmierungszeit' },
     { id: 'einsatz.ablaufzeit', type: 'string', role: 'date', name: 'Ablaufzeit' },
     { id: 'einsatz.sondersignal', type: 'number', role: 'value', name: 'Sondersignal', def: 0 },
     { id: 'einsatz.latitude', type: 'number', role: 'value.gps.latitude', name: 'Breitengrad' },
@@ -437,63 +490,63 @@ const STATE_DEFS = [
     // EN: derived counters
     { id: 'einsatz.routenGesamt', type: 'number', role: 'value', name: 'Anzahl Routen im aktuellen Einsatz', def: 0 },
     {
-        id: 'einsatz.rueckmeldungGesamt',
+        id: 'einsatz.rueckmeldungenGesamt',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen gesamt im aktuellen Einsatz',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.rollen.ek',
+        id: 'einsatz.rueckmeldungen.rollen.ek',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Einsatzkräfte',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.rollen.gf',
+        id: 'einsatz.rueckmeldungen.rollen.gf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Gruppenführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.rollen.zf',
+        id: 'einsatz.rueckmeldungen.rollen.zf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Zugführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.rollen.vf',
+        id: 'einsatz.rueckmeldungen.rollen.vf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Verbandsführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.funktionen.agt',
+        id: 'einsatz.rueckmeldungen.funktionen.agt',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Atemschutzgeräteträger',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.funktionen.fzf',
+        id: 'einsatz.rueckmeldungen.funktionen.fzf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Fahrzeugführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.funktionen.ma',
+        id: 'einsatz.rueckmeldungen.funktionen.ma',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Maschinisten',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.funktionen.med',
+        id: 'einsatz.rueckmeldungen.funktionen.med',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Medizinisch/Sanitäter',
@@ -1306,7 +1359,9 @@ class WaipWeb extends utils.Adapter {
        value type) explicitly checks that this is really still the old state leaf - relevant
        for IDs like einsatz.json, which changed from state to channel in the 0.7.15
        restructuring but kept the same ID: without this check, the by-now correctly created
-       channel would otherwise get deleted and recreated by initObjects() on every restart. */
+       channel would otherwise get deleted and recreated by initObjects() on every restart.
+       Also removes OBSOLETE_FOLDER_IDS - channel/folder objects at paths abandoned entirely
+       by a rename, where that same type-check doesn't apply (see its own comment). */
     async cleanupObsoleteObjects() {
         for (const id of OBSOLETE_OBJECT_IDS) {
             try {
@@ -1314,6 +1369,17 @@ class WaipWeb extends utils.Adapter {
                 if (obj && obj.type === 'state') {
                     await this.delObjectAsync(id);
                     this.log.info(`Removed obsolete state object from a previous version: ${id}`);
+                }
+            } catch {
+                /* DE: ignorieren - Objekt existierte vermutlich nicht / EN: ignore - object probably didn't exist */
+            }
+        }
+        for (const id of OBSOLETE_FOLDER_IDS) {
+            try {
+                const obj = await this.getObjectAsync(id);
+                if (obj) {
+                    await this.delObjectAsync(id);
+                    this.log.info(`Removed obsolete folder object from a previous version: ${id}`);
                 }
             } catch {
                 /* DE: ignorieren - Objekt existierte vermutlich nicht / EN: ignore - object probably didn't exist */
@@ -2446,6 +2512,16 @@ class WaipWeb extends utils.Adapter {
         // but is determined locally by handleAlarm() and carried along in the snapshot (see
         // lookupStichwortBeschreibung()).
         flat.beschreibung = Object.prototype.hasOwnProperty.call(src, 'beschreibung') ? src.beschreibung : null;
+        // DE: alarmierungszeit kommt vom Server als "zeitstempel" und wird ebenfalls als
+        // Sonderfall im Snapshot mitgeführt (siehe handleAlarm()), da der State-Name vom
+        // Server-Feldnamen abweicht - daher nicht in ALLOWED_EINSATZ_FIELDS.
+        // EN: alarmierungszeit comes from the server as "zeitstempel" and is likewise
+        // carried along in the snapshot as a special case (see handleAlarm()), since the
+        // state name differs from the server's field name - hence not in
+        // ALLOWED_EINSATZ_FIELDS.
+        flat.alarmierungszeit = Object.prototype.hasOwnProperty.call(src, 'alarmierungszeit')
+            ? src.alarmierungszeit
+            : null;
         flat.registeredMonitor = this.currentMonitor || null;
         flat.registeredMonitorName = this.monitorName || null;
         return flat;
@@ -2665,13 +2741,13 @@ class WaipWeb extends utils.Adapter {
 
     /* DE: Berechnet aus den im Snapshot gesammelten Rückmeldungen die Zähler pro Rolle/Fähigkeit
        (analog zu den Badges EK/GF/ZF/VF/AGT/FZF/MA/MED/Gesamt der Weboberfläche) und
-       aktualisiert einsatz.rueckmeldungAnzahl.rollen.<k> und .funktionen.<k> sowie
-       einsatz.rueckmeldungGesamt. EK/GF/ZF/VF (aus rmld_role) liegen unter .rollen, AGT/FZF/MA/
+       aktualisiert einsatz.rueckmeldungen.rollen.<k> und .funktionen.<k> sowie
+       einsatz.rueckmeldungenGesamt. EK/GF/ZF/VF (aus rmld_role) liegen unter .rollen, AGT/FZF/MA/
        MED (aus den rmld_capability_*-Flags) unter .funktionen.
        EN: Computes the per-role/skill counters from the feedback entries collected in the
        snapshot (mirroring the EK/GF/ZF/VF/AGT/FZF/MA/MED/total badges of the web UI) and
-       updates einsatz.rueckmeldungAnzahl.rollen.<k> and .funktionen.<k> as well as
-       einsatz.rueckmeldungGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen, AGT/FZF/MA/
+       updates einsatz.rueckmeldungen.rollen.<k> and .funktionen.<k> as well as
+       einsatz.rueckmeldungenGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen, AGT/FZF/MA/
        MED (from the rmld_capability_* flags) under .funktionen. */
     async updateRueckmeldungCounts() {
         const list = (this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen) || [];
@@ -2701,13 +2777,13 @@ class WaipWeb extends utils.Adapter {
         }
         const tasks = [
             ...RUECKMELDUNG_ROLLEN_KEYS.map(k =>
-                this.setStateAsync(`einsatz.rueckmeldungAnzahl.rollen.${k}`, counts[k], true),
+                this.setStateAsync(`einsatz.rueckmeldungen.rollen.${k}`, counts[k], true),
             ),
             ...RUECKMELDUNG_FUNKTIONEN_KEYS.map(k =>
-                this.setStateAsync(`einsatz.rueckmeldungAnzahl.funktionen.${k}`, counts[k], true),
+                this.setStateAsync(`einsatz.rueckmeldungen.funktionen.${k}`, counts[k], true),
             ),
         ];
-        tasks.push(this.setStateAsync('einsatz.rueckmeldungGesamt', list.length, true));
+        tasks.push(this.setStateAsync('einsatz.rueckmeldungenGesamt', list.length, true));
         const results = await Promise.allSettled(tasks);
         for (const r of results) {
             if (r.status === 'rejected') {
@@ -2893,6 +2969,17 @@ class WaipWeb extends utils.Adapter {
                 this.currentEinsatzSnapshot.emWeitere = data.em_weitere;
             }
 
+            // DE: Server-Feld "zeitstempel" -> State/Snapshot-Feld einsatz.alarmierungszeit -
+            // bewusst als Sonderfall behandelt (nicht in ALLOWED_EINSATZ_FIELDS), da der
+            // State-Name vom Server-Feldnamen abweicht.
+            // EN: Server field "zeitstempel" -> einsatz.alarmierungszeit state/snapshot field -
+            // deliberately handled as a special case (not in ALLOWED_EINSATZ_FIELDS), since
+            // the state name differs from the server's field name.
+            if (Object.prototype.hasOwnProperty.call(data, 'zeitstempel')) {
+                this.currentEinsatzSnapshot.alarmierungszeit = data.zeitstempel;
+                tasks.push(this.setField('einsatz.alarmierungszeit', data.zeitstempel));
+            }
+
             // DE: Beschreibung zum Stichwort lokal ermitteln (kommt nicht vom Server) und wie die
             // übrigen flachen Felder setzen/im Snapshot mitführen.
             // EN: Determine the keyword's description locally (doesn't come from the server)
@@ -3019,6 +3106,13 @@ class WaipWeb extends utils.Adapter {
     async clearCurrentEinsatzStates() {
         const tasks = this.ALLOWED_EINSATZ_FIELDS.map(k => this.setStateAsync(`einsatz.${k}`, null, true));
         tasks.push(this.setStateAsync('einsatz.beschreibung', null, true));
+        // DE: alarmierungszeit ist wie beschreibung ein Sonderfall (nicht in
+        // ALLOWED_EINSATZ_FIELDS, siehe handleAlarm()) und muss daher hier separat geleert
+        // werden.
+        // EN: alarmierungszeit is a special case like beschreibung (not in
+        // ALLOWED_EINSATZ_FIELDS, see handleAlarm()), so it needs to be cleared separately
+        // here.
+        tasks.push(this.setStateAsync('einsatz.alarmierungszeit', null, true));
         tasks.push(this.setStateAsync('einsatz.latitude', null, true));
         tasks.push(this.setStateAsync('einsatz.longitude', null, true));
         // DE: Anders als einsatz.tts.last (dessen Vorbild ursprünglich für kartenbildPfad
@@ -3044,9 +3138,9 @@ class WaipWeb extends utils.Adapter {
 
         this.currentEinsatzUuid = null;
         this.currentEinsatzSnapshot = null;
-        // DE: rueckmeldungGesamt/rueckmeldungAnzahl.* liest aus this.currentEinsatzSnapshot,
+        // DE: rueckmeldungenGesamt/rueckmeldungen.* liest aus this.currentEinsatzSnapshot,
         // ist jetzt also null -> alle Zähler werden konsistent auf 0 zurückgesetzt.
-        // EN: rueckmeldungGesamt/rueckmeldungAnzahl.* reads from this.currentEinsatzSnapshot,
+        // EN: rueckmeldungenGesamt/rueckmeldungen.* reads from this.currentEinsatzSnapshot,
         // which is now null -> all counters get consistently reset to 0.
         await this.updateRueckmeldungCounts();
     }
