@@ -1086,6 +1086,13 @@ class WaipWeb extends utils.Adapter {
         this._warnCache = new Map(); // DE: Nachricht -> zuletzt geloggt (ms), siehe safeLog() / EN: message -> last logged (ms), see safeLog()
         this._lastRestzeit = null;
         this._lastDebugEvent = { event: null, ts: 0 };
+        // DE: Wird in onUnload() gesetzt, damit initObjects() eine noch laufende
+        // Objekt-Initialisierung abbricht, statt bei jeder verbleibenden Definition erneut
+        // gegen die bereits geschlossene DB-Verbindung zu laufen - siehe initObjects().
+        // EN: Set in onUnload() so initObjects() aborts a still-running object
+        // initialization instead of hitting the already-closed DB connection again for
+        // every remaining definition - see initObjects().
+        this._stopping = false;
 
         this.HISTORY_SIZE = HISTORY_SIZE;
         this.ALLOWED_EINSATZ_FIELDS = ALLOWED_EINSATZ_FIELDS;
@@ -1217,6 +1224,7 @@ class WaipWeb extends utils.Adapter {
     }
 
     onUnload(callback) {
+        this._stopping = true;
         try {
             this.cleanupSocket();
             if (this.registrationTimer) {
@@ -1310,28 +1318,63 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
+    /* DE: Legt Channel-/State-Objekte an, die noch nicht existieren (setObjectNotExistsAsync
+       lässt bereits vorhandene unangetastet). Bricht die Schleifen ab, sobald this._stopping
+       gesetzt ist (siehe onUnload()) - wird der Adapter mitten in dieser Initialisierung
+       beendet (z.B. schnelle Neustarts während/kurz nach einem Update), ist die
+       DB-Verbindung ggf. schon geschlossen; ohne diesen Schutz und das try/catch würde
+       jeder weitere setObjectNotExistsAsync-Aufruf einzeln fehlschlagen und - da onReady()
+       selbst nicht gefangen wird - als unhandled promise rejection im Log auftauchen,
+       statt einmalig als Warnung.
+       EN: Creates channel/state objects that don't exist yet (setObjectNotExistsAsync
+       leaves already-existing ones untouched). Aborts the loops once this._stopping is set
+       (see onUnload()) - if the adapter is stopped in the middle of this initialization
+       (e.g. rapid restarts during/right after an update), the DB connection may already be
+       closed; without this guard and the try/catch, every further setObjectNotExistsAsync
+       call would fail individually and - since onReady() itself isn't caught anywhere -
+       surface as an unhandled promise rejection in the log instead of a single warning. */
     async initObjects() {
         for (const def of CHANNEL_DEFS) {
-            await this.setObjectNotExistsAsync(def.id, {
-                type: def.type,
-                common: { name: def.name },
-                native: {},
-            });
+            if (this._stopping) {
+                return;
+            }
+            try {
+                await this.setObjectNotExistsAsync(def.id, {
+                    type: def.type,
+                    common: { name: def.name },
+                    native: {},
+                });
+            } catch (e) {
+                this.safeWarn(`initObjects channel ${def.id}`, e);
+                if (this._stopping) {
+                    return;
+                }
+            }
         }
         for (const def of STATE_DEFS) {
-            await this.setObjectNotExistsAsync(def.id, {
-                type: 'state',
-                common: {
-                    name: def.name,
-                    type: def.type,
-                    role: def.role,
-                    read: true,
-                    write: false,
-                    unit: def.unit,
-                    def: def.def !== undefined ? def.def : null,
-                },
-                native: {},
-            });
+            if (this._stopping) {
+                return;
+            }
+            try {
+                await this.setObjectNotExistsAsync(def.id, {
+                    type: 'state',
+                    common: {
+                        name: def.name,
+                        type: def.type,
+                        role: def.role,
+                        read: true,
+                        write: false,
+                        unit: def.unit,
+                        def: def.def !== undefined ? def.def : null,
+                    },
+                    native: {},
+                });
+            } catch (e) {
+                this.safeWarn(`initObjects state ${def.id}`, e);
+                if (this._stopping) {
+                    return;
+                }
+            }
         }
     }
 

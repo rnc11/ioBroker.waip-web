@@ -501,6 +501,15 @@ example.
 
 ## Changelog
 
+### 0.7.32 (2026-08-24)
+
+- Fixed a startup-only error: if the adapter was stopped while it was
+  still creating its ioBroker objects (e.g. a fast restart right after
+  an update), a "Connection is closed" failure could surface as an
+  `unhandled promise rejection` error in the log instead of being
+  caught - harmless, but noisy. Object initialization now stops
+  cleanly and logs a single warning instead.
+
 ### 0.7.31 (2026-08-24)
 
 - Fixed two `einsatz.kartenbildPfad` timing/staleness issues:
@@ -576,18 +585,6 @@ example.
   on each incident's coordinates, exposed via the new
   `einsatz.kartenbildPfad` state. Configurable image size and zoom
   level; only the 10 most recent images are kept.
-
-### 0.7.27 (2026-08-23)
-
-- [Keyword table](#keyword-descriptions) matching now treats spaces
-  and hyphens as equivalent (any run of either collapses to one
-  before comparing) - e.g. `H:VU mit P` and `H:VU-mit-P` now match
-  the same row, so dispatch-center spelling variants no longer need a
-  separate row each. Removed the now-redundant `B:Gebäude-Groß`/
-  `B:Gebäude-Klein` rows added in 0.7.24 (the existing `B:Gebäude
-  groß`/`B:Gebäude klein` rows already cover them). Comparison was
-  already case-insensitive before this change. Admin UI help text
-  updated accordingly.
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
 section shows only the 5 most recent versions.

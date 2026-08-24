@@ -1,5 +1,17 @@
 # Older changes
 
+### 0.7.27 (2026-08-23)
+
+- [Keyword table](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) matching now treats spaces
+  and hyphens as equivalent (any run of either collapses to one
+  before comparing) - e.g. `H:VU mit P` and `H:VU-mit-P` now match
+  the same row, so dispatch-center spelling variants no longer need a
+  separate row each. Removed the now-redundant `B:Gebäude-Groß`/
+  `B:Gebäude-Klein` rows added in 0.7.24 (the existing `B:Gebäude
+  groß`/`B:Gebäude klein` rows already cover them). Comparison was
+  already case-insensitive before this change. Admin UI help text
+  updated accordingly.
+
 ### 0.7.26 (2026-08-23)
 
 - [Keyword descriptions](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) tab: `Description` and
