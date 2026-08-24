@@ -317,7 +317,11 @@ nur dessen Mittelpunkt), wird als roter Umriss ins Bild eingezeichnet -
 also die vom Server original gesendete Form, keine Markierung an deren
 Mittelpunkt. Nur falls kein solches Polygon vorliegt (z.B. enthält das
 Event nur einen Punkt), fällt der Adapter auf eine einfache
-Punkt-Markierung in der Mitte zurück. Der Dateipfad wird in
+Punkt-Markierung in der Mitte zurück. Das Einsatzgebiet bleibt dabei
+immer vollständig sichtbar: passt es bei der konfigurierten Zoomstufe
+nicht ins Bild, zoomt der Adapter automatisch so weit heraus (nie
+hinein), wie nötig, damit das gesamte Gebiet hineinpasst, statt es am
+Rand abzuschneiden. Der Dateipfad wird in
 `einsatz.kartenbildPfad` geschrieben
 (siehe [einsatz](#einsatz)) – typische Verwendung ist der Versand dieser
 Datei aus einem Blockly-/JavaScript-Skript heraus, z.B. als
@@ -332,7 +336,7 @@ sonst bleibt nichts betroffen.
 | --- | --- | --- |
 | Bildbreite (px) | Breite des erzeugten PNGs | `600` |
 | Bildhöhe (px) | Höhe des erzeugten PNGs | `400` |
-| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) | `16` |
+| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert, wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt | `16` |
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
 (`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –

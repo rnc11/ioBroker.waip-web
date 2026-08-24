@@ -309,7 +309,11 @@ The incident area WAIP-Web sends in the `geometry` field of the event
 center) is drawn onto the image as a red outline - the original shape
 the server sent, not a marker at its centroid. Only if no such polygon
 is available (e.g. the event carries just a point) does the adapter
-fall back to a simple marker dot at the center. The file
+fall back to a simple marker dot at the center. The incident area is
+always kept fully visible: if it wouldn't fit into the image at the
+configured zoom level, the adapter automatically zooms out (never in)
+just enough for the whole area to fit, instead of clipping it at the
+edge. The file
 path is written to `einsatz.kartenbildPfad` (see [einsatz](#einsatz)) –
 typical use is attaching that file from a Blockly/JavaScript script,
 e.g. as a Pushover notification attachment. Only the 10 most recently
@@ -322,7 +326,7 @@ just means a missing/delayed image, nothing else is affected.
 | --- | --- | --- |
 | Image width (px) | Width of the generated PNG | `600` |
 | Image height (px) | Height of the generated PNG | `400` |
-| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) | `16` |
+| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum, automatically reduced if needed to keep the incident area fully visible | `16` |
 
 Images are stored under this adapter instance's own data directory
 (`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
@@ -480,7 +484,10 @@ example.
   area WAIP-Web sends in the event's `geometry` field (usually a
   circle-shaped polygon around the location) as an outline, instead of
   just a marker dot at its centroid. Falls back to the dot marker if no
-  polygon is available (e.g. only a point).
+  polygon is available (e.g. only a point). The area always stays
+  fully visible: the adapter automatically zooms out (never in) past
+  the configured zoom level if needed, instead of clipping the area at
+  the image edge.
 - **Rescue-service decoding** (on the [Rescue service](#rescue-service)
   tab) now defaults to **on** for new installations, matching **Process
   rescue-service incidents** (already on by default) - previously it
