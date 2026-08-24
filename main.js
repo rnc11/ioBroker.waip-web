@@ -103,7 +103,16 @@ const ALLOWED_EINSATZ_FIELDS = [
     // EN: additional field per client_waip.js (the official frontend):
     'zeitstempel',
 ];
-const RUECKMELDUNG_ANZAHL_KEYS = ['ek', 'gf', 'zf', 'vf', 'agt', 'fzf', 'ma', 'med'];
+// DE: Rückmeldungs-Zähler sind seit 0.7.35 in zwei Unter-Kanäle gruppiert - "rollen" (aus
+// rmld_role abgeleitet) und "funktionen" (aus den rmld_capability_*-Flags abgeleitet), siehe
+// updateRueckmeldungCounts(). Vorher lagen alle acht Zähler flach direkt unter
+// einsatz.rueckmeldungAnzahl.
+// EN: Feedback counters have been grouped into two sub-channels since 0.7.35 - "rollen"
+// (derived from rmld_role) and "funktionen" (derived from the rmld_capability_* flags), see
+// updateRueckmeldungCounts(). Previously all eight counters lived flat directly under
+// einsatz.rueckmeldungAnzahl.
+const RUECKMELDUNG_ROLLEN_KEYS = ['ek', 'gf', 'zf', 'vf'];
+const RUECKMELDUNG_FUNKTIONEN_KEYS = ['agt', 'fzf', 'ma', 'med'];
 // DE: identische Disconnect-Logs 60s lang unterdrücken
 // EN: suppress identical disconnect logs for 60s
 const DISCONNECT_DEDUPE_MS = 60000;
@@ -259,6 +268,24 @@ const OBSOLETE_OBJECT_IDS = [
     'einsatz.hausnummer',
     'einsatz.einsatzdetails',
     'einsatz.permissions',
+    // DE: Umstrukturierung in 0.7.35: die acht Rückmeldungs-Zähler ziehen von direkt unter
+    // einsatz.rueckmeldungAnzahl in die neuen Unter-Kanäle .rollen/.funktionen um (siehe
+    // CHANNEL_DEFS/STATE_DEFS) - die alten flachen State-Blätter müssen daher vor
+    // initObjects() entfernt werden, sonst blieben sie als verwaiste States neben den neuen
+    // verschachtelten Pfaden bestehen.
+    // EN: Restructuring in 0.7.35: the eight feedback counters move from directly under
+    // einsatz.rueckmeldungAnzahl into the new .rollen/.funktionen sub-channels (see
+    // CHANNEL_DEFS/STATE_DEFS) - the old flat state leaves must therefore be removed before
+    // initObjects() runs, otherwise they'd linger as orphaned states alongside the new
+    // nested paths.
+    'einsatz.rueckmeldungAnzahl.ek',
+    'einsatz.rueckmeldungAnzahl.gf',
+    'einsatz.rueckmeldungAnzahl.zf',
+    'einsatz.rueckmeldungAnzahl.vf',
+    'einsatz.rueckmeldungAnzahl.agt',
+    'einsatz.rueckmeldungAnzahl.fzf',
+    'einsatz.rueckmeldungAnzahl.ma',
+    'einsatz.rueckmeldungAnzahl.med',
 ];
 
 // DE: Übergeordnete Channel/Folder-Objekte, die für jeden State-Zweig existieren müssen.
@@ -270,7 +297,9 @@ const OBSOLETE_OBJECT_IDS = [
 const CHANNEL_DEFS = [
     { id: 'status', type: 'channel', name: 'Verbindungs- und Registrierungsstatus' },
     { id: 'einsatz', type: 'channel', name: 'Aktueller Einsatz' },
-    { id: 'einsatz.rueckmeldungAnzahl', type: 'folder', name: 'Rückmeldungen nach Funktion' },
+    { id: 'einsatz.rueckmeldungAnzahl', type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
+    { id: 'einsatz.rueckmeldungAnzahl.rollen', type: 'folder', name: 'Rückmeldungen nach Rolle' },
+    { id: 'einsatz.rueckmeldungAnzahl.funktionen', type: 'folder', name: 'Rückmeldungen nach Funktion' },
     { id: 'einsatz.json', type: 'folder', name: 'Einsatzdaten als flache JSON-Objekte/Arrays für Tabellen-Widgets' },
     { id: 'einsatz.tts', type: 'folder', name: 'TTS-Ansage des aktuellen Einsatzes' },
     { id: 'debug', type: 'channel', name: 'Diagnose- und Debug-Informationen' },
@@ -415,44 +444,56 @@ const STATE_DEFS = [
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.ek',
+        id: 'einsatz.rueckmeldungAnzahl.rollen.ek',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Einsatzkräfte',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.gf',
+        id: 'einsatz.rueckmeldungAnzahl.rollen.gf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Gruppenführer',
         def: 0,
     },
-    { id: 'einsatz.rueckmeldungAnzahl.zf', type: 'number', role: 'value', name: 'Rückmeldungen: Zugführer', def: 0 },
     {
-        id: 'einsatz.rueckmeldungAnzahl.vf',
+        id: 'einsatz.rueckmeldungAnzahl.rollen.zf',
+        type: 'number',
+        role: 'value',
+        name: 'Rückmeldungen: Zugführer',
+        def: 0,
+    },
+    {
+        id: 'einsatz.rueckmeldungAnzahl.rollen.vf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Verbandsführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.agt',
+        id: 'einsatz.rueckmeldungAnzahl.funktionen.agt',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Atemschutzgeräteträger',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungAnzahl.fzf',
+        id: 'einsatz.rueckmeldungAnzahl.funktionen.fzf',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Fahrzeugführer',
         def: 0,
     },
-    { id: 'einsatz.rueckmeldungAnzahl.ma', type: 'number', role: 'value', name: 'Rückmeldungen: Maschinisten', def: 0 },
     {
-        id: 'einsatz.rueckmeldungAnzahl.med',
+        id: 'einsatz.rueckmeldungAnzahl.funktionen.ma',
+        type: 'number',
+        role: 'value',
+        name: 'Rückmeldungen: Maschinisten',
+        def: 0,
+    },
+    {
+        id: 'einsatz.rueckmeldungAnzahl.funktionen.med',
         type: 'number',
         role: 'value',
         name: 'Rückmeldungen: Medizinisch/Sanitäter',
@@ -2624,10 +2665,14 @@ class WaipWeb extends utils.Adapter {
 
     /* DE: Berechnet aus den im Snapshot gesammelten Rückmeldungen die Zähler pro Rolle/Fähigkeit
        (analog zu den Badges EK/GF/ZF/VF/AGT/FZF/MA/MED/Gesamt der Weboberfläche) und
-       aktualisiert einsatz.rueckmeldungAnzahl.* sowie einsatz.rueckmeldungGesamt.
+       aktualisiert einsatz.rueckmeldungAnzahl.rollen.<k> und .funktionen.<k> sowie
+       einsatz.rueckmeldungGesamt. EK/GF/ZF/VF (aus rmld_role) liegen unter .rollen, AGT/FZF/MA/
+       MED (aus den rmld_capability_*-Flags) unter .funktionen.
        EN: Computes the per-role/skill counters from the feedback entries collected in the
        snapshot (mirroring the EK/GF/ZF/VF/AGT/FZF/MA/MED/total badges of the web UI) and
-       updates einsatz.rueckmeldungAnzahl.* as well as einsatz.rueckmeldungGesamt. */
+       updates einsatz.rueckmeldungAnzahl.rollen.<k> and .funktionen.<k> as well as
+       einsatz.rueckmeldungGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen, AGT/FZF/MA/
+       MED (from the rmld_capability_* flags) under .funktionen. */
     async updateRueckmeldungCounts() {
         const list = (this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen) || [];
         const counts = { ek: 0, gf: 0, zf: 0, vf: 0, agt: 0, fzf: 0, ma: 0, med: 0 };
@@ -2654,9 +2699,14 @@ class WaipWeb extends utils.Adapter {
                 counts.med++;
             }
         }
-        const tasks = RUECKMELDUNG_ANZAHL_KEYS.map(k =>
-            this.setStateAsync(`einsatz.rueckmeldungAnzahl.${k}`, counts[k], true),
-        );
+        const tasks = [
+            ...RUECKMELDUNG_ROLLEN_KEYS.map(k =>
+                this.setStateAsync(`einsatz.rueckmeldungAnzahl.rollen.${k}`, counts[k], true),
+            ),
+            ...RUECKMELDUNG_FUNKTIONEN_KEYS.map(k =>
+                this.setStateAsync(`einsatz.rueckmeldungAnzahl.funktionen.${k}`, counts[k], true),
+            ),
+        ];
         tasks.push(this.setStateAsync('einsatz.rueckmeldungGesamt', list.length, true));
         const results = await Promise.allSettled(tasks);
         for (const r of results) {

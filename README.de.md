@@ -105,9 +105,10 @@ Rettungsdienst-Wache:
   Gebäudelautsprecher anzusagen, sobald `io.playtts` feuert – hilfreich,
   wenn nicht alle Mitglieder gerade auf einen Bildschirm schauen.
 - **Live-Übersicht der Rückmeldungen.** Die `einsatz.rueckmeldungAnzahl.*`
-  Zähler (pro Rolle: EK/GF/ZF/VF, pro Zusatzfunktion: AGT/FZF/MA/MED)
-  aktualisieren sich in Echtzeit, sobald Einsatzkräfte per App
-  zurückmelden – als Gauge- oder Zahlen-Widget gebunden ergibt das eine
+  Zähler (`rollen.ek`/`.gf`/`.zf`/`.vf` pro Rolle, `funktionen.agt`/`.fzf`/
+  `.ma`/`.med` pro Zusatzfunktion) aktualisieren sich in Echtzeit, sobald
+  Einsatzkräfte per App zurückmelden – als Gauge- oder Zahlen-Widget
+  gebunden ergibt das eine
   Übersicht auf einen Blick, wer bereits kommt.
 - **Nachbereitung/Statistik.** `einsatz.json.history10` hält die letzten
   10 abgeschlossenen Einsätze als flache Tabelle vor – an eine zweite
@@ -460,14 +461,14 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Leer bis das Bild für den aktuellen Einsatz fertig ist; wird außerdem zu Beginn eines neuen Einsatzes, bei einem Fehlschlag der Erzeugung oder falls das OSM-Timeout überschritten wird geleert (bzw. bleibt leer), sowie - wie die übrigen Felder oben - bei `io.standby`. Die zugrundeliegende Bild-Datei selbst wird beim Leeren des States nicht gelöscht (nur das 10er-Rotationslimit entfernt Dateien, siehe [Einsatzkarte](#einsatzkarte)) |
 | `routenGesamt` | number | Anzahl Routen im aktuellen Einsatz |
 | `rueckmeldungGesamt` | number | Rückmeldungen gesamt im aktuellen Einsatz |
-| `rueckmeldungAnzahl.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |
-| `rueckmeldungAnzahl.gf` | number | Anzahl Rückmeldungen als Gruppenführer |
-| `rueckmeldungAnzahl.zf` | number | Anzahl Rückmeldungen als Zugführer |
-| `rueckmeldungAnzahl.vf` | number | Anzahl Rückmeldungen als Verbandsführer |
-| `rueckmeldungAnzahl.agt` | number | Anzahl Rückmeldungen mit Atemschutz-Befähigung |
-| `rueckmeldungAnzahl.fzf` | number | Anzahl Rückmeldungen als Fahrzeugführer |
-| `rueckmeldungAnzahl.ma` | number | Anzahl Rückmeldungen als Maschinist |
-| `rueckmeldungAnzahl.med` | number | Anzahl Rückmeldungen mit medizinischer Befähigung |
+| `rueckmeldungAnzahl.rollen.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |
+| `rueckmeldungAnzahl.rollen.gf` | number | Anzahl Rückmeldungen als Gruppenführer |
+| `rueckmeldungAnzahl.rollen.zf` | number | Anzahl Rückmeldungen als Zugführer |
+| `rueckmeldungAnzahl.rollen.vf` | number | Anzahl Rückmeldungen als Verbandsführer |
+| `rueckmeldungAnzahl.funktionen.agt` | number | Anzahl Rückmeldungen mit Atemschutz-Befähigung |
+| `rueckmeldungAnzahl.funktionen.fzf` | number | Anzahl Rückmeldungen als Fahrzeugführer |
+| `rueckmeldungAnzahl.funktionen.ma` | number | Anzahl Rückmeldungen als Maschinist |
+| `rueckmeldungAnzahl.funktionen.med` | number | Anzahl Rückmeldungen mit medizinischer Befähigung |
 
 ### einsatz.json
 
