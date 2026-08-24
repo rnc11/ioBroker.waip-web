@@ -306,8 +306,9 @@ centered on the incident's location, and stamps the OpenStreetMap
 attribution (required by its ODbL license) into the bottom-left corner.
 The incident area WAIP-Web sends in the `geometry` field of the event
 (usually a circle-shaped polygon around the location, not just its
-center) is drawn onto the image as a red outline - the original shape
-the server sent, not a marker at its centroid. Only if no such polygon
+center) is drawn onto the image as an outline in a configurable color
+and thickness - the original shape the server sent, not a marker at
+its centroid. Only if no such polygon
 is available (e.g. the event carries just a point) does the adapter
 fall back to a simple marker dot at the center. The incident area is
 always kept fully visible: if it wouldn't fit into the image at the
@@ -327,6 +328,8 @@ just means a missing/delayed image, nothing else is affected.
 | Image width (px) | Width of the generated PNG | `600` |
 | Image height (px) | Height of the generated PNG | `400` |
 | Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum, automatically reduced if needed to keep the incident area fully visible | `16` |
+| Outline color | Color of the incident-area outline (and the fallback marker dot's core) | `#DD2020` |
+| Outline thickness (px) | Line thickness of the outline, in pixels (1-12) | `3` |
 
 Images are stored under this adapter instance's own data directory
 (`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
@@ -487,7 +490,8 @@ example.
   polygon is available (e.g. only a point). The area always stays
   fully visible: the adapter automatically zooms out (never in) past
   the configured zoom level if needed, instead of clipping the area at
-  the image edge.
+  the image edge. Outline color and thickness (1-12 px) are now
+  configurable too (also used for the fallback marker dot's core).
 - **Rescue-service decoding** (on the [Rescue service](#rescue-service)
   tab) now defaults to **on** for new installations, matching **Process
   rescue-service incidents** (already on by default) - previously it

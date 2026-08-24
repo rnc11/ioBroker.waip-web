@@ -156,6 +156,10 @@ const OSM_TILE_USER_AGENT = 'ioBroker.waip-web (+https://github.com/rnc11/ioBrok
 const DEFAULT_MAP_IMAGE_WIDTH = 600;
 const DEFAULT_MAP_IMAGE_HEIGHT = 400;
 const DEFAULT_MAP_IMAGE_ZOOM = 16;
+const DEFAULT_MAP_IMAGE_OUTLINE_COLOR = '#dd2020';
+const DEFAULT_MAP_IMAGE_OUTLINE_THICKNESS = 3;
+const MAP_IMAGE_OUTLINE_THICKNESS_MIN = 1;
+const MAP_IMAGE_OUTLINE_THICKNESS_MAX = 12;
 // DE: Wie viele erzeugte Kartenbilder maximal aufgehoben werden - ältere werden nach jeder
 // neuen Erzeugung gelöscht, siehe pruneMapImages().
 // EN: How many generated map images are kept at most - older ones are deleted after every
@@ -856,6 +860,30 @@ function clampNumber(value, min, max, def) {
     return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+// DE: Wandelt eine "#RRGGBB"-Farbe (z.B. aus dem "color"-Feldtyp der Admin-UI,
+// mapImageOutlineColor) in Jimps 0xRRGGBBAA-Integer-Format um (volldeckend, Alpha fest 0xff -
+// siehe buildEinsatzMapImage()). Fällt bei fehlendem/ungültigem Wert (z.B. leerer String, "#"
+// fehlt, falsche Länge) auf defaultHex zurück, statt einen kaputten Wert an Jimp
+// durchzureichen.
+// EN: Converts a "#RRGGBB" color (e.g. from the admin UI's "color" field type,
+// mapImageOutlineColor) into Jimp's 0xRRGGBBAA integer format (fully opaque, alpha fixed at
+// 0xff - see buildEinsatzMapImage()). Falls back to defaultHex on a missing/invalid value
+// (e.g. empty string, missing "#", wrong length) instead of passing a broken value to Jimp.
+function hexColorToJimpInt(hex, defaultHex) {
+    const match = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || '').trim());
+    const rgb = match ? match[1] : /^#?([0-9a-fA-F]{6})$/.exec(defaultHex)[1];
+    // DE: Bewusst *256 + 0xff statt Bitshift (<<8 | 0xff) - Werte ab 0x80000000 (z.B. Weiß,
+    // 0xffffff -> 0xffffff00) würden von JS' Bitoperatoren als 32-bit SIGNED Integer
+    // interpretiert und dadurch negativ/falsch. Plain Arithmetik bleibt eine korrekte
+    // (positive) Zahl, JS-Zahlen können Ganzzahlen bis 2^53 verlustfrei darstellen.
+    // EN: Deliberately *256 + 0xff instead of a bit shift (<<8 | 0xff) - values from
+    // 0x80000000 up (e.g. white, 0xffffff -> 0xffffff00) would be interpreted by JS's
+    // bitwise operators as a 32-bit SIGNED integer and come out negative/wrong. Plain
+    // arithmetic stays a correct (positive) number - JS numbers represent integers up to
+    // 2^53 exactly.
+    return parseInt(rgb, 16) * 256 + 0xff;
+}
+
 /* DE: Rechnet eine Position (WGS84 lon/lat) bei einem gegebenen Zoom-Level in eine
    Pixelkoordinate im globalen "Slippy Map"-Pixelraum um (Web-Mercator, Standardformel
    des OSM-Wikis "Slippy map tilenames" - jede Kachel ist OSM_TILE_SIZE px groß, bei Zoom z
@@ -1112,6 +1140,20 @@ class WaipWeb extends utils.Adapter {
         this.mapImageWidth = clampNumber(this.config.mapImageWidth, 100, 2000, DEFAULT_MAP_IMAGE_WIDTH);
         this.mapImageHeight = clampNumber(this.config.mapImageHeight, 100, 2000, DEFAULT_MAP_IMAGE_HEIGHT);
         this.mapImageZoom = clampNumber(this.config.mapImageZoom, 1, OSM_MAX_ZOOM, DEFAULT_MAP_IMAGE_ZOOM);
+        // DE: Direkt beim Start in Jimps 0xRRGGBBAA-Format vorgerechnet (statt bei jeder
+        // Bilderzeugung neu), analog zu den anderen mapImage*-Config-Werten.
+        // EN: Precomputed into Jimp's 0xRRGGBBAA format once at startup (instead of on every
+        // image generation), same as the other mapImage* config values.
+        this.mapImageOutlineColorInt = hexColorToJimpInt(
+            this.config.mapImageOutlineColor,
+            DEFAULT_MAP_IMAGE_OUTLINE_COLOR,
+        );
+        this.mapImageOutlineThickness = clampNumber(
+            this.config.mapImageOutlineThickness,
+            MAP_IMAGE_OUTLINE_THICKNESS_MIN,
+            MAP_IMAGE_OUTLINE_THICKNESS_MAX,
+            DEFAULT_MAP_IMAGE_OUTLINE_THICKNESS,
+        );
         this.mapImageDir = path.join(utils.getAbsoluteInstanceDataDir(this), 'maps');
         // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): normalizeStichwortForMatch()
         // sorgt für case-insensitiven Vergleich UND behandelt Leerzeichen/Bindestriche als identisch
@@ -2062,34 +2104,35 @@ class WaipWeb extends utils.Adapter {
         // Einsatzort, nicht nur dessen Mittelpunkt) - jeder Ringpunkt wird über
         // lonLatToGlobalPixel() in Bild-Pixelkoordinaten umgerechnet (Ursprung um
         // originX/originY verschoben, siehe deren Berechnung oben) und als geschlossene
-        // Umrisslinie gezeichnet. Nur falls KEIN Polygon vorliegt (Geometrie fehlt oder ist
-        // z.B. nur ein Point/LineString), fällt die Funktion auf einen einfachen
-        // Punkt-Marker (zwei konzentrische Kreise, weißer Ring/roter Kern) in der Bildmitte
-        // zurück - das circle()-Plugin von Jimp maskiert dafür bereits zuverlässig.
+        // Umrisslinie gezeichnet, in der konfigurierten Farbe/Strichstärke
+        // (mapImageOutlineColor/-Thickness). Nur falls KEIN Polygon vorliegt (Geometrie
+        // fehlt oder ist z.B. nur ein Point/LineString), fällt die Funktion auf einen
+        // einfachen Punkt-Marker (zwei konzentrische Kreise, weißer Ring/Kern in der
+        // konfigurierten Farbe) in der Bildmitte zurück - das circle()-Plugin von Jimp
+        // maskiert dafür bereits zuverlässig.
         // EN: Draw the incident area: prefers the original polygon(s) the WAIP server sends
         // in the geometry field (usually a circle-shaped polygon around the incident
         // location, not just its center point) - each ring point is converted to image
         // pixel coordinates via lonLatToGlobalPixel() (origin shifted by originX/originY,
-        // see their calculation above) and drawn as a closed outline. Only if NO polygon is
-        // available (geometry missing, or e.g. just a Point/LineString) does the function
-        // fall back to a simple point marker (two concentric circles, white ring/red core)
-        // at the image center - Jimp's circle() plugin already masks that reliably.
+        // see their calculation above) and drawn as a closed outline, in the configured
+        // color/thickness (mapImageOutlineColor/-Thickness). Only if NO polygon is available
+        // (geometry missing, or e.g. just a Point/LineString) does the function fall back to
+        // a simple point marker (two concentric circles, white ring/core in the configured
+        // color) at the image center - Jimp's circle() plugin already masks that reliably.
         if (rings.length) {
-            const outlineColor = 0xdd2020ff;
-            const thickness = Math.max(2, Math.round(Math.min(width, height) * 0.008));
             for (const ring of rings) {
                 const pixelRing = ring.map(([plon, plat]) => {
                     const p = lonLatToGlobalPixel(plon, plat, zoom);
                     return [p.x - originX, p.y - originY];
                 });
-                drawPolyline(canvas, pixelRing, outlineColor, thickness, true);
+                drawPolyline(canvas, pixelRing, this.mapImageOutlineColorInt, this.mapImageOutlineThickness, true);
             }
         } else {
             const outerSize = Math.max(10, Math.round(Math.min(width, height) * 0.035));
             const innerSize = Math.round(outerSize * 0.6);
             const outerMarker = new Jimp({ width: outerSize, height: outerSize, color: 0xffffffff });
             outerMarker.circle();
-            const innerMarker = new Jimp({ width: innerSize, height: innerSize, color: 0xdd2020ff });
+            const innerMarker = new Jimp({ width: innerSize, height: innerSize, color: this.mapImageOutlineColorInt });
             innerMarker.circle();
             outerMarker.composite(
                 innerMarker,
