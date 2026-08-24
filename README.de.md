@@ -180,9 +180,10 @@ Rettungsdienst-Wache:
   eigenen Region ohnehin nur unzuverlässig signalisiert, siehe
   [Rettungsdienst](#rettungsdienst)
 - Optionales Einsatzkarten-Bild: ein auf die Einsatz-Koordinaten
-  zentriertes und mit einem Punkt markiertes PNG, lokal aus
-  OpenStreetMap-Kacheln zusammengesetzt, dessen Dateipfad als State
-  bereitsteht - siehe [Einsatzkarte](#einsatzkarte)
+  zentriertes PNG, lokal aus OpenStreetMap-Kacheln zusammengesetzt, mit
+  dem von WAIP-Web gesendeten Einsatzgebiet als Umriss eingezeichnet
+  (Rückfall auf Punkt-Markierung), Dateipfad als State bereitgestellt -
+  siehe [Einsatzkarte](#einsatzkarte)
 
 ## Konfiguration
 
@@ -248,7 +249,7 @@ werden dabei keine Daten irgendwohin gesendet. Dieser Tab ist die erste
 von zwei Quellen, die der Reihe nach geprüft werden (die zweite steht
 unter [Stichwort-Stammdaten](#stichwort-stammdaten)):
 
-**Rettungsdienst-Dekodierung** (Admin-Checkbox, standardmäßig aus):
+**Rettungsdienst-Dekodierung** (Admin-Checkbox, standardmäßig an):
 passt das Stichwort auf das Muster `R<Anzahl RTW>N<Anzahl NEF>[p][f][-NT]`
 (z.B. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), wird
 automatisch eine Beschreibung erzeugt. Zwei Schreibweisen des
@@ -258,8 +259,9 @@ vor `NT` (z.B. `R1N1p`, `R1N0-NT`, siehe
 dazu) sowie mit Leerzeichen und ohne Bindestrich (z.B. `R1N1 p`,
 `R1N0 nt`, wie von der IRLS Brandenburg verwendet) – dieses Schema
 (in beiden Schreibweisen) wird von mehreren Leitstellen verwendet,
-nicht nur diesen beiden – nur aktivieren, wenn eure Leitstelle eines
-dieser Muster tatsächlich verwendet. Der Text für jeden Teil ist
+nicht nur diesen beiden – hat keine Auswirkung, falls eure Leitstelle
+keines dieser Muster verwendet, da das Stichwort dann einfach nicht
+passt. Der Text für jeden Teil ist
 selbst konfigurierbar (5 zusätzliche Textfelder erscheinen, sobald
 die Checkbox aktiviert ist), da der Adapter mehrsprachig ist und
 diese Bezeichnungen nicht automatisch übersetzt werden:
@@ -307,10 +309,16 @@ Passt weder diese Tabelle noch der Dekoder oben, bleibt
 aus): ist die Checkbox aktiv und liegen für einen Einsatz gültige
 Koordinaten vor, lädt der Adapter die dafür nötigen Kacheln vom
 öffentlichen Server `tile.openstreetmap.org` herunter, setzt sie zu
-einem einzigen PNG zusammen, zentriert auf den Einsatzort, zeichnet eine
-Markierung (roter Punkt, weißer Rand) exakt in die Mitte und stempelt
+einem einzigen PNG zusammen, zentriert auf den Einsatzort, und stempelt
 die von der ODbL-Lizenz vorgeschriebene OpenStreetMap-Attribution unten
-links auf. Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben
+links auf. Das Einsatzgebiet, das WAIP-Web im `geometry`-Feld des
+Events sendet (meist ein kreisförmiges Polygon um den Einsatzort, nicht
+nur dessen Mittelpunkt), wird als roter Umriss ins Bild eingezeichnet -
+also die vom Server original gesendete Form, keine Markierung an deren
+Mittelpunkt. Nur falls kein solches Polygon vorliegt (z.B. enthält das
+Event nur einen Punkt), fällt der Adapter auf eine einfache
+Punkt-Markierung in der Mitte zurück. Der Dateipfad wird in
+`einsatz.kartenbildPfad` geschrieben
 (siehe [einsatz](#einsatz)) – typische Verwendung ist der Versand dieser
 Datei aus einem Blockly-/JavaScript-Skript heraus, z.B. als
 Pushover-Benachrichtigungsanhang. Es werden nur die 10 zuletzt erzeugten

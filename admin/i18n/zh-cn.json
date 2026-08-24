@@ -3,9 +3,8 @@
     "Automatically decode rescue-service keywords (R<RTW>N<NEF>[p][f][-NT], with or without spaces)": "自动解码救援服务关键字（R<RTW>N<NEF>[p][f][-NT]，带空格或不带空格）",
     "Base URL of the WAIP dispatch server (Socket.IO endpoint, namespace /waip is appended automatically)": "WAIP 调度服务器的基本 URL（Socket.IO 端点，命名空间 /waip 自动附加）",
     "Connection": "连接",
-    "contains": "包含",
     "Description": "描述",
-    "For every incident with valid coordinates, downloads OpenStreetMap tiles and composes a PNG centered on the incident's location, marked with a dot. The file path is written to the einsatz.kartenbildPfad state, e.g. for sending as a Pushover attachment from a Blockly/JavaScript script. Only the 10 most recent images are kept, older ones are deleted automatically. Uses the public tile.openstreetmap.org server - keep this to the intended one-image-per-incident use per the OSM Tile Usage Policy.": "对于每个具有有效坐标的事件，下载 OpenStreetMap 瓦片并合成一张以事件位置为中心、用圆点标记的 PNG 图像。文件路径写入状态 einsatz.kartenbildPfad，例如可从 Blockly/JavaScript 脚本作为 Pushover 附件发送。仅保留最近的 10 张图像，较旧的会自动删除。使用公共服务器 tile.openstreetmap.org——请遵守 OSM Tile Usage Policy 中每个事件一张图像的预期用途。",
+    "For every incident with valid coordinates, downloads OpenStreetMap tiles and composes a PNG centered on the incident's location, with the incident area WAIP-Web sends drawn as an outline (falls back to a marker dot if no area polygon is available). The file path is written to the einsatz.kartenbildPfad state, e.g. for sending as a Pushover attachment from a Blockly/JavaScript script. Only the 10 most recent images are kept, older ones are deleted automatically. Uses the public tile.openstreetmap.org server - keep this to the intended one-image-per-incident use per the OSM Tile Usage Policy.": "对于每个具有有效坐标的事件，下载 OpenStreetMap 瓦片并合成一张以事件位置为中心的 PNG 图像，将 WAIP-Web 发送的事件区域绘制为轮廓（如果没有可用的区域多边形，则回退为圆点标记）。文件路径写入状态 einsatz.kartenbildPfad，例如可从 Blockly/JavaScript 脚本作为 Pushover 附件发送。仅保留最近的 10 张图像，较旧的会自动删除。使用公共服务器 tile.openstreetmap.org——请遵守 OSM Tile Usage Policy 中每个事件一张图像的预期用途。",
     "Generate a map image for each incident": "为每个事件生成地图图像",
     "Height of the generated map image in pixels.": "生成的地图图像高度（像素）。",
     "How long to wait for the server to confirm the monitor registration before logging a warning; the connection itself keeps running either way.": "在记录警告之前等待服务器确认监视器注册需要多长时间；无论哪种方式，连接本身都会保持运行。",
@@ -28,8 +27,7 @@
     "Reconnect delay (s)": "重新连接延迟（秒）",
     "Registration timeout (s)": "注册超时（秒）",
     "Rescue service": "急救服务",
-    "Rescue-service keyword scheme R<RTW>N<NEF>, optionally followed by a p/f modifier and/or an NT suffix (e.g. \"R1N0\" = 1 ambulance, no emergency physician). Two spellings are recognized: without a space and with a hyphen before NT (Leitstelle Lausitz, e.g. \"R1N1p\", \"R1N0-NT\") and with a space and without a hyphen (Leitstelle Brandenburg/IRLS, e.g. \"R1N1 p\", \"R1N0 nt\") - only enable if your dispatch center actually uses one of these patterns. Takes priority over the table on the Keyword descriptions tab when a keyword matches.": "救援服务关键字方案 R<RTW>N<NEF>，可选地后跟 p/f 修饰符和/或 NT 后缀（例如 \"R1N0\" = 1辆救护车，无急诊医生）。可识别两种写法：不带空格且NT前带连字符（勒鲁西茨调度中心写法，例如 \"R1N1p\"、\"R1N0-NT\"）以及带空格且不带连字符（勃兰登堡/IRLS调度中心写法，例如 \"R1N1 p\"、\"R1N0 nt\"）——仅当你的调度中心确实使用其中一种格式时才启用。当关键字匹配时，优先于\"关键字描述\"标签页中的表格。",
-    "starts with": "开始于",
+    "Rescue-service keyword scheme R<RTW>N<NEF>, optionally followed by a p/f modifier and/or an NT suffix (e.g. \"R1N0\" = 1 ambulance, no emergency physician). Two spellings are recognized: without a space and with a hyphen before NT (Leitstelle Lausitz, e.g. \"R1N1p\", \"R1N0-NT\") and with a space and without a hyphen (Leitstelle Brandenburg/IRLS, e.g. \"R1N1 p\", \"R1N0 nt\") - has no effect if your dispatch center doesn't use one of these patterns, since the keyword just won't match. Takes priority over the table on the Keyword descriptions tab when a keyword matches.": "救援服务关键字方案 R<RTW>N<NEF>，可选地后跟 p/f 修饰符和/或 NT 后缀（例如 \"R1N0\" = 1辆救护车，无急诊医生）。可识别两种写法：不带空格且NT前带连字符（勒鲁西茨调度中心写法，例如 \"R1N1p\"、\"R1N0-NT\"）以及带空格且不带连字符（勃兰登堡/IRLS调度中心写法，例如 \"R1N1 p\"、\"R1N0 nt\"）——如果你的调度中心不使用这些格式中的任何一种，此选项也不会有任何影响，因为关键字只是不会匹配。当关键字匹配时，优先于\"关键字描述\"标签页中的表格。",
     "Text appended when the keyword ends in \"-NT\" or \" nt\".": "当关键字以 \"-NT\" 或 \" nt\" 结尾时附加的文本。",
     "Text appended when the keyword ends in \"f\".": "当关键字以“f”结尾时附加的文本。",
     "Text appended when the keyword ends in \"p\".": "当关键字以“p”结尾时附加的文本。",
@@ -37,7 +35,9 @@
     "Text used in the generated description for the R<n> part, e.g. \"Rettungswagen: 1\".": "生成的 R<n> 部分描述中使用的文本，例如“Rettungswagen：1”。",
     "WAIP server URL": "WAIP 服务器 URL",
     "Wait time before the adapter automatically reconnects after a lost connection or a connection error.": "连接丢失或连接错误后适配器自动重新连接之前的等待时间。",
-    "When unchecked, incidents whose einsatzart identifies them as a rescue-service call (contains \"Rettung\" or \"Krankentransport\", case-insensitive) are ignored completely - no states are updated, no history entry is written, no TTS announcement is triggered. Useful because some WAIP dispatch centers only ever signal rescue-service incidents unreliably or not at all. Enabled by default to match previous behavior.": "取消勾选后，einsatzart 表明为急救服务呼叫的事件（包含 \"Rettung\" 或 \"Krankentransport\"，不区分大小写）将被完全忽略——不更新任何状态，不写入历史记录，不触发语音播报（TTS）。这在某些 WAIP 调度中心只能不可靠地或根本不发出急救服务事件信号时很有用。默认启用，以保持先前的行为。",
+    "When unchecked, incidents whose einsatzart identifies them as a rescue-service call (contains \"Rettung\" or \"Krankentransport\", case-insensitive) are ignored completely - no states are updated, no history entry is written, no TTS announcement is triggered. Useful because some WAIP dispatch centers only ever signal rescue-service incidents unreliably or not at all.": "取消勾选后，einsatzart 表明为急救服务呼叫的事件（包含 \"Rettung\" 或 \"Krankentransport\"，不区分大小写）将被完全忽略——不更新任何状态，不写入历史记录，不触发语音播报（TTS）。这在某些 WAIP 调度中心只能不可靠地或根本不发出急救服务事件信号时很有用。",
     "Width of the generated map image in pixels.": "生成的地图图像宽度（像素）。",
-    "Zoom level": "缩放级别"
+    "Zoom level": "缩放级别",
+    "contains": "包含",
+    "starts with": "开始于"
 }
