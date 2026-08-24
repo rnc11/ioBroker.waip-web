@@ -12,7 +12,7 @@
 
 🇩🇪 [Deutsche Version dieser README](README.de.md)
 
-Unofficial ioBroker adapter for **Wachalarm IP-Web (WAIP-Web)**
+ioBroker adapter for **Wachalarm IP-Web (WAIP-Web)**
 
 Connects via Socket.IO to a WAIP-Web dispatch monitor and mirrors incidents
 ("Einsatz"), responder feedback ("Rückmeldung"), routes and TTS
@@ -41,7 +41,7 @@ open.
 
 ## About this adapter
 
-This adapter is an **unofficial community project** and has no connection
+This adapter is an **independent, community-built project** and has no connection
 to the WAIP-Web project, to Robert-112, or to the operator of any specific
 instance (e.g. the Integrated Regional Dispatch Center Lausitz /
 Integrierte Regionalleitstelle Lausitz). It was built by analyzing the
@@ -184,9 +184,9 @@ adapter provides – typical use in a fire station/EMS environment:
 - Optional incident map image: a PNG centered on the incident's
   coordinates, composed locally from OpenStreetMap tiles, with the
   incident area WAIP-Web sends drawn as an outline in a configurable
-  color/thickness (falls back to a marker dot), automatically zoomed
-  out as needed to keep the whole area visible, file path exposed as a
-  state - see [Incident map image](#incident-map-image)
+  color/thickness (switchable to a plain marker dot instead), automatically
+  zoomed out as needed to keep the whole area visible, file path
+  exposed as a state - see [Incident map image](#incident-map-image)
 
 ## Configuration
 
@@ -305,37 +305,50 @@ adapter downloads the tiles it needs from the public
 `tile.openstreetmap.org` server, composites them into a single PNG
 centered on the incident's location, and stamps the OpenStreetMap
 attribution (required by its ODbL license) into the bottom-left corner.
-The incident area WAIP-Web sends in the `geometry` field of the event
-(usually a circle-shaped polygon around the location, not just its
-center) is drawn onto the image as an outline in a configurable color
-and thickness - the original shape the server sent, not a marker at
-its centroid. Only if no such polygon
-is available (e.g. the event carries just a point) does the adapter
-fall back to a simple marker dot at the center. The incident area is
-always kept fully visible: if it wouldn't fit into the image at the
-configured zoom level, the adapter automatically zooms out (never in)
-just enough for the whole area to fit, instead of clipping it at the
-edge. The file
-path is written to `einsatz.kartenbildPfad` (see [einsatz](#einsatz)) –
-typical use is attaching that file from a Blockly/JavaScript script,
-e.g. as a Pushover notification attachment. Only the 10 most recently
-generated images are kept on disk; older ones are deleted automatically
-whenever a new one is written. Image generation runs in the background
-and never delays alarm processing – a slow or failing tile download
-just means a missing/delayed image, nothing else is affected.
+
+By default, the incident area WAIP-Web sends in the `geometry` field of
+the event (usually a circle-shaped polygon around the location, not
+just its center) is drawn onto the image as an outline in a
+configurable color and thickness - the original shape the server sent,
+not a marker at its centroid. **Show incident-area polygon** (admin
+checkbox, on by default) controls this: uncheck it to always show a
+simple marker dot at the center instead, even when a polygon is
+available. The dot is also used automatically whenever the event
+carries no polygon at all (e.g. just a point) - it is then the only
+option regardless of the checkbox. The incident area is
+always kept fully visible when the polygon is drawn: if it wouldn't
+fit into the image at the configured zoom level, the adapter
+automatically zooms out (never in) just enough for the whole area to
+fit, instead of clipping it at the edge.
+
+The file path is written to `einsatz.kartenbildPfad` (see
+[einsatz](#einsatz)) – typical use is attaching that file from a
+Blockly/JavaScript script, e.g. as a Pushover notification attachment.
+Only the 10 most recently generated images are kept on disk; older
+ones are deleted automatically whenever a new one is written. Image
+generation runs in the background and never delays alarm processing –
+a slow or failing tile download just means a missing/delayed image,
+nothing else is affected.
 
 | Field | Description | Default |
 | --- | --- | --- |
+| Show incident-area polygon | Draw the original polygon WAIP-Web sends (on) vs. always show a centered marker dot instead (off) | *(on)* |
 | Image width (px) | Width of the generated PNG | `600` |
 | Image height (px) | Height of the generated PNG | `400` |
-| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum, automatically reduced if needed to keep the incident area fully visible | `16` |
+| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum, automatically reduced if needed to keep the incident area fully visible | `19` |
 | Outline color | Color of the incident-area outline (and the fallback marker dot's core) | `#DD2020` |
-| Outline thickness (px) | Line thickness of the outline, in pixels (1-12) | `3` |
+| Outline thickness (px) | Line thickness of the outline, in pixels (1-12) | `4` |
 
 Images are stored under this adapter instance's own data directory
 (`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
 `einsatz.kartenbildPfad` is therefore a real, absolute filesystem path
-that a script running on the same host can read directly.
+that a script running on the same host can read directly. This
+directory is **not** deleted automatically when the adapter is
+stopped or its instance configuration is reset; to remove it when
+uninstalling, tick **"Also delete instance data"** in the confirmation
+dialog when deleting the instance/adapter in Admin (available since
+js-controller 4.0 / Admin 5 for any adapter's instance data directory
+– unchecked by default).
 
 > **Note:** This uses the official, free `tile.openstreetmap.org`
 > server, which is intended for occasional/low-volume use (see the
@@ -411,7 +424,7 @@ The most recently finished incident remains available via
 | `ablaufzeit` | string (date) | End of the standby display duration, basis for `restzeit` |
 | `sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
 | `latitude` / `longitude` | number | Incident location (normalized from wgs84 fields or GeoJSON centroid) |
-| `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Unlike the fields above, **not** cleared on `io.standby` (same pattern as `einsatz.tts.last`), so it stays available to pick up the last incident's map after it ended |
+| `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Cleared like the other fields above on `io.standby`; the underlying image file itself is not deleted (only the 10-image retention limit removes files, see [Incident map image](#incident-map-image)) |
 | `routenGesamt` | number | Number of routes in the current incident |
 | `rueckmeldungGesamt` | number | Total feedback count for the current incident |
 | `rueckmeldungAnzahl.ek` | number | Feedback count as team member ("Einsatzkraft") |
@@ -482,6 +495,31 @@ example.
 
 ## Changelog
 
+### 0.7.30 (2026-08-24)
+
+- [Incident map image](#incident-map-image): new **Show incident-area
+  polygon** checkbox (on by default) - uncheck it to always show the
+  centered marker dot instead, even when the server sends a polygon.
+  The margin kept around the polygon when auto-zooming to fit it was
+  also reduced by 30%, so the area fills more of the image. Default
+  zoom level raised from 16 to 19, default outline thickness from 3 to
+  4 px.
+- `einsatz.kartenbildPfad` is now cleared on `io.standby` like the
+  other `einsatz.*` fields (previously kept, matching
+  `einsatz.tts.last`'s pattern) - the image file itself is unaffected,
+  only the 10-image retention limit ever deletes files.
+- Documented that this adapter's own data directory (generated map
+  images) is only removed on instance/adapter deletion if "Also
+  delete instance data" is checked in Admin's deletion dialog - a
+  native js-controller/Admin feature (unchecked by default), not
+  something this adapter's code controls.
+- Removed "Unofficial"/"Inoffiziell" from both READMEs' wording; the
+  disclaimer about having no connection to the WAIP-Web project/
+  Robert-112 itself is unchanged, just reworded without that word.
+- This Changelog section now shows only the 5 most recent versions -
+  older entries move to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) on every
+  release.
+
 ### 0.7.29 (2026-08-24)
 
 - [Incident map image](#incident-map-image): draws the actual incident
@@ -536,153 +574,8 @@ example.
   pattern`), and the table's help text was moved above the table
   instead of below - with many rows it used to sit far out of view.
 
-### 0.7.25 (2026-08-23)
-
-- Updated the admin UI text for the [rescue-service decoder](#rescue-service)
-  to reflect the two supported keyword spellings added in 0.7.23
-  (Leitstelle Lausitz `R1N1p`/`R1N0-NT` and IRLS Brandenburg `R1N1 p`/
-  `R1N0 nt`) - the checkbox label/help and the NT suffix label/help
-  previously only mentioned the hyphenated no-space form.
-
-### 0.7.24 (2026-08-23)
-
-- Extended the default [keyword table](#keyword-descriptions) with two
-  more Brandenburg spelling variants: `B:Gebäude-Groß` and
-  `B:Gebäude-Klein` (hyphen instead of space, as used by some dispatch
-  centers) - same descriptions as the existing `B:Gebäude groß`/`B:Gebäude
-  klein` entries. Only affects the shipped example table for new
-  installs - existing configured tables are untouched.
-
-### 0.7.23 (2026-08-23)
-
-- Extended the default [keyword table](#keyword-descriptions) with the
-  29 `K`/`V`/`M`/`S` keywords (Krankentransport, Verlegung, MANV,
-  Sonderstichwörter) from the IRLS Brandenburg rescue-service catalog
-  (v2.7) - previously only the `R<ambulance>N<physician-vehicle>`
-  scheme and the Brand/THL (`B:`/`H:`) table were covered, so
-  `einsatz.beschreibung` stayed `null` for these.
-- Fixed the [rescue-service keyword](#rescue-service) decoder
-  (`decodeRettungsdienstStichwort`): it only accepted the Leitstelle
-  Lausitz spelling without a space (`R1N1p`, `R1N0-NT`) and silently
-  returned `null` for the IRLS Brandenburg spelling with a space
-  (`R1N1 p`, `R1N0 nt`) - both are now recognized.
-- Only affects the shipped example table and the decoder logic for
-  new installs/upgrades - existing configured tables are untouched.
-
-### 0.7.22 (2026-08-23)
-
-- Extended the default [keyword table](#keyword-descriptions) with
-  `H:Person-TMR` (technical human rescue) and corrected three entries
-  whose pattern didn't match the actual dispatch keyword:
-  `H:Flugunfall` → `H:Flugzeugunfall` (`klein`/`groß`), `H:Öl Wasser`
-  → `H:Öl auf Wasser`, `H:Rettung aus Höhen/Tiefen` → `H:Rettung aus
-  Höhen und Tiefen` (source: Regionalleitstellen Brandenburg keyword
-  list, v7.1). Only affects the shipped example table for new
-  installs - existing configured tables are untouched.
-
-### 0.7.21 (2026-08-23)
-
-- Removed the keyword table's CSV export/import: a bug in ioBroker
-  Admin's own `table` component corrupted German umlauts on CSV
-  import (e.g. `Ã¤`/`Ã` instead of `ä`/`ß`) - confirmed to be entirely
-  inside the Admin UI, not this adapter's code. Use ioBroker's
-  standard instance configuration export/import (JSON) instead - see
-  [Keyword descriptions](#keyword-descriptions) for the reload caveat
-  after using it.
-- Split the admin configuration UI into 3 tabs -
-  [Connection](#connection), [Rescue-service
-  keywords](#rescue-service),
-  [Keyword descriptions](#keyword-descriptions) - each with a
-  matching icon, replacing the single combined settings page.
-- Documentation: restructured the configuration section of the
-  README to mirror the 3 admin tabs, fixed a stale reference to the
-  removed CSV feature, and added a couple of small clarifications
-  (mentioned `einsatz.beschreibung` in the practical-use-cases
-  section, mentioned the 3-tab structure up front). All code comments
-  in `main.js` are now bilingual (German + English).
-
-### 0.7.20 (2026-08-22)
-
-- Added `einsatz.beschreibung`: a plain-language description for
-  `einsatz.stichwort`, resolved entirely locally (also included in
-  `einsatz.json.current`/`.history10`). Two sources, in order:
-  - An optional decoder for the `R<RTW>N<NEF>[p][f][-NT]` rescue-service
-    keyword scheme used by several dispatch centers - the label for
-    each part is fully configurable via 5 new text fields.
-  - A user-maintained keyword table (admin table, CSV export/import,
-    pre-filled with an example fire/rescue keyword list) where the
-    most specific (longest) matching pattern wins automatically,
-    regardless of row order - the table can be freely sorted by
-    keyword.
-  - `null` if nothing matches. See
-    [Alarm keyword descriptions](#alarm-keyword-descriptions).
-
-### 0.7.19 (2026-08-22)
-
-- Fixed a bug where incoming feedback (`io.new_rmld`) was silently
-  dropped as "wrong monitor" whenever the responding station's number
-  (`wache_nr`) differed from the registered monitor ID:
-  `payloadMonitorMatch()` incorrectly treated `wache_nr`/`wache_id`/
-  `wacheId` as monitor-identifying fields, but confirmed against the
-  WAIP-Web server source, `wache_nr` on a feedback event is the station
-  number of the crew that submitted it, unrelated to the monitor/
-  dispatch-center ID. Removed these three from the match candidates -
-  alarms and routes were never affected (they don't carry these
-  fields).
-
-### 0.7.18 (2026-08-22)
-
-- Fixed `debug.lastEvent`/`debug.normalizedPosition` to hold a
-  single-element JSON array instead of a bare object (matching
-  `einsatz.json.current`), for direct VIS table-widget compatibility,
-  and to correctly initialize to `[]` instead of `null` on a fresh
-  install/restart.
-- Removed `einsatz.einsatznummer`/`.objekt`/`.objektteil`/
-  `.besonderheiten`/`.strasse`/`.hausnummer`/`.einsatzdetails`/
-  `.permissions` (and the corresponding fields in
-  `einsatz.json.current`/`.history10`): confirmed via the WAIP-Web
-  server source (`server/waip.js`,
-  `db_user_check_permission_for_waip()`) that these fields are only
-  ever populated for logged-in clients - since this adapter connects
-  anonymously by design, they were always empty/`false`. Removed
-  instead of permanently carrying dead states - see the note in the
-  [`einsatz`](#einsatz) section.
-
-### 0.7.17 (2026-08-22)
-
-- Fixed `cleanupObsoleteObjects()` incorrectly deleting and recreating
-  the `einsatz.json` channel on every restart (it wasn't checking
-  `obj.type`, so the current channel object was mistaken for a leftover
-  state from before the 0.7.15 migration).
-- Fixed a spurious `status.registrationPending` "no existing object"
-  warning that could occur if the adapter was stopped before object
-  initialization had finished.
-- Reduced WAIP registration from three emits to a single emit - Socket.IO
-  already delivers reliably once connected, and the existing registration
-  timeout remains as the safety net for the rare case it doesn't confirm.
-- `permissions` inside `einsatz.json.current`/`.history10` is now always
-  stringified consistently with the standalone `einsatz.permissions`
-  state, and `einsatz.json.current` is wrapped in a single-element array
-  (VIS table widgets require an array at the root, not a bare object).
-- Fixed `einsatz.json.history10`/`debug.monitorAudit` staying `null`
-  instead of `[]` on a fresh install (they're excluded from the
-  per-restart reset to preserve history, which previously also meant
-  they were never initialized at all on first install).
-- Added `registeredMonitor`/`registeredMonitorName` fields to
-  `einsatz.json.current`/`.history10`.
-- Reworked logging: translated all remaining German log text to
-  English; implemented the official first-occurrence-`warn`/
-  repeat-`debug`/recovery-`info` pattern for recurring failures (session
-  cookie, registration, connection); capped noisy Socket.IO ping/pong
-  debug logging; a sustained flood of wrong-monitor events now escalates
-  to `warn` instead of staying at `info` indefinitely. See
-  [LOGGING.md](LOGGING.md) for the full reference.
-- Documentation: added a table of contents, a practical-use-cases
-  section, a known-limitation note (only the single most recently active
-  incident is shown - see [`einsatz`](#einsatz)), and enforced the
-  changelog's own 5-entry limit.
-
-Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md).
+Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
+section shows only the 5 most recent versions.
 
 ## License
 

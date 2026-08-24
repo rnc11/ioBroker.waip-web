@@ -4,7 +4,7 @@
 
 🇬🇧 [English version of this README](README.md)
 
-Inoffizieller ioBroker-Adapter für **Wachalarm IP-Web (WAIP-Web)**
+ioBroker-Adapter für **Wachalarm IP-Web (WAIP-Web)**
 
 Verbindet sich per Socket.IO mit einem WAIP-Web-Wachalarm-Monitor und bildet
 Einsätze, Rückmeldungen, Routen und TTS-Ansagen als ioBroker-States ab –
@@ -31,7 +31,7 @@ ohne dass ein Browser-Tab dauerhaft offen sein muss.
 
 ## Über diesen Adapter
 
-Dieser Adapter ist ein **inoffizielles Community-Projekt** und steht in
+Dieser Adapter ist ein **eigenständiges Community-Projekt** und steht in
 keiner Verbindung zum WAIP-Web-Projekt, zu Robert-112 oder zum Betreiber
 einer konkreten Instanz (z. B. der Integrierten Regionalleitstelle
 Lausitz). Er wurde entwickelt, indem das öffentlich über den Browser
@@ -182,9 +182,10 @@ Rettungsdienst-Wache:
 - Optionales Einsatzkarten-Bild: ein auf die Einsatz-Koordinaten
   zentriertes PNG, lokal aus OpenStreetMap-Kacheln zusammengesetzt, mit
   dem von WAIP-Web gesendeten Einsatzgebiet als Umriss in
-  konfigurierbarer Farbe/Stärke eingezeichnet (Rückfall auf
-  Punkt-Markierung), zoomt bei Bedarf automatisch so heraus, dass das
-  gesamte Gebiet sichtbar bleibt, Dateipfad als State bereitgestellt -
+  konfigurierbarer Farbe/Stärke eingezeichnet (umschaltbar auf eine
+  einfache Punkt-Markierung), zoomt bei Bedarf automatisch so heraus,
+  dass das gesamte Gebiet sichtbar bleibt, Dateipfad als State
+  bereitgestellt -
   siehe [Einsatzkarte](#einsatzkarte)
 
 ## Konfiguration
@@ -313,21 +314,26 @@ Koordinaten vor, lädt der Adapter die dafür nötigen Kacheln vom
 öffentlichen Server `tile.openstreetmap.org` herunter, setzt sie zu
 einem einzigen PNG zusammen, zentriert auf den Einsatzort, und stempelt
 die von der ODbL-Lizenz vorgeschriebene OpenStreetMap-Attribution unten
-links auf. Das Einsatzgebiet, das WAIP-Web im `geometry`-Feld des
-Events sendet (meist ein kreisförmiges Polygon um den Einsatzort, nicht
-nur dessen Mittelpunkt), wird als Umriss in konfigurierbarer Farbe und
+links auf.
+
+Standardmäßig wird das Einsatzgebiet, das WAIP-Web im `geometry`-Feld
+des Events sendet (meist ein kreisförmiges Polygon um den Einsatzort,
+nicht nur dessen Mittelpunkt), als Umriss in konfigurierbarer Farbe und
 Strichstärke ins Bild eingezeichnet - also die vom Server original
-gesendete Form, keine Markierung an deren
-Mittelpunkt. Nur falls kein solches Polygon vorliegt (z.B. enthält das
-Event nur einen Punkt), fällt der Adapter auf eine einfache
-Punkt-Markierung in der Mitte zurück. Das Einsatzgebiet bleibt dabei
-immer vollständig sichtbar: passt es bei der konfigurierten Zoomstufe
-nicht ins Bild, zoomt der Adapter automatisch so weit heraus (nie
-hinein), wie nötig, damit das gesamte Gebiet hineinpasst, statt es am
-Rand abzuschneiden. Der Dateipfad wird in
-`einsatz.kartenbildPfad` geschrieben
-(siehe [einsatz](#einsatz)) – typische Verwendung ist der Versand dieser
-Datei aus einem Blockly-/JavaScript-Skript heraus, z.B. als
+gesendete Form, keine Markierung an deren Mittelpunkt. **Einsatzgebiet-
+Polygon anzeigen** (Admin-Checkbox, standardmäßig an) steuert das:
+deaktivieren, um stattdessen immer eine einfache Punkt-Markierung in
+der Mitte zu zeigen, auch wenn ein Polygon verfügbar wäre. Liegt gar
+kein Polygon vor (z.B. enthält das Event nur einen Punkt), wird ohnehin
+immer die Punkt-Markierung verwendet, unabhängig von der Checkbox. Das
+Einsatzgebiet bleibt beim Zeichnen des Polygons immer vollständig
+sichtbar: passt es bei der konfigurierten Zoomstufe nicht ins Bild,
+zoomt der Adapter automatisch so weit heraus (nie hinein), wie nötig,
+damit das gesamte Gebiet hineinpasst, statt es am Rand abzuschneiden.
+
+Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben (siehe
+[einsatz](#einsatz)) – typische Verwendung ist der Versand dieser Datei
+aus einem Blockly-/JavaScript-Skript heraus, z.B. als
 Pushover-Benachrichtigungsanhang. Es werden nur die 10 zuletzt erzeugten
 Bilder aufgehoben, ältere werden automatisch gelöscht, sobald ein neues
 geschrieben wird. Die Bilderzeugung läuft im Hintergrund und verzögert
@@ -337,17 +343,24 @@ sonst bleibt nichts betroffen.
 
 | Feld | Beschreibung | Default |
 | --- | --- | --- |
+| Einsatzgebiet-Polygon anzeigen | Das von WAIP-Web gesendete Original-Polygon zeichnen (an) vs. immer eine zentrierte Punkt-Markierung zeigen (aus) | *(an)* |
 | Bildbreite (px) | Breite des erzeugten PNGs | `600` |
 | Bildhöhe (px) | Höhe des erzeugten PNGs | `400` |
-| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert, wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt | `16` |
+| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert, wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt | `19` |
 | Umrissfarbe | Farbe des Einsatzgebiet-Umrisses (und des Kerns der Fallback-Punkt-Markierung) | `#DD2020` |
-| Umriss-Strichstärke (px) | Linienstärke des Umrisses in Pixeln (1-12) | `3` |
+| Umriss-Strichstärke (px) | Linienstärke des Umrisses in Pixeln (1-12) | `4` |
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
 (`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –
 `einsatz.kartenbildPfad` ist deshalb ein echter, absoluter
 Dateisystempfad, den ein auf demselben Host laufendes Skript direkt
-lesen kann.
+lesen kann. Dieses Verzeichnis wird **nicht** automatisch gelöscht,
+wenn der Adapter gestoppt oder seine Instanzkonfiguration
+zurückgesetzt wird; um es bei einer Deinstallation zu entfernen,
+im Bestätigungsdialog beim Löschen der Instanz/des Adapters in Admin
+die Option **"Auch Instanzdaten löschen"** anhaken (seit js-controller
+4.0 / Admin 5 für das Instanzdaten-Verzeichnis jedes Adapters verfügbar
+– standardmäßig nicht angehakt).
 
 > **Hinweis:** Genutzt wird der offizielle, kostenlose Server
 > `tile.openstreetmap.org`, der für gelegentliche/geringe Nutzung
@@ -425,7 +438,7 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `ablaufzeit` | string (date) | Ende der Standby-Anzeigedauer, Basis für `restzeit` |
 | `sondersignal` | number | `1` = Sondersignal, sonst kein Sondersignal |
 | `latitude` / `longitude` | number | Position des Einsatzortes (normalisiert aus wgs84-Feldern oder GeoJSON-Mittelpunkt) |
-| `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Anders als die Felder oben wird dieser State bei `io.standby` **nicht** geleert (gleiches Muster wie `einsatz.tts.last`), bleibt also auch nach Einsatzende noch verfügbar |
+| `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Wird wie die übrigen Felder oben bei `io.standby` geleert; die zugrundeliegende Bild-Datei selbst wird dabei nicht gelöscht (nur das 10er-Rotationslimit entfernt Dateien, siehe [Einsatzkarte](#einsatzkarte)) |
 | `routenGesamt` | number | Anzahl Routen im aktuellen Einsatz |
 | `rueckmeldungGesamt` | number | Rückmeldungen gesamt im aktuellen Einsatz |
 | `rueckmeldungAnzahl.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |
