@@ -111,7 +111,7 @@ adapter provides – typical use in a fire station/EMS environment:
   automation at it (or just play the URL directly) to have the incident
   announced over building speakers the moment `io.playtts` fires –
   useful where members aren't all looking at a screen.
-- **Live headcount / feedback board.** The `einsatz.rueckmeldungAnzahl.*`
+- **Live headcount / feedback board.** The `einsatz.rueckmeldungen.*`
   counters (`rollen.ek`/`.gf`/`.zf`/`.vf` per role, `funktionen.agt`/`.fzf`/
   `.ma`/`.med` per qualification) update in real time as responders
   confirm via the app – bind them to gauge or number widgets for an
@@ -439,21 +439,21 @@ The most recently finished incident remains available via
 | `beschreibung` | string | Description for `stichwort`, resolved locally (not sent by the server) - see [Rescue service](#rescue-service)/[Keyword descriptions](#keyword-descriptions) below. `null` if nothing matched |
 | `ort` | string | Location/town |
 | `ortsteil` | string | District (if different from `ort`) |
-| `zeitstempel` | string (date) | Alarm time |
+| `alarmierungszeit` | string (date) | Alarm time |
 | `ablaufzeit` | string (date) | End of the standby display duration, basis for `restzeit` |
 | `sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
 | `latitude` / `longitude` | number | Incident location (normalized from wgs84 fields or GeoJSON centroid) |
 | `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Empty until the first image for the current incident is ready; also cleared (stays empty) at the start of a new incident, if generation fails, or if it doesn't finish within the OSM timeout, and - like the other fields above - on `io.standby`. The underlying image file itself is not deleted when the state is cleared (only the 10-image retention limit removes files, see [Incident map image](#incident-map-image)) |
 | `routenGesamt` | number | Number of routes in the current incident |
-| `rueckmeldungGesamt` | number | Total feedback count for the current incident |
-| `rueckmeldungAnzahl.rollen.ek` | number | Feedback count as team member ("Einsatzkraft") |
-| `rueckmeldungAnzahl.rollen.gf` | number | Feedback count as crew leader ("Gruppenführer") |
-| `rueckmeldungAnzahl.rollen.zf` | number | Feedback count as division chief ("Zugführer") |
-| `rueckmeldungAnzahl.rollen.vf` | number | Feedback count as group commander ("Verbandsführer") |
-| `rueckmeldungAnzahl.funktionen.agt` | number | Feedback count with breathing-apparatus qualification ("Atemschutzgeräteträger") |
-| `rueckmeldungAnzahl.funktionen.fzf` | number | Feedback count as vehicle commander ("Fahrzeugführer") |
-| `rueckmeldungAnzahl.funktionen.ma` | number | Feedback count as driver/operator ("Maschinist") |
-| `rueckmeldungAnzahl.funktionen.med` | number | Feedback count with a medical qualification |
+| `rueckmeldungenGesamt` | number | Total feedback count for the current incident |
+| `rueckmeldungen.rollen.ek` | number | Feedback count as team member ("Einsatzkraft") |
+| `rueckmeldungen.rollen.gf` | number | Feedback count as crew leader ("Gruppenführer") |
+| `rueckmeldungen.rollen.zf` | number | Feedback count as division chief ("Zugführer") |
+| `rueckmeldungen.rollen.vf` | number | Feedback count as group commander ("Verbandsführer") |
+| `rueckmeldungen.funktionen.agt` | number | Feedback count with breathing-apparatus qualification ("Atemschutzgeräteträger") |
+| `rueckmeldungen.funktionen.fzf` | number | Feedback count as vehicle commander ("Fahrzeugführer") |
+| `rueckmeldungen.funktionen.ma` | number | Feedback count as driver/operator ("Maschinist") |
+| `rueckmeldungen.funktionen.med` | number | Feedback count with a medical qualification |
 
 ### einsatz.json
 
@@ -468,7 +468,7 @@ incident – see the note in the [`einsatz`](#einsatz) section.
 
 | State | Type | Description |
 | --- | --- | --- |
-| `current` | string (JSON array) | Current incident's flat data: the same 12 fields as the individual `einsatz.*` states above (`id` … `zeitstempel`, plus `beschreibung`, `lat`/`lon`), plus `registeredMonitor`/`registeredMonitorName` (the monitor the adapter was registered to at the time), bundled as one object inside a single-element array (`[]` if no incident is active) – the array wrapper is needed because most table widgets require an array at the root, not a bare object |
+| `current` | string (JSON array) | Current incident's flat data: the same 12 fields as the individual `einsatz.*` states above (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), plus `registeredMonitor`/`registeredMonitorName` (the monitor the adapter was registered to at the time), bundled as one object inside a single-element array (`[]` if no incident is active) – the array wrapper is needed because most table widgets require an array at the root, not a bare object |
 | `history10` | string (JSON array) | Last 10 completed incidents, same shape as `current`, one array entry per incident, written on `io.standby` |
 | `routen` | string (JSON array) | Routes of the current incident; each entry has `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` resolved to flat `lat`/`lon`) |
 | `rueckmeldungen` | string (JSON array) | Feedback entries of the current incident, as received from the server |
@@ -514,6 +514,17 @@ example.
 
 ## Changelog
 
+### 0.7.36 (2026-08-25)
+
+- Object structure change: `einsatz.rueckmeldungAnzahl` is now
+  **`einsatz.rueckmeldungen`** (the `rollen.*`/`funktionen.*`
+  sub-channels are unchanged), `einsatz.rueckmeldungGesamt` is now
+  **`einsatz.rueckmeldungenGesamt`**, and `einsatz.zeitstempel` is now
+  **`einsatz.alarmierungszeit`**. Old objects (including now-orphaned
+  channel/folder objects, not just states) are removed automatically
+  on upgrade; scripts/VIS bindings referencing the old paths need to
+  be updated - see [einsatz](#einsatz).
+
 ### 0.7.35 (2026-08-24)
 
 - Object structure change: the eight feedback counters under
@@ -557,22 +568,6 @@ example.
   `unhandled promise rejection` error in the log instead of being
   caught - harmless, but noisy. Object initialization now stops
   cleanly and logs a single warning instead.
-
-### 0.7.31 (2026-08-24)
-
-- Fixed two `einsatz.kartenbildPfad` timing/staleness issues:
-  - Alarm processing now **waits** for the
-    [incident map image](#incident-map-image) to finish before
-    continuing, instead of generating it in the background - so
-    `einsatz.kartenbildPfad` and `einsatz.alarmAktiv` become available
-    together. The wait is capped by a new configurable **OSM timeout**
-    (1-60s, default 10s): if the image isn't ready in time, a warning
-    is logged and `kartenbildPfad` stays empty for that incident
-    instead of blocking alarm processing indefinitely.
-  - `einsatz.kartenbildPfad` is now reset immediately when a new
-    incident starts, instead of possibly still showing a previous
-    incident's stale image path (e.g. when the new incident has no
-    coordinates, or the map image feature just got disabled).
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
 section shows only the 5 most recent versions.

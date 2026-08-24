@@ -1,5 +1,21 @@
 # Older changes
 
+### 0.7.31 (2026-08-24)
+
+- Fixed two `einsatz.kartenbildPfad` timing/staleness issues:
+  - Alarm processing now **waits** for the
+    [incident map image](https://github.com/rnc11/ioBroker.waip-web#incident-map-image) to finish before
+    continuing, instead of generating it in the background - so
+    `einsatz.kartenbildPfad` and `einsatz.alarmAktiv` become available
+    together. The wait is capped by a new configurable **OSM timeout**
+    (1-60s, default 10s): if the image isn't ready in time, a warning
+    is logged and `kartenbildPfad` stays empty for that incident
+    instead of blocking alarm processing indefinitely.
+  - `einsatz.kartenbildPfad` is now reset immediately when a new
+    incident starts, instead of possibly still showing a previous
+    incident's stale image path (e.g. when the new incident has no
+    coordinates, or the map image feature just got disabled).
+
 ### 0.7.30 (2026-08-24)
 
 - [Incident map image](https://github.com/rnc11/ioBroker.waip-web#incident-map-image): new **Show incident-area
