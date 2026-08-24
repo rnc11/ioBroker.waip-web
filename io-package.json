@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "waip-web",
-    "version": "0.7.27",
+    "version": "0.7.28",
     "news": {
+      "0.7.28": {
+        "en": "New: \"Process rescue-service incidents\" checkbox (on by default) on the renamed \"Rescue service\" tab - when unchecked, incidents identified as rescue-service calls via einsatzart are ignored completely (no states, no history, no TTS). New \"Incident map image\" tab: optionally generates an OpenStreetMap PNG marked with a dot, centered on each incident's coordinates, exposed via the new einsatz.kartenbildPfad state (configurable size/zoom, only the 10 most recent images kept).",
+        "de": "Neu: Checkbox \"Rettungsdienst-Einsätze verarbeiten\" (standardmäßig an) auf dem umbenannten Tab \"Rettungsdienst\" - deaktiviert werden über einsatzart als Rettungsdienst erkannte Einsätze komplett ignoriert (keine States, keine History, kein TTS). Neuer Tab \"Einsatzkarte\": erzeugt optional ein mit einem Punkt markiertes OpenStreetMap-PNG, zentriert auf die Einsatz-Koordinaten, über den neuen State einsatz.kartenbildPfad bereitgestellt (Größe/Zoom konfigurierbar, nur die letzten 10 Bilder werden aufgehoben).",
+        "ru": "Новое: флажок \"Обрабатывать вызовы скорой помощи\" (по умолчанию включён) на переименованной вкладке \"Скорая помощь\" - если снят, вызовы, определённые как вызовы скорой помощи через einsatzart, полностью игнорируются (без состояний, без истории, без TTS). Новая вкладка \"Изображение карты вызова\": по желанию создаёт отмеченное точкой PNG-изображение OpenStreetMap, центрированное на координатах каждого вызова, доступное через новое состояние einsatz.kartenbildPfad (настраиваемый размер/масштаб, хранятся только 10 последних изображений).",
+        "pt": "Novidade: caixa de seleção \"Processar ocorrências do serviço de resgate\" (ativada por padrão) na aba renomeada \"Serviço de resgate\" - se desmarcada, as ocorrências identificadas como chamados do serviço de resgate via einsatzart são completamente ignoradas (sem estados, sem histórico, sem TTS). Nova aba \"Imagem de mapa da ocorrência\": gera opcionalmente um PNG do OpenStreetMap marcado com um ponto, centrado nas coordenadas de cada ocorrência, exposto através do novo estado einsatz.kartenbildPfad (tamanho/zoom configuráveis, apenas as 10 imagens mais recentes são mantidas).",
+        "nl": "Nieuw: selectievakje \"Reddingsdienst-incidenten verwerken\" (standaard ingeschakeld) op het hernoemde tabblad \"Reddingsdienst\" - indien uitgeschakeld, worden via einsatzart als reddingsdienstmelding herkende incidenten volledig genegeerd (geen states, geen geschiedenis, geen TTS). Nieuw tabblad \"Incidentkaartafbeelding\": genereert optioneel een met een stip gemarkeerde OpenStreetMap-PNG, gecentreerd op de coördinaten van elk incident, beschikbaar via de nieuwe state einsatz.kartenbildPfad (grootte/zoom instelbaar, alleen de 10 meest recente afbeeldingen worden bewaard).",
+        "fr": "Nouveau : case à cocher \"Traiter les incidents du service de secours\" (activée par défaut) sur l'onglet renommé \"Service de secours\" - si désactivée, les incidents identifiés comme des appels du service de secours via einsatzart sont complètement ignorés (aucun état, aucun historique, aucun TTS). Nouvel onglet \"Image de carte de l'incident\" : génère en option un PNG OpenStreetMap marqué d'un point, centré sur les coordonnées de chaque incident, exposé via le nouvel état einsatz.kartenbildPfad (taille/zoom configurables, seules les 10 images les plus récentes sont conservées).",
+        "it": "Novità: casella \"Elaborare gli incidenti del servizio di soccorso\" (attiva per impostazione predefinita) nella scheda rinominata \"Servizio di soccorso\" - se disattivata, gli incidenti identificati come chiamate del servizio di soccorso tramite einsatzart vengono ignorati completamente (nessuno stato, nessuna cronologia, nessun TTS). Nuova scheda \"Immagine della mappa dell'incidente\": genera facoltativamente un PNG di OpenStreetMap contrassegnato con un punto, centrato sulle coordinate di ogni incidente, esposto tramite il nuovo stato einsatz.kartenbildPfad (dimensione/zoom configurabili, vengono conservate solo le 10 immagini più recenti).",
+        "es": "Novedad: casilla \"Procesar incidentes del servicio de rescate\" (activada por defecto) en la pestaña renombrada \"Servicio de rescate\" - si se desactiva, los incidentes identificados como avisos del servicio de rescate mediante einsatzart se ignoran por completo (sin estados, sin historial, sin TTS). Nueva pestaña \"Imagen de mapa del incidente\": genera opcionalmente un PNG de OpenStreetMap marcado con un punto, centrado en las coordenadas de cada incidente, disponible mediante el nuevo estado einsatz.kartenbildPfad (tamaño/zoom configurables, solo se conservan las 10 imágenes más recientes).",
+        "pl": "Nowość: pole wyboru \"Przetwarzaj zdarzenia ratownictwa medycznego\" (domyślnie włączone) na przemianowanej karcie \"Ratownictwo medyczne\" - po odznaczeniu zdarzenia rozpoznane jako wezwania ratownictwa medycznego poprzez einsatzart są całkowicie ignorowane (brak stanów, historii, TTS). Nowa karta \"Obraz mapy zdarzenia\": opcjonalnie generuje oznaczony kropką obraz PNG OpenStreetMap, wyśrodkowany na współrzędnych każdego zdarzenia, udostępniany przez nowy stan einsatz.kartenbildPfad (konfigurowalny rozmiar/zoom, przechowywanych jest tylko 10 najnowszych obrazów).",
+        "uk": "Новинка: прапорець \"Обробляти виклики швидкої допомоги\" (типово увімкнено) на перейменованій вкладці \"Швидка допомога\" - якщо знято, виклики, визначені як виклики швидкої допомоги через einsatzart, повністю ігноруються (без станів, без історії, без TTS). Нова вкладка \"Зображення карти виклику\": за бажанням створює позначене крапкою PNG-зображення OpenStreetMap, центроване на координатах кожного виклику, доступне через новий стан einsatz.kartenbildPfad (настроюваний розмір/масштаб, зберігаються лише 10 останніх зображень).",
+        "zh-cn": "新增：在重命名后的\"急救服务\"标签页中新增\"处理急救服务事件\"复选框（默认启用）——取消勾选后，通过 einsatzart 识别为急救服务呼叫的事件将被完全忽略（无状态更新、无历史记录、无语音播报）。新增\"事件地图图像\"标签页：可选地生成以圆点标记、以每个事件坐标为中心的 OpenStreetMap PNG 图像，通过新状态 einsatz.kartenbildPfad 提供（尺寸/缩放可配置，仅保留最近 10 张图像）。"
+      },
       "0.7.27": {
         "en": "Keyword table matching now treats spaces and hyphens as equivalent (any run of either collapses to one before comparing) - e.g. \"H:VU mit P\" and \"H:VU-mit-P\" now match the same table row, so dispatch-center spelling variants no longer need a separate row each. Removed the now-redundant B:Gebäude-Groß/B:Gebäude-Klein rows added in 0.7.24 (the existing B:Gebäude groß/B:Gebäude klein rows already cover them). Comparison was already case-insensitive before this change. Admin UI help text and both READMEs updated accordingly.",
         "de": "Der Abgleich der Stichwort-Tabelle behandelt Leerzeichen und Bindestriche jetzt als gleichwertig (jede Folge aus beidem wird vor dem Vergleich zu einem Leerzeichen zusammengefasst) - z.B. matchen \"H:VU mit P\" und \"H:VU-mit-P\" jetzt dieselbe Tabellenzeile, Leitstellen-Schreibvarianten benötigen also keine eigene Zeile mehr. Die in 0.7.24 ergänzten, jetzt redundanten Zeilen B:Gebäude-Groß/B:Gebäude-Klein entfernt (die bestehenden Zeilen B:Gebäude groß/B:Gebäude klein decken sie bereits ab). Der Abgleich war schon vor dieser Änderung case-insensitiv. Admin-UI-Hilfetext und beide READMEs entsprechend angepasst.",
@@ -128,6 +141,7 @@
     "monitorID": "",
     "registrationTimeoutSec": 10,
     "reconnectDelaySec": 5,
+    "rdAlarmierungEnabled": true,
     "rdKeywordDecodingEnabled": false,
     "stichwortMapping": [
       {
@@ -490,7 +504,11 @@
     "rdLabelN": "Notfalleinsatzfahrzeug",
     "rdLabelP": "Polytrauma",
     "rdLabelF": "First Responder",
-    "rdLabelNT": "Notfalltransport mit Notfallkrankenwagen"
+    "rdLabelNT": "Notfalltransport mit Notfallkrankenwagen",
+    "mapImageEnabled": false,
+    "mapImageWidth": 600,
+    "mapImageHeight": 400,
+    "mapImageZoom": 16
   },
   "objects": [],
   "instanceObjects": [

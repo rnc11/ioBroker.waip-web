@@ -19,8 +19,9 @@ ohne dass ein Browser-Tab dauerhaft offen sein muss.
 - [Konfiguration](#konfiguration)
   - [Verbindung](#verbindung)
   - [Warum ein Session-Cookie nötig ist](#warum-ein-session-cookie-nötig-ist)
-  - [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter)
+  - [Rettungsdienst](#rettungsdienst)
   - [Stichwort-Stammdaten](#stichwort-stammdaten)
+  - [Einsatzkarte](#einsatzkarte)
 - [States (unter `waip-web.0.*`)](#states-unter-waip-web0)
   - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
     [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
@@ -173,14 +174,22 @@ Rettungsdienst-Wache:
   (`einsatz.beschreibung`), lokal ermittelt aus einer selbst pflegbaren
   Stichwort-Tabelle sowie einem optionalen Dekoder für das von
   mehreren Leitstellen verwendete Rettungsdienst-Stichwortschema
-  (`R<RTW>N<NEF>`) - siehe
-  [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter)
+  (`R<RTW>N<NEF>`) - siehe [Rettungsdienst](#rettungsdienst)
+- Rettungsdienst-Einsätze können komplett ignoriert werden (keine
+  States, keine History, kein TTS) - sinnvoll, wenn WAIP sie in der
+  eigenen Region ohnehin nur unzuverlässig signalisiert, siehe
+  [Rettungsdienst](#rettungsdienst)
+- Optionales Einsatzkarten-Bild: ein auf die Einsatz-Koordinaten
+  zentriertes und mit einem Punkt markiertes PNG, lokal aus
+  OpenStreetMap-Kacheln zusammengesetzt, dessen Dateipfad als State
+  bereitsteht - siehe [Einsatzkarte](#einsatzkarte)
 
 ## Konfiguration
 
 In der Admin-Oberfläche der Adapterinstanz sind die Einstellungen auf
-drei Tabs verteilt: **Verbindung**, **Rettungsdienst-Stichwörter** und
-**Stichwort-Stammdaten** – alle drei unten näher beschrieben.
+vier Tabs verteilt: **Verbindung**, **Rettungsdienst**,
+**Stichwort-Stammdaten** und **Einsatzkarte** – alle vier unten näher
+beschrieben.
 
 ### Verbindung
 
@@ -214,7 +223,21 @@ Laufzeit, mindestens 55 Sekunden, höchstens die konfigurierte Obergrenze) –
 genau die gleiche Klammerung, die auch `/js/session_keepalive.js` der
 Website selbst verwendet.
 
-### Rettungsdienst-Stichwörter
+### Rettungsdienst
+
+**Rettungsdienst-Einsätze verarbeiten** (Admin-Checkbox, standardmäßig
+**an**): Einsätze, deren `einsatzart` auf einen Rettungsdienst-Einsatz
+hindeutet (enthält "Rettung" oder "Krankentransport", ohne
+Berücksichtigung von Groß-/Kleinschreibung - siehe die
+`einsatzart`-Beispiele unter [einsatz](#einsatz)), werden standardmäßig
+ganz normal verarbeitet, wie in jeder früheren Adapter-Version. Wird die
+Checkbox deaktiviert, ignoriert der Adapter solche Einsätze stattdessen
+**komplett**: keine `einsatz.*`-States werden aktualisiert, kein
+History-Eintrag geschrieben, keine TTS-Ansage ausgelöst - als wäre der
+Einsatz nie eingegangen. Hintergrund: Rettungsdienst-Einsätze werden
+über WAIP Berichten zufolge nur in manchen Regionen/Leitstellen
+überhaupt alarmiert/signalisiert - wo das nicht der Fall ist oder nicht
+gewünscht wird, schaltet diese Checkbox das Rauschen ab.
 
 `einsatz.stichwort` wird unverändert vom Server als bloßer Code
 übernommen (z.B. `B2`, `H:VU mit P`) – WAIP-Web selbst erklärt nicht,
@@ -252,7 +275,7 @@ diese Bezeichnungen nicht automatisch übersetzt werden:
 ### Stichwort-Stammdaten
 
 Wird nur geprüft, falls der Dekoder auf dem Tab
-[Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter) nicht gegriffen
+[Rettungsdienst](#rettungsdienst) nicht gegriffen
 hat: eine Liste von `{Stichwort-Muster, Beschreibung, Abgleich-Typ}`-Zeilen
 – Abgleich-Typ ist `beginnt mit` oder `enthält`, der Vergleich ist
 case-insensitiv und behandelt Leerzeichen und Bindestriche als
@@ -277,6 +300,45 @@ etwas, das dieser Adapter beeinflussen kann).
 
 Passt weder diese Tabelle noch der Dekoder oben, bleibt
 `einsatz.beschreibung` einfach `null` – kein Fehler.
+
+### Einsatzkarte
+
+**Kartenbild für jeden Einsatz erzeugen** (Admin-Checkbox, standardmäßig
+aus): ist die Checkbox aktiv und liegen für einen Einsatz gültige
+Koordinaten vor, lädt der Adapter die dafür nötigen Kacheln vom
+öffentlichen Server `tile.openstreetmap.org` herunter, setzt sie zu
+einem einzigen PNG zusammen, zentriert auf den Einsatzort, zeichnet eine
+Markierung (roter Punkt, weißer Rand) exakt in die Mitte und stempelt
+die von der ODbL-Lizenz vorgeschriebene OpenStreetMap-Attribution unten
+links auf. Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben
+(siehe [einsatz](#einsatz)) – typische Verwendung ist der Versand dieser
+Datei aus einem Blockly-/JavaScript-Skript heraus, z.B. als
+Pushover-Benachrichtigungsanhang. Es werden nur die 10 zuletzt erzeugten
+Bilder aufgehoben, ältere werden automatisch gelöscht, sobald ein neues
+geschrieben wird. Die Bilderzeugung läuft im Hintergrund und verzögert
+die Alarmverarbeitung nie – ein langsamer oder fehlschlagender
+Kachel-Download führt höchstens zu einem fehlenden/verspäteten Bild,
+sonst bleibt nichts betroffen.
+
+| Feld | Beschreibung | Default |
+| --- | --- | --- |
+| Bildbreite (px) | Breite des erzeugten PNGs | `600` |
+| Bildhöhe (px) | Höhe des erzeugten PNGs | `400` |
+| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) | `16` |
+
+Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
+(`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –
+`einsatz.kartenbildPfad` ist deshalb ein echter, absoluter
+Dateisystempfad, den ein auf demselben Host laufendes Skript direkt
+lesen kann.
+
+> **Hinweis:** Genutzt wird der offizielle, kostenlose Server
+> `tile.openstreetmap.org`, der für gelegentliche/geringe Nutzung
+> gedacht ist (siehe die
+> [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)).
+> Ein Bild pro Einsatz bleibt deutlich darunter – die Zoomstufe nicht
+> so weit reduzieren, dass riesige Gebiete abgedeckt werden, und das
+> Ganze nicht zu einem Massen-Kachel-Abruf ausbauen.
 
 ## States (unter `waip-web.0.*`)
 
@@ -339,13 +401,14 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `uuid` | string | Eindeutige Einsatz-UUID (dient auch der Zuordnung von Rückmeldungen) |
 | `einsatzart` | string | z. B. „Brandeinsatz", „Hilfeleistungseinsatz", „Rettungseinsatz", „Krankentransport" |
 | `stichwort` | string | Alarmstichwort |
-| `beschreibung` | string | Beschreibung zu `stichwort`, lokal ermittelt (wird nicht vom Server gesendet) - siehe [Rettungsdienst-Stichwörter](#rettungsdienst-stichwörter)/[Stichwort-Stammdaten](#stichwort-stammdaten) unten. `null` falls nichts passte |
+| `beschreibung` | string | Beschreibung zu `stichwort`, lokal ermittelt (wird nicht vom Server gesendet) - siehe [Rettungsdienst](#rettungsdienst)/[Stichwort-Stammdaten](#stichwort-stammdaten) unten. `null` falls nichts passte |
 | `ort` | string | Ort |
 | `ortsteil` | string | Ortsteil (falls abweichend vom Ort) |
 | `zeitstempel` | string (date) | Alarmzeit |
 | `ablaufzeit` | string (date) | Ende der Standby-Anzeigedauer, Basis für `restzeit` |
 | `sondersignal` | number | `1` = Sondersignal, sonst kein Sondersignal |
 | `latitude` / `longitude` | number | Position des Einsatzortes (normalisiert aus wgs84-Feldern oder GeoJSON-Mittelpunkt) |
+| `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Anders als die Felder oben wird dieser State bei `io.standby` **nicht** geleert (gleiches Muster wie `einsatz.tts.last`), bleibt also auch nach Einsatzende noch verfügbar |
 | `routenGesamt` | number | Anzahl Routen im aktuellen Einsatz |
 | `rueckmeldungGesamt` | number | Rückmeldungen gesamt im aktuellen Einsatz |
 | `rueckmeldungAnzahl.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |

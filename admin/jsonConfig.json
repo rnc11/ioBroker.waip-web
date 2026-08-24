@@ -62,9 +62,22 @@
         },
         "tabRescueService": {
             "type": "panel",
-            "label": "Rescue-service keywords",
+            "label": "Rescue service",
             "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMi41IiB5PSI4IiB3aWR0aD0iMTIiIGhlaWdodD0iOCIgcng9IjEiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48cG9seWdvbiBwb2ludHM9IjE0LjUsMTEgMTcuNSwxMSAyMC41LDE0IDIwLjUsMTYgMTQuNSwxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNWY2MzY4IiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxsaW5lIHgxPSIxNy43IiB5MT0iMTEiIHgyPSIxNy43IiB5Mj0iMTQiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjQiLz48Y2lyY2xlIGN4PSI2LjUiIGN5PSIxNy43IiByPSIxLjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48Y2lyY2xlIGN4PSIxNi41IiBjeT0iMTcuNyIgcj0iMS44IiBmaWxsPSJub25lIiBzdHJva2U9IiM1ZjYzNjgiIHN0cm9rZS13aWR0aD0iMS42Ii8+PGxpbmUgeDE9IjgiIHkxPSIxMC4yIiB4Mj0iOCIgeTI9IjEzLjgiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxsaW5lIHgxPSI2LjIiIHkxPSIxMiIgeDI9IjkuOCIgeTI9IjEyIiBzdHJva2U9IiM1ZjYzNjgiIHN0cm9rZS13aWR0aD0iMS40IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=",
             "items": {
+                "rdAlarmierungEnabled": {
+                    "type": "checkbox",
+                    "label": "Process rescue-service incidents",
+                    "help": "When unchecked, incidents whose einsatzart identifies them as a rescue-service call (contains \"Rettung\" or \"Krankentransport\", case-insensitive) are ignored completely - no states are updated, no history entry is written, no TTS announcement is triggered. Useful because some WAIP dispatch centers only ever signal rescue-service incidents unreliably or not at all. Enabled by default to match previous behavior.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "_dividerRdAlarmierung": {
+                    "type": "divider"
+                },
                 "rdKeywordDecodingEnabled": {
                     "type": "checkbox",
                     "label": "Automatically decode rescue-service keywords (R<RTW>N<NEF>[p][f][-NT], with or without spaces)",
@@ -183,6 +196,62 @@
                     "md": 12,
                     "lg": 12,
                     "xl": 12
+                }
+            }
+        },
+        "tabMapImage": {
+            "type": "panel",
+            "label": "Incident map image",
+            "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJDOCAyIDUgNSA1IDljMCA1IDcgMTMgNyAxM3M3LTggNy0xM2MwLTQtMy03LTctN3oiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjkiIHI9IjIuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNWY2MzY4IiBzdHJva2Utd2lkdGg9IjEuNiIvPjwvc3ZnPg==",
+            "items": {
+                "mapImageEnabled": {
+                    "type": "checkbox",
+                    "label": "Generate a map image for each incident",
+                    "help": "For every incident with valid coordinates, downloads OpenStreetMap tiles and composes a PNG centered on the incident's location, marked with a dot. The file path is written to the einsatz.kartenbildPfad state, e.g. for sending as a Pushover attachment from a Blockly/JavaScript script. Only the 10 most recent images are kept, older ones are deleted automatically. Uses the public tile.openstreetmap.org server - keep this to the intended one-image-per-incident use per the OSM Tile Usage Policy.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "mapImageWidth": {
+                    "type": "number",
+                    "label": "Image width (px)",
+                    "help": "Width of the generated map image in pixels.",
+                    "hidden": "!data.mapImageEnabled",
+                    "min": 100,
+                    "max": 2000,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "mapImageHeight": {
+                    "type": "number",
+                    "label": "Image height (px)",
+                    "help": "Height of the generated map image in pixels.",
+                    "hidden": "!data.mapImageEnabled",
+                    "min": 100,
+                    "max": 2000,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "mapImageZoom": {
+                    "type": "number",
+                    "label": "Zoom level",
+                    "help": "OpenStreetMap zoom level (1 = whole world, 19 = building level). Higher values show a smaller area in more detail.",
+                    "hidden": "!data.mapImageEnabled",
+                    "min": 1,
+                    "max": 19,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
                 }
             }
         }
