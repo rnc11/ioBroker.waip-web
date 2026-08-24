@@ -145,6 +145,13 @@ const MISSED_STANDBY_GRACE_MS = 60000;
 // a meaningful user agent can be blocked without warning).
 const OSM_TILE_SIZE = 256;
 const OSM_MAX_ZOOM = 19;
+// DE: Untergrenze für das automatische Herauszoomen in fitZoomToPolygon() - ein großzügiger
+// Boden (statt 0), der ein pathologisch riesiges Einsatzgebiet-Polygon davon abhält, das
+// Kartenbild auf einen fast bedeutungslosen Weltmaßstab herauszuzoomen.
+// EN: Lower bound for the automatic zoom-out in fitZoomToPolygon() - a generous floor
+// (instead of 0) that keeps a pathologically huge incident-area polygon from zooming the
+// map image out to an almost meaningless world-scale view.
+const OSM_MIN_AUTO_ZOOM = 3;
 const OSM_TILE_USER_AGENT = 'ioBroker.waip-web (+https://github.com/rnc11/ioBroker.waip-web)';
 const DEFAULT_MAP_IMAGE_WIDTH = 600;
 const DEFAULT_MAP_IMAGE_HEIGHT = 400;
@@ -893,6 +900,74 @@ function fetchOsmTile(zoom, tileX, tileY) {
         });
         req.on('error', reject);
     });
+}
+
+/* DE: Ermittelt für ein Einsatzgebiet-Polygon (ein oder mehrere Ringe aus [lon, lat]-Punkten,
+   siehe extractPolygonRings()) den größtmöglichen Zoom-Level, bei dem dessen komplette
+   Bounding-Box noch (mit Rand) in ein width×height-Bild passt - höchstens maxZoom (der
+   konfigurierte Zoom), es wird also NIE über die Konfiguration hinaus hineingezoomt, nur bei
+   Bedarf herausgezoomt. So bleibt das Einsatzgebiet garantiert vollständig im Bildausschnitt
+   sichtbar, statt am Rand abgeschnitten zu werden. Bricht bei OSM_MIN_AUTO_ZOOM ab, falls
+   selbst dort nichts passt (z.B. ein unrealistisch riesiges Polygon) - der Aufrufer zeichnet
+   den Umriss dann trotzdem, er kann in diesem Extremfall über den Bildrand hinausragen.
+   EN: Determines, for an incident-area polygon (one or more rings of [lon, lat] points, see
+   extractPolygonRings()), the largest possible zoom level at which its full bounding box
+   still fits (with margin) into a width×height image - at most maxZoom (the configured
+   zoom), so it NEVER zooms in past the configuration, only out if needed. This guarantees
+   the incident area stays fully visible in the image instead of being clipped at the edge.
+   Gives up at OSM_MIN_AUTO_ZOOM if nothing fits even there (e.g. an unrealistically huge
+   polygon) - the caller still draws the outline in that extreme case, it may extend past
+   the image edge. */
+function fitZoomToPolygon(rings, maxZoom, width, height) {
+    let minLon = Infinity;
+    let maxLon = -Infinity;
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    for (const ring of rings) {
+        for (const [plon, plat] of ring) {
+            if (plon < minLon) {
+                minLon = plon;
+            }
+            if (plon > maxLon) {
+                maxLon = plon;
+            }
+            if (plat < minLat) {
+                minLat = plat;
+            }
+            if (plat > maxLat) {
+                maxLat = plat;
+            }
+        }
+    }
+    if (!isFinite(minLon) || !isFinite(minLat)) {
+        return maxZoom;
+    }
+
+    // DE: Rand, damit die (mit gewisser Strichstärke gezeichnete) Umrisslinie nicht exakt am
+    // Bildrand klebt.
+    // EN: Margin so the (drawn with some line thickness) outline doesn't sit exactly at the
+    // image edge.
+    const marginX = Math.max(8, Math.round(width * 0.06));
+    const marginY = Math.max(8, Math.round(height * 0.06));
+    const availableWidth = Math.max(1, width - 2 * marginX);
+    const availableHeight = Math.max(1, height - 2 * marginY);
+
+    for (let z = maxZoom; z >= OSM_MIN_AUTO_ZOOM; z--) {
+        // DE: minLat/maxLat vertauscht ggü. minLon/maxLon: in Web-Mercator wächst die
+        // Pixel-Y-Koordinate nach Süden, der höchste Breitengrad (Norden) liegt also oben
+        // (kleineres y) - topLeft braucht daher maxLat, bottomRight minLat.
+        // EN: minLat/maxLat swapped relative to minLon/maxLon: in Web Mercator the pixel Y
+        // coordinate grows southward, so the highest latitude (north) is at the top
+        // (smaller y) - topLeft therefore needs maxLat, bottomRight needs minLat.
+        const topLeft = lonLatToGlobalPixel(minLon, maxLat, z);
+        const bottomRight = lonLatToGlobalPixel(maxLon, minLat, z);
+        const bboxWidth = bottomRight.x - topLeft.x;
+        const bboxHeight = bottomRight.y - topLeft.y;
+        if (bboxWidth <= availableWidth && bboxHeight <= availableHeight) {
+            return z;
+        }
+    }
+    return OSM_MIN_AUTO_ZOOM;
 }
 
 /* DE: Zeichnet eine (optional geschlossene) Polylinie aus Bildkoordinaten auf eine
@@ -1905,6 +1980,11 @@ class WaipWeb extends utils.Adapter {
        einfach die Hintergrundfarbe der Leinwand, ein Totalausfall aller Kacheln lässt
        Promise.all() aber durchschlagen. Wirft bei einem harten Fehler (z.B. keine einzige
        Kachel ladbar) - Aufrufer generateEinsatzMapImage() fängt das ab.
+       Zoom-Level: Wird ein Einsatzgebiet-Polygon mitgeliefert, weicht der tatsächlich
+       verwendete Zoom bei Bedarf nach unten (herauszoomen) vom konfigurierten
+       this.mapImageZoom ab, damit das komplette Gebiet im Bild sichtbar bleibt statt am
+       Rand abgeschnitten zu werden - siehe fitZoomToPolygon(). Ohne Polygon (Fallback auf
+       den Punkt-Marker) bleibt es beim konfigurierten Zoom.
        EN: Builds the PNG map image for an incident: downloads the OSM tiles needed for
        width/height/zoom, composites them onto a canvas, crops it exactly (not just
        tile-aligned) to the configured image area around the incident location, and draws
@@ -1913,11 +1993,26 @@ class WaipWeb extends utils.Adapter {
        failures (e.g. a single 404/timeout) are tolerated - the affected tile just stays the
        canvas background color, but a total failure of all tiles propagates via
        Promise.all(). Throws on a hard failure (e.g. not a single tile loadable) - caller
-       generateEinsatzMapImage() catches that. */
+       generateEinsatzMapImage() catches that.
+       Zoom level: if an incident-area polygon is supplied, the actual zoom used deviates
+       downward (zooms out) from the configured this.mapImageZoom as needed, so the full
+       area stays visible in the image instead of being clipped at the edge - see
+       fitZoomToPolygon(). Without a polygon (falling back to the point marker), it stays at
+       the configured zoom. */
     async buildEinsatzMapImage(lat, lon, geometry) {
-        const zoom = this.mapImageZoom;
         const width = this.mapImageWidth;
         const height = this.mapImageHeight;
+        const rings = extractPolygonRings(geometry);
+        let zoom = this.mapImageZoom;
+        if (rings.length) {
+            const fittedZoom = fitZoomToPolygon(rings, zoom, width, height);
+            if (fittedZoom !== zoom) {
+                this.log.debug(
+                    `buildEinsatzMapImage: zooming out from ${zoom} to ${fittedZoom} so the incident area fits in the image`,
+                );
+                zoom = fittedZoom;
+            }
+        }
 
         const center = lonLatToGlobalPixel(lon, lat, zoom);
         const originX = center.x - width / 2;
@@ -1979,7 +2074,6 @@ class WaipWeb extends utils.Adapter {
         // available (geometry missing, or e.g. just a Point/LineString) does the function
         // fall back to a simple point marker (two concentric circles, white ring/red core)
         // at the image center - Jimp's circle() plugin already masks that reliably.
-        const rings = extractPolygonRings(geometry);
         if (rings.length) {
             const outlineColor = 0xdd2020ff;
             const thickness = Math.max(2, Math.round(Math.min(width, height) * 0.008));

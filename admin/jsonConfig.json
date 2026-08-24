@@ -243,7 +243,7 @@
                 "mapImageZoom": {
                     "type": "number",
                     "label": "Zoom level",
-                    "help": "OpenStreetMap zoom level (1 = whole world, 19 = building level). Higher values show a smaller area in more detail.",
+                    "help": "OpenStreetMap zoom level (1 = whole world, 19 = building level). Higher values show a smaller area in more detail. This is a maximum, not a fixed value: if the incident area sent by the server wouldn't fully fit in the image at this zoom, the adapter automatically zooms out (never in) just enough to keep the whole area visible.",
                     "hidden": "!data.mapImageEnabled",
                     "min": 1,
                     "max": 19,
