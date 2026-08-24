@@ -336,10 +336,14 @@ Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben (siehe
 aus einem Blockly-/JavaScript-Skript heraus, z.B. als
 Pushover-Benachrichtigungsanhang. Es werden nur die 10 zuletzt erzeugten
 Bilder aufgehoben, ältere werden automatisch gelöscht, sobald ein neues
-geschrieben wird. Die Bilderzeugung läuft im Hintergrund und verzögert
-die Alarmverarbeitung nie – ein langsamer oder fehlschlagender
-Kachel-Download führt höchstens zu einem fehlenden/verspäteten Bild,
-sonst bleibt nichts betroffen.
+geschrieben wird. Die Alarmverarbeitung wartet auf die Fertigstellung
+des Bildes, bevor sie fortfährt – `einsatz.kartenbildPfad` trägt daher
+garantiert schon den richtigen Wert, sobald auch die übrigen Felder des
+Einsatzes (z.B. `einsatz.alarmAktiv`) verfügbar werden – allerdings
+höchstens bis zum konfigurierbaren **OSM-Timeout**: Ist der
+Kachel-Download/die Bildzusammensetzung bis dahin nicht fertig, wird
+eine Warnung geloggt und `einsatz.kartenbildPfad` bleibt für diesen
+Einsatz leer, ohne die Alarmverarbeitung unbegrenzt zu blockieren.
 
 | Feld | Beschreibung | Default |
 | --- | --- | --- |
@@ -349,6 +353,7 @@ sonst bleibt nichts betroffen.
 | Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert, wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt | `19` |
 | Umrissfarbe | Farbe des Einsatzgebiet-Umrisses (und des Kerns der Fallback-Punkt-Markierung) | `#DD2020` |
 | Umriss-Strichstärke (px) | Linienstärke des Umrisses in Pixeln (1-12) | `4` |
+| OSM-Timeout (s) | Maximale Wartezeit auf das Bild (Kachel-Download und -Zusammensetzung), bevor ohne es fortgefahren wird (1-60) | `10` |
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
 (`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –
@@ -438,7 +443,7 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `ablaufzeit` | string (date) | Ende der Standby-Anzeigedauer, Basis für `restzeit` |
 | `sondersignal` | number | `1` = Sondersignal, sonst kein Sondersignal |
 | `latitude` / `longitude` | number | Position des Einsatzortes (normalisiert aus wgs84-Feldern oder GeoJSON-Mittelpunkt) |
-| `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Wird wie die übrigen Felder oben bei `io.standby` geleert; die zugrundeliegende Bild-Datei selbst wird dabei nicht gelöscht (nur das 10er-Rotationslimit entfernt Dateien, siehe [Einsatzkarte](#einsatzkarte)) |
+| `kartenbildPfad` | string | Pfad zum zuletzt erzeugten Einsatzkarten-Bild (PNG) - siehe [Einsatzkarte](#einsatzkarte). Leer bis das Bild für den aktuellen Einsatz fertig ist; wird außerdem zu Beginn eines neuen Einsatzes, bei einem Fehlschlag der Erzeugung oder falls das OSM-Timeout überschritten wird geleert (bzw. bleibt leer), sowie - wie die übrigen Felder oben - bei `io.standby`. Die zugrundeliegende Bild-Datei selbst wird beim Leeren des States nicht gelöscht (nur das 10er-Rotationslimit entfernt Dateien, siehe [Einsatzkarte](#einsatzkarte)) |
 | `routenGesamt` | number | Anzahl Routen im aktuellen Einsatz |
 | `rueckmeldungGesamt` | number | Rückmeldungen gesamt im aktuellen Einsatz |
 | `rueckmeldungAnzahl.ek` | number | Anzahl Rückmeldungen als Einsatzkraft |
