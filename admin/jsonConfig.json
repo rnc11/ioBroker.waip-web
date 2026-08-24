@@ -232,7 +232,7 @@
                 "mapImageZoom": {
                     "type": "number",
                     "label": "Zoom level",
-                    "help": "OpenStreetMap zoom level (1 = whole world, 19 = building level). Higher values show a smaller area in more detail. Used for both display modes below - as a maximum for the incident-area polygon (if the area wouldn't fully fit in the image at this zoom, the adapter automatically zooms out, never in, just enough to keep it fully visible) and as a fixed value for the centered marker dot.",
+                    "help": "OpenStreetMap zoom level (1 = whole world, 19 = building level). Fixed zoom for the marker dot; a maximum for the polygon outline, auto-reduced if needed to keep it fully visible (see 'Show incident-area polygon').",
                     "hidden": "!data.mapImageEnabled",
                     "min": 1,
                     "max": 19,
@@ -245,7 +245,7 @@
                 "mapImageOutlineColor": {
                     "type": "color",
                     "label": "Marker & outline color",
-                    "help": "Color used for both display modes below: the centered marker dot's core, or the incident-area outline when a polygon is drawn instead.",
+                    "help": "Color of the marker dot, or of the polygon outline when one is drawn (see 'Show incident-area polygon').",
                     "hidden": "!data.mapImageEnabled",
                     "xs": 12,
                     "sm": 6,
@@ -256,7 +256,7 @@
                 "mapImageWidth": {
                     "type": "number",
                     "label": "Image width (px)",
-                    "help": "Width of the generated map image in pixels. Used for both display modes below.",
+                    "help": "Width of the generated map image in pixels (applies to both the marker dot and the polygon outline).",
                     "hidden": "!data.mapImageEnabled",
                     "min": 100,
                     "max": 2000,
@@ -269,7 +269,7 @@
                 "mapImageHeight": {
                     "type": "number",
                     "label": "Image height (px)",
-                    "help": "Height of the generated map image in pixels. Used for both display modes below.",
+                    "help": "Height of the generated map image in pixels (applies to both the marker dot and the polygon outline).",
                     "hidden": "!data.mapImageEnabled",
                     "min": 100,
                     "max": 2000,

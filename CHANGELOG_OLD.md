@@ -1,5 +1,26 @@
 # Older changes
 
+### 0.7.29 (2026-08-24)
+
+- [Incident map image](https://github.com/rnc11/ioBroker.waip-web#incident-map-image): draws the actual incident
+  area WAIP-Web sends in the event's `geometry` field (usually a
+  circle-shaped polygon around the location) as an outline, instead of
+  just a marker dot at its centroid. Falls back to the dot marker if no
+  polygon is available (e.g. only a point). The area always stays
+  fully visible: the adapter automatically zooms out (never in) past
+  the configured zoom level if needed, instead of clipping the area at
+  the image edge. Outline color and thickness (1-12 px) are now
+  configurable too (also used for the fallback marker dot's core).
+- **Rescue-service decoding** (on the [Rescue service](https://github.com/rnc11/ioBroker.waip-web#rescue-service)
+  tab) now defaults to **on** for new installations, matching **Process
+  rescue-service incidents** (already on by default) - previously it
+  defaulted to off. Already-configured instances keep their stored
+  value, this only affects fresh installs.
+- Trimmed the self-justifying "kept the previous behavior" sentence
+  from both checkboxes' admin descriptions and reworded the decoding
+  checkbox's description ("has no effect if your dispatch center
+  doesn't use one of these patterns" instead of "only enable if...").
+
 ### 0.7.28 (2026-08-24)
 
 - New: **Process rescue-service incidents** checkbox on the
