@@ -253,22 +253,11 @@
                     "lg": 4,
                     "xl": 4
                 },
-                "mapImageShowPolygon": {
-                    "type": "checkbox",
-                    "label": "Show incident-area polygon",
-                    "help": "When checked (default), the incident-area polygon WAIP-Web sends is drawn as an outline (falling back to a centered marker dot only when no polygon is available). Uncheck to always show the simple centered marker dot instead, even when a polygon is available.",
-                    "hidden": "!data.mapImageEnabled",
-                    "xs": 12,
-                    "sm": 12,
-                    "md": 12,
-                    "lg": 12,
-                    "xl": 12
-                },
                 "mapImageWidth": {
                     "type": "number",
                     "label": "Image width (px)",
-                    "help": "Width of the generated map image in pixels.",
-                    "hidden": "!data.mapImageEnabled || !data.mapImageShowPolygon",
+                    "help": "Width of the generated map image in pixels. Used for both display modes below.",
+                    "hidden": "!data.mapImageEnabled",
                     "min": 100,
                     "max": 2000,
                     "xs": 12,
@@ -280,8 +269,8 @@
                 "mapImageHeight": {
                     "type": "number",
                     "label": "Image height (px)",
-                    "help": "Height of the generated map image in pixels.",
-                    "hidden": "!data.mapImageEnabled || !data.mapImageShowPolygon",
+                    "help": "Height of the generated map image in pixels. Used for both display modes below.",
+                    "hidden": "!data.mapImageEnabled",
                     "min": 100,
                     "max": 2000,
                     "xs": 12,
@@ -289,6 +278,17 @@
                     "md": 4,
                     "lg": 4,
                     "xl": 4
+                },
+                "mapImageShowPolygon": {
+                    "type": "checkbox",
+                    "label": "Show incident-area polygon",
+                    "help": "When checked (default), the incident-area polygon WAIP-Web sends is drawn as an outline (falling back to a centered marker dot only when no polygon is available). Uncheck to always show the simple centered marker dot instead, even when a polygon is available.",
+                    "hidden": "!data.mapImageEnabled",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
                 },
                 "mapImageOutlineThickness": {
                     "type": "number",

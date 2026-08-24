@@ -7,7 +7,7 @@
     "Description": "描述",
     "For every incident with valid coordinates, downloads OpenStreetMap tiles and composes a PNG centered on the incident's location, with the incident area WAIP-Web sends drawn as an outline (falls back to a marker dot if no area polygon is available). The file path is written to the einsatz.kartenbildPfad state, e.g. for sending as a Pushover attachment from a Blockly/JavaScript script. Only the 10 most recent images are kept, older ones are deleted automatically. Uses the public tile.openstreetmap.org server - keep this to the intended one-image-per-incident use per the OSM Tile Usage Policy.": "对于每个具有有效坐标的事件，下载 OpenStreetMap 瓦片并合成一张以事件位置为中心的 PNG 图像，将 WAIP-Web 发送的事件区域绘制为轮廓（如果没有可用的区域多边形，则回退为圆点标记）。文件路径写入状态 einsatz.kartenbildPfad，例如可从 Blockly/JavaScript 脚本作为 Pushover 附件发送。仅保留最近的 10 张图像，较旧的会自动删除。使用公共服务器 tile.openstreetmap.org——请遵守 OSM Tile Usage Policy 中每个事件一张图像的预期用途。",
     "Generate a map image for each incident": "为每个事件生成地图图像",
-    "Height of the generated map image in pixels.": "生成的地图图像高度（像素）。",
+    "Height of the generated map image in pixels. Used for both display modes below.": "生成的地图图像高度（像素）。用于下方两种显示模式。",
     "How long to wait for the server to confirm the monitor registration before logging a warning; the connection itself keeps running either way.": "在记录警告之前等待服务器确认监视器注册需要多长时间；无论哪种方式，连接本身都会保持运行。",
     "Image height (px)": "图像高度（px）",
     "Image width (px)": "图像宽度（px）",
@@ -44,7 +44,7 @@
     "Wait time before the adapter automatically reconnects after a lost connection or a connection error.": "连接丢失或连接错误后适配器自动重新连接之前的等待时间。",
     "When checked (default), the incident-area polygon WAIP-Web sends is drawn as an outline (falling back to a centered marker dot only when no polygon is available). Uncheck to always show the simple centered marker dot instead, even when a polygon is available.": "选中时（默认），将 WAIP-Web 发送的事件区域多边形绘制为轮廓（仅在没有可用多边形时才回退为居中的圆点标记）。取消选中则始终显示简单的居中圆点标记，即使有多边形可用。",
     "When unchecked, incidents whose einsatzart identifies them as a rescue-service call (contains \"Rettung\" or \"Krankentransport\", case-insensitive) are ignored completely - no states are updated, no history entry is written, no TTS announcement is triggered. Useful because some WAIP dispatch centers only ever signal rescue-service incidents unreliably or not at all.": "取消勾选后，einsatzart 表明为急救服务呼叫的事件（包含 \"Rettung\" 或 \"Krankentransport\"，不区分大小写）将被完全忽略——不更新任何状态，不写入历史记录，不触发语音播报（TTS）。这在某些 WAIP 调度中心只能不可靠地或根本不发出急救服务事件信号时很有用。",
-    "Width of the generated map image in pixels.": "生成的地图图像宽度（像素）。",
+    "Width of the generated map image in pixels. Used for both display modes below.": "生成的地图图像宽度（像素）。用于下方两种显示模式。",
     "Zoom level": "缩放级别",
     "contains": "包含",
     "starts with": "开始于"

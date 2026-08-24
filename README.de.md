@@ -335,16 +335,15 @@ sichtbar: passt es bei der konfigurierten Zoomstufe nicht ins Bild,
 zoomt der Adapter automatisch so weit heraus (nie hinein), wie nötig,
 damit das gesamte Gebiet hineinpasst, statt es am Rand abzuschneiden.
 
-**Zoomstufe** und **Marker- & Umrissfarbe** stehen oberhalb dieser
-Checkbox, da beide für **beide** Darstellungsarten gelten - die
-Zoomstufe wie oben beschrieben für das Polygon, bzw. als fester Wert
-für die Punkt-Markierung; die Farbe für den Polygon-Umriss, bzw. für
-den Kern der Punkt-Markierung. **Bildbreite/-höhe** und
-**Umriss-Strichstärke** werden nur angezeigt, solange **Einsatzgebiet-
-Polygon anzeigen** aktiv ist, um das Panel auf diesen Modus zu
-fokussieren - Bildbreite/-höhe gelten aber weiterhin auch für die
-Punkt-Markierung (nur die Admin-Felder zum Anpassen sind ausgeblendet,
-die zuletzt gespeicherten Werte werden trotzdem verwendet).
+**Zoomstufe**, **Marker- & Umrissfarbe** und **Bildbreite/-höhe**
+stehen alle oberhalb dieser Checkbox, da sie für **beide**
+Darstellungsarten gelten - die Zoomstufe wie oben beschrieben für das
+Polygon, bzw. als fester Wert für die Punkt-Markierung; die Farbe für
+den Polygon-Umriss, bzw. für den Kern der Punkt-Markierung;
+Bildbreite/-höhe für das Bild selbst in beiden Fällen. Nur die
+**Umriss-Strichstärke** wird unterhalb der Checkbox angezeigt, da sie
+wirklich nur den Polygon-Umriss betrifft - die Größe der
+Punkt-Markierung ist fest vorgegeben, nicht einstellbar.
 
 Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben (siehe
 [einsatz](#einsatz)) – typische Verwendung ist der Versand dieser Datei
@@ -365,9 +364,9 @@ Einsatz leer, ohne die Alarmverarbeitung unbegrenzt zu blockieren.
 | OSM-Timeout (s) | Maximale Wartezeit auf das Bild (Kachel-Download und -Zusammensetzung), bevor ohne es fortgefahren wird (1-60) | `10` |
 | Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert für das Polygon (wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt), ein fester Wert für die Punkt-Markierung | `19` |
 | Marker- & Umrissfarbe | Farbe der zentrierten Punkt-Markierung, bzw. des Einsatzgebiet-Umrisses, wenn stattdessen ein Polygon gezeichnet wird | `#DD2020` |
-| Einsatzgebiet-Polygon anzeigen | Das von WAIP-Web gesendete Original-Polygon zeichnen (an) vs. immer eine zentrierte Punkt-Markierung zeigen (aus) | *(an)* |
 | Bildbreite (px) | Breite des erzeugten PNGs | `600` |
 | Bildhöhe (px) | Höhe des erzeugten PNGs | `400` |
+| Einsatzgebiet-Polygon anzeigen | Das von WAIP-Web gesendete Original-Polygon zeichnen (an) vs. immer eine zentrierte Punkt-Markierung zeigen (aus) | *(an)* |
 | Umriss-Strichstärke (px) | Linienstärke des Umrisses in Pixeln (1-12) | `4` |
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz

@@ -324,15 +324,14 @@ fit into the image at the configured zoom level, the adapter
 automatically zooms out (never in) just enough for the whole area to
 fit, instead of clipping it at the edge.
 
-**Zoom level** and **Marker & outline color** sit above that checkbox
-because both apply to *either* display mode - the zoom level as
-described above for the polygon, or as a fixed value for the marker
-dot; the color for the polygon outline, or for the marker dot's core.
-**Image width/height** and **Outline thickness** are shown only while
-**Show incident-area polygon** is checked, to keep the panel focused
-on that mode's settings - note that image width/height still apply to
-the marker dot too (only the admin fields to adjust them are hidden;
-their last-saved values keep being used either way).
+**Zoom level**, **Marker & outline color** and **Image width/height**
+all sit above that checkbox because they apply to *either* display
+mode - the zoom level as described above for the polygon, or as a
+fixed value for the marker dot; the color for the polygon outline, or
+for the marker dot's core; width/height for the image itself either
+way. Only **Outline thickness** is shown below the checkbox, since it
+genuinely only affects the polygon outline - the marker dot's size is
+fixed, not configurable.
 
 The file path is written to `einsatz.kartenbildPfad` (see
 [einsatz](#einsatz)) – typical use is attaching that file from a
@@ -353,9 +352,9 @@ blocking alarm processing indefinitely.
 | OSM timeout (s) | Maximum time to wait for the image (tile download and composition) before continuing without it (1-60) | `10` |
 | Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum for the polygon (automatically reduced if needed to keep the incident area fully visible), a fixed value for the marker dot | `19` |
 | Marker & outline color | Color of the centered marker dot, or of the incident-area outline when a polygon is drawn instead | `#DD2020` |
-| Show incident-area polygon | Draw the original polygon WAIP-Web sends (on) vs. always show a centered marker dot instead (off) | *(on)* |
 | Image width (px) | Width of the generated PNG | `600` |
 | Image height (px) | Height of the generated PNG | `400` |
+| Show incident-area polygon | Draw the original polygon WAIP-Web sends (on) vs. always show a centered marker dot instead (off) | *(on)* |
 | Outline thickness (px) | Line thickness of the outline, in pixels (1-12) | `4` |
 
 Images are stored under this adapter instance's own data directory
@@ -521,12 +520,13 @@ example.
     and its label fields are now hidden while **Process rescue-service
     incidents** is unchecked (irrelevant otherwise, since such
     incidents are ignored entirely anyway).
-  - [Incident map image](#incident-map-image): **Zoom level** and the
+  - [Incident map image](#incident-map-image): **Zoom level**, the
     renamed **Marker & outline color** (used by both display modes,
-    not just the outline) now sit above **Show incident-area
-    polygon**, since both apply regardless of that setting; **OSM
-    timeout** moved directly under the enable checkbox; image
-    width/height and outline thickness are now hidden while **Show
+    not just the outline) and **Image width/height** now sit above
+    **Show incident-area polygon**, since all three apply regardless
+    of that setting; **OSM timeout** moved directly under the enable
+    checkbox; only **Outline thickness** (genuinely polygon-only, the
+    marker dot's size isn't configurable) is now hidden while **Show
     incident-area polygon** is off.
 
 ### 0.7.32 (2026-08-24)
