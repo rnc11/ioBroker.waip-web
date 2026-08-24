@@ -183,9 +183,10 @@ adapter provides – typical use in a fire station/EMS environment:
   the first place, see [Rescue service](#rescue-service)
 - Optional incident map image: a PNG centered on the incident's
   coordinates, composed locally from OpenStreetMap tiles, with the
-  incident area WAIP-Web sends drawn as an outline (falls back to a
-  marker dot), file path exposed as a state - see
-  [Incident map image](#incident-map-image)
+  incident area WAIP-Web sends drawn as an outline in a configurable
+  color/thickness (falls back to a marker dot), automatically zoomed
+  out as needed to keep the whole area visible, file path exposed as a
+  state - see [Incident map image](#incident-map-image)
 
 ## Configuration
 

@@ -181,8 +181,10 @@ Rettungsdienst-Wache:
   [Rettungsdienst](#rettungsdienst)
 - Optionales Einsatzkarten-Bild: ein auf die Einsatz-Koordinaten
   zentriertes PNG, lokal aus OpenStreetMap-Kacheln zusammengesetzt, mit
-  dem von WAIP-Web gesendeten Einsatzgebiet als Umriss eingezeichnet
-  (Rückfall auf Punkt-Markierung), Dateipfad als State bereitgestellt -
+  dem von WAIP-Web gesendeten Einsatzgebiet als Umriss in
+  konfigurierbarer Farbe/Stärke eingezeichnet (Rückfall auf
+  Punkt-Markierung), zoomt bei Bedarf automatisch so heraus, dass das
+  gesamte Gebiet sichtbar bleibt, Dateipfad als State bereitgestellt -
   siehe [Einsatzkarte](#einsatzkarte)
 
 ## Konfiguration
