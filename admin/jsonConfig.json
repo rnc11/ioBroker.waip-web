@@ -252,6 +252,30 @@
                     "md": 4,
                     "lg": 4,
                     "xl": 4
+                },
+                "mapImageOutlineColor": {
+                    "type": "color",
+                    "label": "Outline color",
+                    "help": "Color of the incident-area outline (and of the fallback marker dot's core, used when no area polygon is available).",
+                    "hidden": "!data.mapImageEnabled",
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "mapImageOutlineThickness": {
+                    "type": "number",
+                    "label": "Outline thickness (px)",
+                    "help": "Line thickness of the incident-area outline, in pixels.",
+                    "hidden": "!data.mapImageEnabled",
+                    "min": 1,
+                    "max": 12,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
                 }
             }
         }

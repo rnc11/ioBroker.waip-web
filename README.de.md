@@ -313,8 +313,9 @@ einem einzigen PNG zusammen, zentriert auf den Einsatzort, und stempelt
 die von der ODbL-Lizenz vorgeschriebene OpenStreetMap-Attribution unten
 links auf. Das Einsatzgebiet, das WAIP-Web im `geometry`-Feld des
 Events sendet (meist ein kreisförmiges Polygon um den Einsatzort, nicht
-nur dessen Mittelpunkt), wird als roter Umriss ins Bild eingezeichnet -
-also die vom Server original gesendete Form, keine Markierung an deren
+nur dessen Mittelpunkt), wird als Umriss in konfigurierbarer Farbe und
+Strichstärke ins Bild eingezeichnet - also die vom Server original
+gesendete Form, keine Markierung an deren
 Mittelpunkt. Nur falls kein solches Polygon vorliegt (z.B. enthält das
 Event nur einen Punkt), fällt der Adapter auf eine einfache
 Punkt-Markierung in der Mitte zurück. Das Einsatzgebiet bleibt dabei
@@ -337,6 +338,8 @@ sonst bleibt nichts betroffen.
 | Bildbreite (px) | Breite des erzeugten PNGs | `600` |
 | Bildhöhe (px) | Höhe des erzeugten PNGs | `400` |
 | Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert, wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt | `16` |
+| Umrissfarbe | Farbe des Einsatzgebiet-Umrisses (und des Kerns der Fallback-Punkt-Markierung) | `#DD2020` |
+| Umriss-Strichstärke (px) | Linienstärke des Umrisses in Pixeln (1-12) | `3` |
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
 (`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –
