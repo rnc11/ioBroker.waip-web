@@ -1,5 +1,30 @@
 # Older changes
 
+### 0.7.30 (2026-08-24)
+
+- [Incident map image](https://github.com/rnc11/ioBroker.waip-web#incident-map-image): new **Show incident-area
+  polygon** checkbox (on by default) - uncheck it to always show the
+  centered marker dot instead, even when the server sends a polygon.
+  The margin kept around the polygon when auto-zooming to fit it was
+  also reduced by 30%, so the area fills more of the image. Default
+  zoom level raised from 16 to 19, default outline thickness from 3 to
+  4 px.
+- `einsatz.kartenbildPfad` is now cleared on `io.standby` like the
+  other `einsatz.*` fields (previously kept, matching
+  `einsatz.tts.last`'s pattern) - the image file itself is unaffected,
+  only the 10-image retention limit ever deletes files.
+- Documented that this adapter's own data directory (generated map
+  images) is only removed on instance/adapter deletion if "Also
+  delete instance data" is checked in Admin's deletion dialog - a
+  native js-controller/Admin feature (unchecked by default), not
+  something this adapter's code controls.
+- Removed "Unofficial"/"Inoffiziell" from both READMEs' wording; the
+  disclaimer about having no connection to the WAIP-Web project/
+  Robert-112 itself is unchanged, just reworded without that word.
+- This Changelog section now shows only the 5 most recent versions -
+  older entries move to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) on every
+  release.
+
 ### 0.7.29 (2026-08-24)
 
 - [Incident map image](https://github.com/rnc11/ioBroker.waip-web#incident-map-image): draws the actual incident

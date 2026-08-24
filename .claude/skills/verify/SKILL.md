@@ -64,6 +64,20 @@ change to `io-package.json`'s object structure itself). Instead:
    adapterInstance.setInterval = (fn, ms, ...a) => setInterval(fn, ms, ...a);
    adapterInstance.clearInterval = t => clearInterval(t);
    ```
+   Same issue for `delObjectAsync` (needed by `cleanupObsoleteObjects()`/
+   `migrateObjectTypes()` when testing an object-structure migration):
+   `mockAdapter.js` implements the raw callback-style `delObject()`, but
+   omits it from its internal `implementedMethods` promisification list,
+   so `delObjectAsync` silently doesn't exist - the `await
+   this.delObjectAsync(id)` call throws, gets swallowed by
+   `cleanupObsoleteObjects()`'s own try/catch (which assumes failure means
+   "object probably didn't exist"), and the object is never actually
+   deleted - with no visible error, only a test assertion that
+   surprisingly fails. Patch it the same way:
+   ```js
+   adapterInstance.delObjectAsync = id =>
+       new Promise((resolve, reject) => adapterInstance.delObject(id, err => (err ? reject(err) : resolve())));
+   ```
 7. Call `await adapterInstance.readyHandler()` (the mock stores
    `this.on('ready', fn)` as `.readyHandler`, doesn't auto-fire it) - this
    runs the REAL `onReady()`, including `cleanupObsoleteObjects()` /
@@ -106,3 +120,17 @@ R-scheme decoder (space-separated modifier, the 0.7.23 regex fix), and
 `H:VU ohne P` correctly resolved to its own distinct row (no false
 collision with `H:VU mit P`) - all through a real socket.io network
 connection into a real running adapter instance.
+
+Verified the 0.7.35 `einsatz.rueckmeldungAnzahl.*` restructuring (flat
+`.ek`/`.gf`/.../`.med` states split into `.rollen.*`/`.funktionen.*`
+sub-channels) this way, combined with `MockDatabase.publishObject()`/
+`publishState()` to pre-seed an old flat state object before startup
+(simulating a real upgrade): confirmed `cleanupObsoleteObjects()`
+actually removed the pre-seeded old object (needed the
+`delObjectAsync` patch above to work in the mock at all), all 10 new
+folder/state objects existed after startup, and three real
+`io.new_rmld` events (two `team_member` with one `rmld_capability_agt`,
+one `crew_leader` with `rmld_capability_fzf`) produced the correct
+counts at the new nested paths
+(`rollen.ek=2`/`rollen.gf=1`/`funktionen.agt=1`/`funktionen.fzf=1`/
+`rueckmeldungGesamt=3`).

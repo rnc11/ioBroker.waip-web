@@ -112,9 +112,10 @@ adapter provides – typical use in a fire station/EMS environment:
   announced over building speakers the moment `io.playtts` fires –
   useful where members aren't all looking at a screen.
 - **Live headcount / feedback board.** The `einsatz.rueckmeldungAnzahl.*`
-  counters (per role: EK/GF/ZF/VF, per qualification: AGT/FZF/MA/MED)
-  update in real time as responders confirm via the app – bind them to
-  gauge or number widgets for an at-a-glance "who's coming" overview
+  counters (`rollen.ek`/`.gf`/`.zf`/`.vf` per role, `funktionen.agt`/`.fzf`/
+  `.ma`/`.med` per qualification) update in real time as responders
+  confirm via the app – bind them to gauge or number widgets for an
+  at-a-glance "who's coming" overview
   during the response.
 - **Post-incident review / statistics.** `einsatz.json.history10` keeps
   the last 10 completed incidents as a flat table – bind it to a second
@@ -445,14 +446,14 @@ The most recently finished incident remains available via
 | `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Empty until the first image for the current incident is ready; also cleared (stays empty) at the start of a new incident, if generation fails, or if it doesn't finish within the OSM timeout, and - like the other fields above - on `io.standby`. The underlying image file itself is not deleted when the state is cleared (only the 10-image retention limit removes files, see [Incident map image](#incident-map-image)) |
 | `routenGesamt` | number | Number of routes in the current incident |
 | `rueckmeldungGesamt` | number | Total feedback count for the current incident |
-| `rueckmeldungAnzahl.ek` | number | Feedback count as team member ("Einsatzkraft") |
-| `rueckmeldungAnzahl.gf` | number | Feedback count as crew leader ("Gruppenführer") |
-| `rueckmeldungAnzahl.zf` | number | Feedback count as division chief ("Zugführer") |
-| `rueckmeldungAnzahl.vf` | number | Feedback count as group commander ("Verbandsführer") |
-| `rueckmeldungAnzahl.agt` | number | Feedback count with breathing-apparatus qualification ("Atemschutzgeräteträger") |
-| `rueckmeldungAnzahl.fzf` | number | Feedback count as vehicle commander ("Fahrzeugführer") |
-| `rueckmeldungAnzahl.ma` | number | Feedback count as driver/operator ("Maschinist") |
-| `rueckmeldungAnzahl.med` | number | Feedback count with a medical qualification |
+| `rueckmeldungAnzahl.rollen.ek` | number | Feedback count as team member ("Einsatzkraft") |
+| `rueckmeldungAnzahl.rollen.gf` | number | Feedback count as crew leader ("Gruppenführer") |
+| `rueckmeldungAnzahl.rollen.zf` | number | Feedback count as division chief ("Zugführer") |
+| `rueckmeldungAnzahl.rollen.vf` | number | Feedback count as group commander ("Verbandsführer") |
+| `rueckmeldungAnzahl.funktionen.agt` | number | Feedback count with breathing-apparatus qualification ("Atemschutzgeräteträger") |
+| `rueckmeldungAnzahl.funktionen.fzf` | number | Feedback count as vehicle commander ("Fahrzeugführer") |
+| `rueckmeldungAnzahl.funktionen.ma` | number | Feedback count as driver/operator ("Maschinist") |
+| `rueckmeldungAnzahl.funktionen.med` | number | Feedback count with a medical qualification |
 
 ### einsatz.json
 
@@ -513,6 +514,17 @@ example.
 
 ## Changelog
 
+### 0.7.35 (2026-08-24)
+
+- Object structure change: the eight feedback counters under
+  `einsatz.rueckmeldungAnzahl` are now grouped into two sub-channels -
+  **rollen** (`ek`/`gf`/`zf`/`vf`, by role) and **funktionen**
+  (`agt`/`fzf`/`ma`/`med`, by qualification) - instead of sitting flat
+  next to each other. The old flat states are removed automatically on
+  upgrade; scripts/VIS bindings referencing the old paths need to be
+  updated to the new `einsatz.rueckmeldungAnzahl.rollen.*`/
+  `.funktionen.*` paths - see [einsatz](#einsatz).
+
 ### 0.7.34 (2026-08-24)
 
 - [Incident map image](#incident-map-image): fixed the help texts for
@@ -561,31 +573,6 @@ example.
     incident starts, instead of possibly still showing a previous
     incident's stale image path (e.g. when the new incident has no
     coordinates, or the map image feature just got disabled).
-
-### 0.7.30 (2026-08-24)
-
-- [Incident map image](#incident-map-image): new **Show incident-area
-  polygon** checkbox (on by default) - uncheck it to always show the
-  centered marker dot instead, even when the server sends a polygon.
-  The margin kept around the polygon when auto-zooming to fit it was
-  also reduced by 30%, so the area fills more of the image. Default
-  zoom level raised from 16 to 19, default outline thickness from 3 to
-  4 px.
-- `einsatz.kartenbildPfad` is now cleared on `io.standby` like the
-  other `einsatz.*` fields (previously kept, matching
-  `einsatz.tts.last`'s pattern) - the image file itself is unaffected,
-  only the 10-image retention limit ever deletes files.
-- Documented that this adapter's own data directory (generated map
-  images) is only removed on instance/adapter deletion if "Also
-  delete instance data" is checked in Admin's deletion dialog - a
-  native js-controller/Admin feature (unchecked by default), not
-  something this adapter's code controls.
-- Removed "Unofficial"/"Inoffiziell" from both READMEs' wording; the
-  disclaimer about having no connection to the WAIP-Web project/
-  Robert-112 itself is unchanged, just reworded without that word.
-- This Changelog section now shows only the 5 most recent versions -
-  older entries move to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) on every
-  release.
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
 section shows only the 5 most recent versions.
