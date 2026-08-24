@@ -165,6 +165,13 @@ const MAP_IMAGE_OUTLINE_THICKNESS_MAX = 12;
 // EN: How many generated map images are kept at most - older ones are deleted after every
 // new one is created, see pruneMapImages().
 const MAP_IMAGE_RETENTION_COUNT = 10;
+// DE: Wie lange handleAlarm() höchstens auf die Fertigstellung des Kartenbilds wartet, bevor
+// er mit leerem einsatz.kartenbildPfad weitermacht - siehe generateEinsatzMapImage().
+// EN: How long handleAlarm() waits at most for the map image to finish before continuing
+// with an empty einsatz.kartenbildPfad - see generateEinsatzMapImage().
+const DEFAULT_MAP_IMAGE_TIMEOUT_SECONDS = 10;
+const MAP_IMAGE_TIMEOUT_SECONDS_MIN = 1;
+const MAP_IMAGE_TIMEOUT_SECONDS_MAX = 60;
 
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
@@ -1162,6 +1169,12 @@ class WaipWeb extends utils.Adapter {
             MAP_IMAGE_OUTLINE_THICKNESS_MIN,
             MAP_IMAGE_OUTLINE_THICKNESS_MAX,
             DEFAULT_MAP_IMAGE_OUTLINE_THICKNESS,
+        );
+        this.mapImageTimeoutSeconds = clampNumber(
+            this.config.mapImageTimeout,
+            MAP_IMAGE_TIMEOUT_SECONDS_MIN,
+            MAP_IMAGE_TIMEOUT_SECONDS_MAX,
+            DEFAULT_MAP_IMAGE_TIMEOUT_SECONDS,
         );
         this.mapImageDir = path.join(utils.getAbsoluteInstanceDataDir(this), 'maps');
         // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): normalizeStichwortForMatch()
@@ -2174,20 +2187,47 @@ class WaipWeb extends utils.Adapter {
 
     /* DE: Erzeugt (falls mapImageEnabled aktiv ist) das Einsatzkarten-PNG für lat/lon, schreibt
        es als Datei unter mapImageDir ab und aktualisiert einsatz.kartenbildPfad. Wird von
-       handleAlarm() bewusst NICHT awaited aufgerufen (siehe dortigen Aufruf) - ein einzelner
-       langsamer/fehlschlagender Kachel-Download soll die eigentliche Alarmverarbeitung nicht
-       verzögern. Fängt daher selbst alle Fehler ab, statt sie an den (nicht wartenden) Aufrufer
-       durchzureichen.
+       handleAlarm() bewusst AWAITED aufgerufen (siehe dortigen Aufruf) - die Alarmverarbeitung
+       wartet also auf das fertige Bild, damit kartenbildPfad garantiert schon den richtigen
+       Wert für den aktuellen Einsatz trägt, sobald die übrigen einsatz.*-Felder (allen voran
+       alarmAktiv) gesetzt werden - nicht erst irgendwann später asynchron.
+       Um einen einzelnen langsamen/hängenden Kachel-Download trotzdem nicht die gesamte
+       Alarmverarbeitung blockieren zu lassen, ist die Wartezeit auf this.mapImageTimeoutSeconds
+       (Admin-Feld "OSM-Timeout", 1-60s) begrenzt: Wird das Bild nicht rechtzeitig fertig, wird
+       eine Warnung geloggt, einsatz.kartenbildPfad bleibt/wird leer (null), und die Funktion
+       kehrt zurück - die eigentliche Erzeugung läuft im Hintergrund weiter (Kacheln sind
+       bereits angefragt), ihr Ergebnis wird aber verworfen (nicht mehr nach kartenbildPfad
+       geschrieben), damit sie nicht verspätet einen inzwischen neueren/anderen Einsatz
+       überschreibt. Fängt alle Fehler (inkl. Timeout) selbst ab, statt sie an den wartenden
+       Aufrufer durchzureichen - ein misslungenes Kartenbild soll die Alarmverarbeitung selbst
+       nie zum Absturz bringen.
        EN: Generates (if mapImageEnabled is on) the incident map PNG for lat/lon, writes it as
-       a file under mapImageDir and updates einsatz.kartenbildPfad. Deliberately called
-       without awaiting from handleAlarm() (see that call site) - a single slow/failing tile
-       download shouldn't delay actual alarm processing. Therefore catches all errors itself
-       instead of passing them up to the (non-awaiting) caller. */
+       a file under mapImageDir and updates einsatz.kartenbildPfad. Deliberately called AWAITED
+       from handleAlarm() (see that call site) - alarm processing waits for the finished image,
+       so kartenbildPfad is guaranteed to already hold the correct value for the current
+       incident by the time the rest of the einsatz.* fields (most importantly alarmAktiv) get
+       set, rather than only catching up asynchronously at some later point.
+       To still keep a single slow/hanging tile download from blocking the entire alarm
+       processing, the wait is capped at this.mapImageTimeoutSeconds (Admin field "OSM
+       timeout", 1-60s): if the image doesn't finish in time, a warning is logged,
+       einsatz.kartenbildPfad stays/becomes empty (null), and the function returns - the actual
+       generation keeps running in the background (tiles are already in flight), but its result
+       is discarded (never written to kartenbildPfad) so it can't later overwrite a by-then
+       newer/different incident. Catches all errors (including the timeout) itself instead of
+       passing them up to the waiting caller - a failed map image should never crash alarm
+       processing itself. */
     async generateEinsatzMapImage(lat, lon, geometry) {
         if (!this.mapImageEnabled) {
             return;
         }
-        try {
+        // DE: Fragment schon vor dem eigentlichen Erzeugen einfrieren - currentEinsatzUuid
+        // könnte sich ändern, falls die Erzeugung durch den Timeout unten im Hintergrund
+        // weiterläuft und erst nach einem inzwischen neuen Einsatz fertig wird.
+        // EN: Freeze the fragment before the actual generation - currentEinsatzUuid could
+        // change if generation keeps running in the background past the timeout below and
+        // only finishes after a by-then new incident.
+        const uuidFragment = (this.currentEinsatzUuid || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'na';
+        const work = (async () => {
             await fsPromises.mkdir(this.mapImageDir, { recursive: true });
             const image = await this.buildEinsatzMapImage(lat, lon, geometry);
             // DE: Dateiname mit Zeitstempel-Präfix (sortierbar für pruneMapImages()) und den
@@ -2198,14 +2238,64 @@ class WaipWeb extends utils.Adapter {
             // first 8 characters of the incident UUID (debugging aid, not a uniqueness
             // guarantee - Date.now() alone is already sufficient for that, since incidents
             // don't arrive at millisecond intervals).
-            const uuidFragment = (this.currentEinsatzUuid || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'na';
             const filename = `einsatz_${Date.now()}_${uuidFragment}.png`;
             const filePath = path.join(this.mapImageDir, filename);
             await image.write(filePath);
+            return filePath;
+        })();
+
+        let timedOut = false;
+        let timeoutHandle;
+        const timeout = new Promise(resolve => {
+            timeoutHandle = this.setTimeout(() => {
+                timedOut = true;
+                resolve();
+            }, this.mapImageTimeoutSeconds * 1000);
+        });
+
+        let filePath;
+        try {
+            filePath = await Promise.race([work, timeout]);
+        } catch (e) {
+            this.clearTimeout(timeoutHandle);
+            this.safeWarn('generateEinsatzMapImage', e);
+            try {
+                await this.setStateAsync('einsatz.kartenbildPfad', null, true);
+            } catch (e2) {
+                this.safeWarn('einsatz.kartenbildPfad.setState', e2);
+            }
+            return;
+        }
+        this.clearTimeout(timeoutHandle);
+
+        if (timedOut) {
+            this.safeWarn(
+                'generateEinsatzMapImage.timeout',
+                `image was not ready within the configured OSM timeout of ${this.mapImageTimeoutSeconds}s - leaving einsatz.kartenbildPfad empty for this incident`,
+            );
+            try {
+                await this.setStateAsync('einsatz.kartenbildPfad', null, true);
+            } catch (e) {
+                this.safeWarn('einsatz.kartenbildPfad.setState', e);
+            }
+            // DE: Ergebnis der im Hintergrund weiterlaufenden Erzeugung bewusst verwerfen (siehe
+            // Funktionskommentar) - nur noch aufräumen, falls sie doch noch fertig wird, aber
+            // nicht mehr nach kartenbildPfad schreiben.
+            // EN: Deliberately discard the result of the still-running background generation
+            // (see function comment) - only still clean up if it does finish, but no longer
+            // write to kartenbildPfad.
+            work.then(() => this.pruneMapImages().catch(e => this.safeWarn('pruneMapImages', e))).catch(() => {
+                /* already logged inside buildEinsatzMapImage's own per-tile handling, or
+                   irrelevant now that the result is discarded */
+            });
+            return;
+        }
+
+        try {
             await this.setStateAsync('einsatz.kartenbildPfad', filePath, true);
             await this.pruneMapImages();
         } catch (e) {
-            this.safeWarn('generateEinsatzMapImage', e);
+            this.safeWarn('einsatz.kartenbildPfad.setState', e);
         }
     }
 
@@ -2614,6 +2704,21 @@ class WaipWeb extends utils.Adapter {
                     this.safeWarn('einsatz.routenGesamt.setState', e);
                 }
                 await this.updateRueckmeldungCounts();
+                // DE: kartenbildPfad ebenfalls sofort leeren, statt auf generateEinsatzMapImage()
+                // weiter unten zu warten - sonst könnte er für den neuen Einsatz kurzzeitig (oder,
+                // falls keine gültigen Koordinaten vorliegen bzw. mapImageEnabled aus ist, sogar
+                // dauerhaft) noch den Bildpfad des VORHERIGEN Einsatzes zeigen, obwohl alarmAktiv
+                // bereits für den neuen Einsatz gesetzt wird.
+                // EN: Also clear kartenbildPfad immediately instead of waiting for
+                // generateEinsatzMapImage() further down - otherwise it could briefly (or, if no
+                // valid coordinates are present or mapImageEnabled is off, even permanently) still
+                // show the PREVIOUS incident's image path for the new incident, even though
+                // alarmAktiv is already being set for the new one.
+                try {
+                    await this.setStateAsync('einsatz.kartenbildPfad', null, true);
+                } catch (e) {
+                    this.safeWarn('einsatz.kartenbildPfad.setState', e);
+                }
             } else if (!this.currentEinsatzSnapshot) {
                 this.currentEinsatzSnapshot = { routen: [], rueckmeldungen: [] };
             }
@@ -2641,17 +2746,24 @@ class WaipWeb extends utils.Adapter {
                 // entnehmen - normalizeData() löscht data.geometry nach der Positions-
                 // Ermittlung, buildEinsatzMapImage() braucht aber die vollen Polygon-Daten,
                 // nicht nur den daraus abgeleiteten Mittelpunkt (siehe extractPolygonRings()).
-                // Nicht awaiten - ein langsamer/fehlschlagender Kachel-Download soll die
-                // Alarmverarbeitung nicht verzögern (siehe generateEinsatzMapImage(), fängt
-                // alle Fehler selbst ab). Kein-op, falls mapImageEnabled deaktiviert ist.
+                // Bewusst AWAITED - die übrigen einsatz.*-Felder (allen voran alarmAktiv gleich
+                // im Anschluss) sollen erst gesetzt werden, wenn kartenbildPfad bereits den
+                // richtigen Wert für DIESEN Einsatz trägt, statt ihn erst irgendwann später
+                // asynchron nachzuliefern. generateEinsatzMapImage() begrenzt die Wartezeit
+                // selbst über this.mapImageTimeoutSeconds und fängt alle Fehler ab, blockiert die
+                // Alarmverarbeitung also nie unbegrenzt. Kein-op, falls mapImageEnabled
+                // deaktiviert ist.
                 // EN: Take the raw (not normalizeData()-stripped) geometry from incoming -
                 // normalizeData() deletes data.geometry after determining the position, but
                 // buildEinsatzMapImage() needs the full polygon data, not just the centroid
-                // derived from it (see extractPolygonRings()). Not awaited - a slow/failing
-                // tile download shouldn't delay alarm processing (see
-                // generateEinsatzMapImage(), catches all errors itself). No-op if
-                // mapImageEnabled is disabled.
-                this.generateEinsatzMapImage(lat, lon, incoming && incoming.geometry);
+                // derived from it (see extractPolygonRings()). Deliberately AWAITED - the rest
+                // of the einsatz.* fields (most importantly alarmAktiv right after) should only
+                // be set once kartenbildPfad already holds the correct value for THIS incident,
+                // instead of catching up asynchronously at some later point.
+                // generateEinsatzMapImage() itself caps the wait via
+                // this.mapImageTimeoutSeconds and catches all errors, so it never blocks alarm
+                // processing indefinitely. No-op if mapImageEnabled is disabled.
+                await this.generateEinsatzMapImage(lat, lon, incoming && incoming.geometry);
             } else {
                 try {
                     await this.setStateAsync('einsatz.latitude', null, true);

@@ -325,10 +325,15 @@ The file path is written to `einsatz.kartenbildPfad` (see
 [einsatz](#einsatz)) – typical use is attaching that file from a
 Blockly/JavaScript script, e.g. as a Pushover notification attachment.
 Only the 10 most recently generated images are kept on disk; older
-ones are deleted automatically whenever a new one is written. Image
-generation runs in the background and never delays alarm processing –
-a slow or failing tile download just means a missing/delayed image,
-nothing else is affected.
+ones are deleted automatically whenever a new one is written. Alarm
+processing waits for the image to finish before continuing, so
+`einsatz.kartenbildPfad` is guaranteed to already hold the correct
+value by the time the rest of the incident's fields (e.g.
+`einsatz.alarmAktiv`) become available – but only up to the
+configurable **OSM timeout**: if the tile download/composition isn't
+done within that time, a warning is logged and
+`einsatz.kartenbildPfad` stays empty for that incident, without
+blocking alarm processing indefinitely.
 
 | Field | Description | Default |
 | --- | --- | --- |
@@ -338,6 +343,7 @@ nothing else is affected.
 | Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum, automatically reduced if needed to keep the incident area fully visible | `19` |
 | Outline color | Color of the incident-area outline (and the fallback marker dot's core) | `#DD2020` |
 | Outline thickness (px) | Line thickness of the outline, in pixels (1-12) | `4` |
+| OSM timeout (s) | Maximum time to wait for the image (tile download and composition) before continuing without it (1-60) | `10` |
 
 Images are stored under this adapter instance's own data directory
 (`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
@@ -424,7 +430,7 @@ The most recently finished incident remains available via
 | `ablaufzeit` | string (date) | End of the standby display duration, basis for `restzeit` |
 | `sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
 | `latitude` / `longitude` | number | Incident location (normalized from wgs84 fields or GeoJSON centroid) |
-| `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Cleared like the other fields above on `io.standby`; the underlying image file itself is not deleted (only the 10-image retention limit removes files, see [Incident map image](#incident-map-image)) |
+| `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Empty until the first image for the current incident is ready; also cleared (stays empty) at the start of a new incident, if generation fails, or if it doesn't finish within the OSM timeout, and - like the other fields above - on `io.standby`. The underlying image file itself is not deleted when the state is cleared (only the 10-image retention limit removes files, see [Incident map image](#incident-map-image)) |
 | `routenGesamt` | number | Number of routes in the current incident |
 | `rueckmeldungGesamt` | number | Total feedback count for the current incident |
 | `rueckmeldungAnzahl.ek` | number | Feedback count as team member ("Einsatzkraft") |
@@ -494,6 +500,22 @@ message the adapter can produce, grouped by level, with its cause and an
 example.
 
 ## Changelog
+
+### 0.7.31 (2026-08-24)
+
+- Fixed two `einsatz.kartenbildPfad` timing/staleness issues:
+  - Alarm processing now **waits** for the
+    [incident map image](#incident-map-image) to finish before
+    continuing, instead of generating it in the background - so
+    `einsatz.kartenbildPfad` and `einsatz.alarmAktiv` become available
+    together. The wait is capped by a new configurable **OSM timeout**
+    (1-60s, default 10s): if the image isn't ready in time, a warning
+    is logged and `kartenbildPfad` stays empty for that incident
+    instead of blocking alarm processing indefinitely.
+  - `einsatz.kartenbildPfad` is now reset immediately when a new
+    incident starts, instead of possibly still showing a previous
+    incident's stale image path (e.g. when the new incident has no
+    coordinates, or the map image feature just got disabled).
 
 ### 0.7.30 (2026-08-24)
 
@@ -566,13 +588,6 @@ example.
   groß`/`B:Gebäude klein` rows already cover them). Comparison was
   already case-insensitive before this change. Admin UI help text
   updated accordingly.
-
-### 0.7.26 (2026-08-23)
-
-- [Keyword descriptions](#keyword-descriptions) tab: `Description` and
-  `Match` columns are now sortable too (previously only `Keyword /
-  pattern`), and the table's help text was moved above the table
-  instead of below - with many rows it used to sit far out of view.
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
 section shows only the 5 most recent versions.

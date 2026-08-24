@@ -1,5 +1,12 @@
 # Older changes
 
+### 0.7.26 (2026-08-23)
+
+- [Keyword descriptions](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) tab: `Description` and
+  `Match` columns are now sortable too (previously only `Keyword /
+  pattern`), and the table's help text was moved above the table
+  instead of below - with many rows it used to sit far out of view.
+
 ### 0.7.25 (2026-08-23)
 
 - Updated the admin UI text for the [rescue-service decoder](https://github.com/rnc11/ioBroker.waip-web#rescue-service)
