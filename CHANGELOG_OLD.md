@@ -1,5 +1,151 @@
 # Older changes
 
+### 0.7.25 (2026-08-23)
+
+- Updated the admin UI text for the [rescue-service decoder](https://github.com/rnc11/ioBroker.waip-web#rescue-service)
+  to reflect the two supported keyword spellings added in 0.7.23
+  (Leitstelle Lausitz `R1N1p`/`R1N0-NT` and IRLS Brandenburg `R1N1 p`/
+  `R1N0 nt`) - the checkbox label/help and the NT suffix label/help
+  previously only mentioned the hyphenated no-space form.
+
+### 0.7.24 (2026-08-23)
+
+- Extended the default [keyword table](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) with two
+  more Brandenburg spelling variants: `B:Gebäude-Groß` and
+  `B:Gebäude-Klein` (hyphen instead of space, as used by some dispatch
+  centers) - same descriptions as the existing `B:Gebäude groß`/`B:Gebäude
+  klein` entries. Only affects the shipped example table for new
+  installs - existing configured tables are untouched.
+
+### 0.7.23 (2026-08-23)
+
+- Extended the default [keyword table](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) with the
+  29 `K`/`V`/`M`/`S` keywords (Krankentransport, Verlegung, MANV,
+  Sonderstichwörter) from the IRLS Brandenburg rescue-service catalog
+  (v2.7) - previously only the `R<ambulance>N<physician-vehicle>`
+  scheme and the Brand/THL (`B:`/`H:`) table were covered, so
+  `einsatz.beschreibung` stayed `null` for these.
+- Fixed the [rescue-service keyword](https://github.com/rnc11/ioBroker.waip-web#rescue-service) decoder
+  (`decodeRettungsdienstStichwort`): it only accepted the Leitstelle
+  Lausitz spelling without a space (`R1N1p`, `R1N0-NT`) and silently
+  returned `null` for the IRLS Brandenburg spelling with a space
+  (`R1N1 p`, `R1N0 nt`) - both are now recognized.
+- Only affects the shipped example table and the decoder logic for
+  new installs/upgrades - existing configured tables are untouched.
+
+### 0.7.22 (2026-08-23)
+
+- Extended the default [keyword table](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) with
+  `H:Person-TMR` (technical human rescue) and corrected three entries
+  whose pattern didn't match the actual dispatch keyword:
+  `H:Flugunfall` → `H:Flugzeugunfall` (`klein`/`groß`), `H:Öl Wasser`
+  → `H:Öl auf Wasser`, `H:Rettung aus Höhen/Tiefen` → `H:Rettung aus
+  Höhen und Tiefen` (source: Regionalleitstellen Brandenburg keyword
+  list, v7.1). Only affects the shipped example table for new
+  installs - existing configured tables are untouched.
+
+### 0.7.21 (2026-08-23)
+
+- Removed the keyword table's CSV export/import: a bug in ioBroker
+  Admin's own `table` component corrupted German umlauts on CSV
+  import (e.g. `Ã¤`/`Ã` instead of `ä`/`ß`) - confirmed to be entirely
+  inside the Admin UI, not this adapter's code. Use ioBroker's
+  standard instance configuration export/import (JSON) instead - see
+  [Keyword descriptions](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) for the reload caveat
+  after using it.
+- Split the admin configuration UI into 3 tabs -
+  [Connection](https://github.com/rnc11/ioBroker.waip-web#connection), [Rescue-service
+  keywords](https://github.com/rnc11/ioBroker.waip-web#rescue-service),
+  [Keyword descriptions](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) - each with a
+  matching icon, replacing the single combined settings page.
+- Documentation: restructured the configuration section of the
+  README to mirror the 3 admin tabs, fixed a stale reference to the
+  removed CSV feature, and added a couple of small clarifications
+  (mentioned `einsatz.beschreibung` in the practical-use-cases
+  section, mentioned the 3-tab structure up front). All code comments
+  in `main.js` are now bilingual (German + English).
+
+### 0.7.20 (2026-08-22)
+
+- Added `einsatz.beschreibung`: a plain-language description for
+  `einsatz.stichwort`, resolved entirely locally (also included in
+  `einsatz.json.current`/`.history10`). Two sources, in order:
+  - An optional decoder for the `R<RTW>N<NEF>[p][f][-NT]` rescue-service
+    keyword scheme used by several dispatch centers - the label for
+    each part is fully configurable via 5 new text fields.
+  - A user-maintained keyword table (admin table, CSV export/import,
+    pre-filled with an example fire/rescue keyword list) where the
+    most specific (longest) matching pattern wins automatically,
+    regardless of row order - the table can be freely sorted by
+    keyword.
+  - `null` if nothing matches. See
+    [Alarm keyword descriptions](https://github.com/rnc11/ioBroker.waip-web#alarm-keyword-descriptions).
+
+### 0.7.19 (2026-08-22)
+
+- Fixed a bug where incoming feedback (`io.new_rmld`) was silently
+  dropped as "wrong monitor" whenever the responding station's number
+  (`wache_nr`) differed from the registered monitor ID:
+  `payloadMonitorMatch()` incorrectly treated `wache_nr`/`wache_id`/
+  `wacheId` as monitor-identifying fields, but confirmed against the
+  WAIP-Web server source, `wache_nr` on a feedback event is the station
+  number of the crew that submitted it, unrelated to the monitor/
+  dispatch-center ID. Removed these three from the match candidates -
+  alarms and routes were never affected (they don't carry these
+  fields).
+
+### 0.7.18 (2026-08-22)
+
+- Fixed `debug.lastEvent`/`debug.normalizedPosition` to hold a
+  single-element JSON array instead of a bare object (matching
+  `einsatz.json.current`), for direct VIS table-widget compatibility,
+  and to correctly initialize to `[]` instead of `null` on a fresh
+  install/restart.
+- Removed `einsatz.einsatznummer`/`.objekt`/`.objektteil`/
+  `.besonderheiten`/`.strasse`/`.hausnummer`/`.einsatzdetails`/
+  `.permissions` (and the corresponding fields in
+  `einsatz.json.current`/`.history10`): confirmed via the WAIP-Web
+  server source (`server/waip.js`,
+  `db_user_check_permission_for_waip()`) that these fields are only
+  ever populated for logged-in clients - since this adapter connects
+  anonymously by design, they were always empty/`false`. Removed
+  instead of permanently carrying dead states - see the note in the
+  [`einsatz`](https://github.com/rnc11/ioBroker.waip-web#einsatz) section.
+
+### 0.7.17 (2026-08-22)
+
+- Fixed `cleanupObsoleteObjects()` incorrectly deleting and recreating
+  the `einsatz.json` channel on every restart (it wasn't checking
+  `obj.type`, so the current channel object was mistaken for a leftover
+  state from before the 0.7.15 migration).
+- Fixed a spurious `status.registrationPending` "no existing object"
+  warning that could occur if the adapter was stopped before object
+  initialization had finished.
+- Reduced WAIP registration from three emits to a single emit - Socket.IO
+  already delivers reliably once connected, and the existing registration
+  timeout remains as the safety net for the rare case it doesn't confirm.
+- `permissions` inside `einsatz.json.current`/`.history10` is now always
+  stringified consistently with the standalone `einsatz.permissions`
+  state, and `einsatz.json.current` is wrapped in a single-element array
+  (VIS table widgets require an array at the root, not a bare object).
+- Fixed `einsatz.json.history10`/`debug.monitorAudit` staying `null`
+  instead of `[]` on a fresh install (they're excluded from the
+  per-restart reset to preserve history, which previously also meant
+  they were never initialized at all on first install).
+- Added `registeredMonitor`/`registeredMonitorName` fields to
+  `einsatz.json.current`/`.history10`.
+- Reworked logging: translated all remaining German log text to
+  English; implemented the official first-occurrence-`warn`/
+  repeat-`debug`/recovery-`info` pattern for recurring failures (session
+  cookie, registration, connection); capped noisy Socket.IO ping/pong
+  debug logging; a sustained flood of wrong-monitor events now escalates
+  to `warn` instead of staying at `info` indefinitely. See
+  [LOGGING.md](https://github.com/rnc11/ioBroker.waip-web/blob/main/LOGGING.md) for the full reference.
+- Documentation: added a table of contents, a practical-use-cases
+  section, a known-limitation note (only the single most recently active
+  incident is shown - see [`einsatz`](https://github.com/rnc11/ioBroker.waip-web#einsatz)), and enforced the
+  changelog's own 5-entry limit.
+
 ### 0.7.16 (2026-08-22)
 
 - Fixed two stale-data gaps around incident transitions:

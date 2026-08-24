@@ -155,9 +155,9 @@ const OSM_MIN_AUTO_ZOOM = 3;
 const OSM_TILE_USER_AGENT = 'ioBroker.waip-web (+https://github.com/rnc11/ioBroker.waip-web)';
 const DEFAULT_MAP_IMAGE_WIDTH = 600;
 const DEFAULT_MAP_IMAGE_HEIGHT = 400;
-const DEFAULT_MAP_IMAGE_ZOOM = 16;
+const DEFAULT_MAP_IMAGE_ZOOM = 19;
 const DEFAULT_MAP_IMAGE_OUTLINE_COLOR = '#dd2020';
-const DEFAULT_MAP_IMAGE_OUTLINE_THICKNESS = 3;
+const DEFAULT_MAP_IMAGE_OUTLINE_THICKNESS = 4;
 const MAP_IMAGE_OUTLINE_THICKNESS_MIN = 1;
 const MAP_IMAGE_OUTLINE_THICKNESS_MAX = 12;
 // DE: Wie viele erzeugte Kartenbilder maximal aufgehoben werden - ältere werden nach jeder
@@ -972,11 +972,13 @@ function fitZoomToPolygon(rings, maxZoom, width, height) {
     }
 
     // DE: Rand, damit die (mit gewisser Strichstärke gezeichnete) Umrisslinie nicht exakt am
-    // Bildrand klebt.
+    // Bildrand klebt. 4,2 %/6px statt 6 %/8px (30 % kleinerer Rand) - das Einsatzgebiet-
+    // Polygon soll den Bildausschnitt großzügiger ausfüllen.
     // EN: Margin so the (drawn with some line thickness) outline doesn't sit exactly at the
-    // image edge.
-    const marginX = Math.max(8, Math.round(width * 0.06));
-    const marginY = Math.max(8, Math.round(height * 0.06));
+    // image edge. 4.2%/6px instead of 6%/8px (30% smaller margin) - the incident-area
+    // polygon should fill more of the image area.
+    const marginX = Math.max(6, Math.round(width * 0.042));
+    const marginY = Math.max(6, Math.round(height * 0.042));
     const availableWidth = Math.max(1, width - 2 * marginX);
     const availableHeight = Math.max(1, height - 2 * marginY);
 
@@ -1137,6 +1139,13 @@ class WaipWeb extends utils.Adapter {
         // width/height/zoom are defensively clamped in case the admin configuration (e.g.
         // via an external JSON import) contains a nonsensical value.
         this.mapImageEnabled = !!this.config.mapImageEnabled;
+        // DE: Default true - zeigt das vom Server gesendete Einsatzgebiet-Polygon, falls
+        // vorhanden (siehe buildEinsatzMapImage()). false erzwingt immer den zentrierten
+        // Punkt-Marker, auch wenn ein Polygon verfügbar wäre.
+        // EN: Defaults to true - shows the incident-area polygon sent by the server, if
+        // available (see buildEinsatzMapImage()). false always forces the centered marker
+        // dot, even when a polygon would be available.
+        this.mapImageShowPolygon = this.config.mapImageShowPolygon !== false;
         this.mapImageWidth = clampNumber(this.config.mapImageWidth, 100, 2000, DEFAULT_MAP_IMAGE_WIDTH);
         this.mapImageHeight = clampNumber(this.config.mapImageHeight, 100, 2000, DEFAULT_MAP_IMAGE_HEIGHT);
         this.mapImageZoom = clampNumber(this.config.mapImageZoom, 1, OSM_MAX_ZOOM, DEFAULT_MAP_IMAGE_ZOOM);
@@ -2036,15 +2045,18 @@ class WaipWeb extends utils.Adapter {
        canvas background color, but a total failure of all tiles propagates via
        Promise.all(). Throws on a hard failure (e.g. not a single tile loadable) - caller
        generateEinsatzMapImage() catches that.
-       Zoom level: if an incident-area polygon is supplied, the actual zoom used deviates
-       downward (zooms out) from the configured this.mapImageZoom as needed, so the full
-       area stays visible in the image instead of being clipped at the edge - see
-       fitZoomToPolygon(). Without a polygon (falling back to the point marker), it stays at
-       the configured zoom. */
+       Zoom level: if an incident-area polygon is supplied (and mapImageShowPolygon is on),
+       the actual zoom used deviates downward (zooms out) from the configured
+       this.mapImageZoom as needed, so the full area stays visible in the image instead of
+       being clipped at the edge - see fitZoomToPolygon(). Without a polygon (falling back
+       to the point marker), it stays at the configured zoom.
+       mapImageShowPolygon: when off, the polygon is never extracted/drawn at all - the
+       function behaves exactly as if the incident carried no geometry, always falling back
+       to the centered marker dot at the configured zoom. */
     async buildEinsatzMapImage(lat, lon, geometry) {
         const width = this.mapImageWidth;
         const height = this.mapImageHeight;
-        const rings = extractPolygonRings(geometry);
+        const rings = this.mapImageShowPolygon ? extractPolygonRings(geometry) : [];
         let zoom = this.mapImageZoom;
         if (rings.length) {
             const fittedZoom = fitZoomToPolygon(rings, zoom, width, height);
@@ -2804,6 +2816,14 @@ class WaipWeb extends utils.Adapter {
         tasks.push(this.setStateAsync('einsatz.beschreibung', null, true));
         tasks.push(this.setStateAsync('einsatz.latitude', null, true));
         tasks.push(this.setStateAsync('einsatz.longitude', null, true));
+        // DE: Anders als einsatz.tts.last (dessen Vorbild ursprünglich für kartenbildPfad
+        // übernommen wurde) wird kartenbildPfad jetzt doch wie die übrigen einsatz.*-Felder
+        // geleert - kein Alarm aktiv soll auch bedeuten, dass kein Kartenbild mehr referenziert
+        // wird.
+        // EN: Unlike einsatz.tts.last (whose pattern was originally borrowed for
+        // kartenbildPfad), kartenbildPfad is now cleared like the other einsatz.* fields
+        // after all - no active alarm should also mean no map image is referenced anymore.
+        tasks.push(this.setStateAsync('einsatz.kartenbildPfad', null, true));
         tasks.push(this.writeJsonArrayState('einsatz.json.current', []));
         tasks.push(this.writeJsonArrayState('einsatz.json.routen', []));
         tasks.push(this.writeJsonArrayState('einsatz.json.rueckmeldungen', []));
