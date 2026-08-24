@@ -46,8 +46,12 @@
 const https = require('node:https');
 const http = require('node:http');
 const { URL } = require('node:url');
+const path = require('node:path');
+const fsPromises = require('node:fs/promises');
 const utils = require('@iobroker/adapter-core');
 const { io } = require('socket.io-client');
+const { Jimp, loadFont } = require('jimp');
+const jimpFonts = require('jimp/fonts');
 
 const DEFAULT_URL = 'https://wachalarm.leitstelle-lausitz.de';
 // DE: Obergrenze, wie /js/session_keepalive.js der Seite selbst
@@ -128,6 +132,28 @@ const WRONG_MONITOR_WARN_WINDOW_MS = 5 * 60 * 1000;
 // EN: Grace period after einsatz.ablaufzeit has passed, before the watchdog in
 // restzeitInterval assumes a missed io.standby and finalizes the incident (see there).
 const MISSED_STANDBY_GRACE_MS = 60000;
+
+// DE: Konstanten für das Einsatzkarten-Feature (siehe buildEinsatzMapImage()/
+// generateEinsatzMapImage()) - Kachelgröße/max. Zoom liegen am offiziellen OSM-Tile-Server
+// (tile.openstreetmap.org) fest, sind also keine Konfigurationswerte. Der User-Agent
+// identifiziert den Adapter gegenüber dem Server (siehe OSM Tile Usage Policy: Anfragen
+// ohne aussagekräftigen User-Agent können ohne Vorwarnung geblockt werden).
+// EN: Constants for the incident-map feature (see buildEinsatzMapImage()/
+// generateEinsatzMapImage()) - tile size/max zoom are fixed by the official OSM tile
+// server (tile.openstreetmap.org), so they aren't configuration values. The user agent
+// identifies the adapter to the server (see the OSM Tile Usage Policy: requests without
+// a meaningful user agent can be blocked without warning).
+const OSM_TILE_SIZE = 256;
+const OSM_MAX_ZOOM = 19;
+const OSM_TILE_USER_AGENT = 'ioBroker.waip-web (+https://github.com/rnc11/ioBroker.waip-web)';
+const DEFAULT_MAP_IMAGE_WIDTH = 600;
+const DEFAULT_MAP_IMAGE_HEIGHT = 400;
+const DEFAULT_MAP_IMAGE_ZOOM = 16;
+// DE: Wie viele erzeugte Kartenbilder maximal aufgehoben werden - ältere werden nach jeder
+// neuen Erzeugung gelöscht, siehe pruneMapImages().
+// EN: How many generated map images are kept at most - older ones are deleted after every
+// new one is created, see pruneMapImages().
+const MAP_IMAGE_RETENTION_COUNT = 10;
 
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
@@ -310,6 +336,12 @@ const STATE_DEFS = [
     { id: 'einsatz.sondersignal', type: 'number', role: 'value', name: 'Sondersignal', def: 0 },
     { id: 'einsatz.latitude', type: 'number', role: 'value.gps.latitude', name: 'Breitengrad' },
     { id: 'einsatz.longitude', type: 'number', role: 'value.gps.longitude', name: 'Längengrad' },
+    {
+        id: 'einsatz.kartenbildPfad',
+        type: 'string',
+        role: 'text',
+        name: 'Pfad zur zuletzt erzeugten Einsatzkarte (PNG) - leer, falls das Kartenbild-Feature deaktiviert ist, keine Koordinaten vorliegen oder die Erzeugung fehlschlug',
+    },
     // DE: Flache JSON-Objekte/Arrays für Tabellen-Widgets (siehe einsatz.json.*-Channel).
     // Jedes dieser States ist entweder ein flaches Objekt oder ein Array flacher Objekte -
     // bewusst ohne weitere Verschachtelung, da VIS-Tabellen-Widgets nur eine Ebene abflachen
@@ -719,6 +751,79 @@ function normalizeStichwortForMatch(value) {
         .trim();
 }
 
+// DE: Erkennt anhand von einsatz.einsatzart, ob ein Einsatz ein Rettungsdienst-Einsatz ist
+// (Server sendet z.B. "Rettungseinsatz"/"Krankentransport" vs. "Brandeinsatz"/
+// "Hilfeleistungseinsatz", siehe README). Substring-/Regex-Vergleich statt exakter Werteliste,
+// da die genaue Formulierung je Leitstelle variieren kann (z.B. "Rettungsdiensteinsatz").
+// Grundlage für die Checkbox "Rettungsdienst-Einsätze verarbeiten" (rdAlarmierungEnabled).
+// EN: Detects from einsatz.einsatzart whether an incident is a rescue-service incident
+// (server sends e.g. "Rettungseinsatz"/"Krankentransport" vs. "Brandeinsatz"/
+// "Hilfeleistungseinsatz", see README). Substring/regex match instead of an exact value
+// list, since the exact wording can vary by dispatch center (e.g. "Rettungsdiensteinsatz").
+// Basis for the "Process rescue-service incidents" checkbox (rdAlarmierungEnabled).
+const RD_EINSATZART_RE = /rettung|krankentransport/i;
+function isRettungsdienstEinsatz(einsatzart) {
+    return typeof einsatzart === 'string' && RD_EINSATZART_RE.test(einsatzart);
+}
+
+// DE: Klemmt einen Konfigurationswert auf [min, max] und fällt bei fehlendem/ungültigem Wert
+// auf def zurück - für mapImageWidth/-Height/-Zoom (siehe onReady()).
+// EN: Clamps a configuration value to [min, max], falling back to def for a missing/invalid
+// value - for mapImageWidth/-Height/-Zoom (see onReady()).
+function clampNumber(value, min, max, def) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+        return def;
+    }
+    return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+/* DE: Rechnet eine Position (WGS84 lon/lat) bei einem gegebenen Zoom-Level in eine
+   Pixelkoordinate im globalen "Slippy Map"-Pixelraum um (Web-Mercator, Standardformel
+   des OSM-Wikis "Slippy map tilenames" - jede Kachel ist OSM_TILE_SIZE px groß, bei Zoom z
+   gibt es 2^z Kacheln pro Achse). Dient buildEinsatzMapImage() dazu, den exakten
+   Bildausschnitt (nicht nur kachelgenau) um die Einsatz-Koordinaten zu bestimmen.
+   EN: Converts a position (WGS84 lon/lat) at a given zoom level into a pixel coordinate
+   in the global "slippy map" pixel space (Web Mercator, the standard formula from the OSM
+   wiki's "Slippy map tilenames" - each tile is OSM_TILE_SIZE px, and at zoom z there are
+   2^z tiles per axis). Used by buildEinsatzMapImage() to determine the exact image
+   crop (not just tile-aligned) around the incident's coordinates. */
+function lonLatToGlobalPixel(lon, lat, zoom) {
+    const n = Math.pow(2, zoom);
+    const x = ((lon + 180) / 360) * n * OSM_TILE_SIZE;
+    const latRad = (lat * Math.PI) / 180;
+    const y = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n * OSM_TILE_SIZE;
+    return { x, y };
+}
+
+/* DE: Lädt eine einzelne Kachel von tile.openstreetmap.org. tileX wird auf [0, 2^z) gewrappt
+   (Längengrad-Wrap um die Datumsgrenze), tileY dagegen NICHT vom Aufrufer geprüft - siehe
+   den y<0/y>=n-Check in buildEinsatzMapImage() (es gibt keine Kacheln für Breitengrade
+   jenseits von ca. ±85° in der Web-Mercator-Projektion).
+   EN: Downloads a single tile from tile.openstreetmap.org. tileX is wrapped into
+   [0, 2^z) (longitude wraps around the date line); tileY is NOT checked by this
+   function - see the y<0/y>=n check in buildEinsatzMapImage() (there are no tiles for
+   latitudes beyond roughly ±85° in the Web Mercator projection). */
+function fetchOsmTile(zoom, tileX, tileY) {
+    const n = Math.pow(2, zoom);
+    const wrappedX = ((tileX % n) + n) % n;
+    const url = `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${tileY}.png`;
+    return new Promise((resolve, reject) => {
+        const req = https.get(url, { headers: { 'User-Agent': OSM_TILE_USER_AGENT } }, res => {
+            if (res.statusCode !== 200) {
+                res.resume();
+                reject(new Error(`tile ${zoom}/${wrappedX}/${tileY} -> HTTP ${res.statusCode}`));
+                return;
+            }
+            const chunks = [];
+            res.on('data', c => chunks.push(c));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', reject);
+        });
+        req.on('error', reject);
+    });
+}
+
 class WaipWeb extends utils.Adapter {
     constructor(options) {
         super({
@@ -775,6 +880,13 @@ class WaipWeb extends utils.Adapter {
             this.config.monitorID !== undefined && this.config.monitorID !== null
                 ? String(this.config.monitorID).trim()
                 : '';
+        // DE: Default true (im Gegensatz zu rdKeywordDecodingEnabled) - vor Einführung dieser
+        // Checkbox wurden Rettungsdienst-Einsätze immer verarbeitet, das bisherige Verhalten
+        // soll sich für bestehende Installationen also nicht ändern.
+        // EN: Defaults to true (unlike rdKeywordDecodingEnabled) - before this checkbox
+        // existed, rescue-service incidents were always processed, so existing
+        // installations shouldn't see a behavior change.
+        this.rdAlarmierungEnabled = this.config.rdAlarmierungEnabled !== false;
         this.rdKeywordDecodingEnabled = !!this.config.rdKeywordDecodingEnabled;
         // DE: Beschriftungen für decodeRettungsdienstStichwort() - konfigurierbar statt fest im
         // Code, damit sie sich in jede Sprache übersetzen/anpassen lassen. Leerer/fehlender
@@ -789,6 +901,17 @@ class WaipWeb extends utils.Adapter {
             f: (this.config.rdLabelF || '').trim() || DEFAULT_RD_LABEL_F,
             nt: (this.config.rdLabelNT || '').trim() || DEFAULT_RD_LABEL_NT,
         };
+        // DE: Konfiguration für das Einsatzkarten-Feature (siehe generateEinsatzMapImage()) -
+        // Breite/Höhe/Zoom werden defensiv geklemmt, falls die Admin-Konfiguration (z.B. per
+        // externem JSON-Import) einen unsinnigen Wert enthält.
+        // EN: Configuration for the incident-map feature (see generateEinsatzMapImage()) -
+        // width/height/zoom are defensively clamped in case the admin configuration (e.g.
+        // via an external JSON import) contains a nonsensical value.
+        this.mapImageEnabled = !!this.config.mapImageEnabled;
+        this.mapImageWidth = clampNumber(this.config.mapImageWidth, 100, 2000, DEFAULT_MAP_IMAGE_WIDTH);
+        this.mapImageHeight = clampNumber(this.config.mapImageHeight, 100, 2000, DEFAULT_MAP_IMAGE_HEIGHT);
+        this.mapImageZoom = clampNumber(this.config.mapImageZoom, 1, OSM_MAX_ZOOM, DEFAULT_MAP_IMAGE_ZOOM);
+        this.mapImageDir = path.join(utils.getAbsoluteInstanceDataDir(this), 'maps');
         // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): normalizeStichwortForMatch()
         // sorgt für case-insensitiven Vergleich UND behandelt Leerzeichen/Bindestriche als identisch
         // (siehe deren Kommentar), alphabetisch nach Muster sortiert. Die Reihenfolge hat für
@@ -1647,6 +1770,169 @@ class WaipWeb extends utils.Adapter {
         return best ? best.beschreibung : null;
     }
 
+    /* DE: Baut das PNG-Kartenbild für einen Einsatz: lädt die für width/height/zoom nötigen
+       OSM-Kacheln, setzt sie zu einer Leinwand zusammen, schneidet sie exakt (nicht nur
+       kachelgenau) auf den konfigurierten Bildausschnitt um den Einsatzort zu, zeichnet
+       eine Markierung (roter Punkt, weißer Rand) in die Bildmitte und stempelt die laut
+       OSM-Lizenz (ODbL) erforderliche Attribution unten links auf. Kachel-Fehlschläge
+       (z.B. einzelner 404/Timeout) werden toleriert - die betroffene Kachel bleibt dann
+       einfach die Hintergrundfarbe der Leinwand, ein Totalausfall aller Kacheln lässt
+       Promise.all() aber durchschlagen. Wirft bei einem harten Fehler (z.B. keine einzige
+       Kachel ladbar) - Aufrufer generateEinsatzMapImage() fängt das ab.
+       EN: Builds the PNG map image for an incident: downloads the OSM tiles needed for
+       width/height/zoom, composites them onto a canvas, crops it exactly (not just
+       tile-aligned) to the configured image area around the incident location, draws a
+       marker (red dot, white ring) at the center, and stamps the attribution required by
+       the OSM license (ODbL) in the bottom-left corner. Individual tile failures (e.g. a
+       single 404/timeout) are tolerated - the affected tile just stays the canvas
+       background color, but a total failure of all tiles propagates via Promise.all().
+       Throws on a hard failure (e.g. not a single tile loadable) - caller
+       generateEinsatzMapImage() catches that. */
+    async buildEinsatzMapImage(lat, lon) {
+        const zoom = this.mapImageZoom;
+        const width = this.mapImageWidth;
+        const height = this.mapImageHeight;
+
+        const center = lonLatToGlobalPixel(lon, lat, zoom);
+        const originX = center.x - width / 2;
+        const originY = center.y - height / 2;
+
+        const startTileX = Math.floor(originX / OSM_TILE_SIZE);
+        const endTileX = Math.floor((originX + width - 1) / OSM_TILE_SIZE);
+        const startTileY = Math.floor(originY / OSM_TILE_SIZE);
+        const endTileY = Math.floor((originY + height - 1) / OSM_TILE_SIZE);
+        const n = Math.pow(2, zoom);
+
+        const canvasWidth = (endTileX - startTileX + 1) * OSM_TILE_SIZE;
+        const canvasHeight = (endTileY - startTileY + 1) * OSM_TILE_SIZE;
+        const canvas = new Jimp({ width: canvasWidth, height: canvasHeight, color: 0xcccccc_ff });
+
+        const tileFetches = [];
+        for (let tx = startTileX; tx <= endTileX; tx++) {
+            for (let ty = startTileY; ty <= endTileY; ty++) {
+                // DE: Keine Kacheln jenseits der Pol-nahen Web-Mercator-Grenze (siehe fetchOsmTile).
+                // EN: No tiles beyond the near-pole Web Mercator limit (see fetchOsmTile).
+                if (ty < 0 || ty >= n) {
+                    continue;
+                }
+                const offsetX = (tx - startTileX) * OSM_TILE_SIZE;
+                const offsetY = (ty - startTileY) * OSM_TILE_SIZE;
+                tileFetches.push(
+                    fetchOsmTile(zoom, tx, ty)
+                        .then(buf => Jimp.read(buf))
+                        .then(tileImg => {
+                            canvas.composite(tileImg, offsetX, offsetY);
+                        })
+                        .catch(e => this.safeWarn(`buildEinsatzMapImage.tile ${zoom}/${tx}/${ty}`, e)),
+                );
+            }
+        }
+        if (!tileFetches.length) {
+            throw new Error(`no tiles to fetch for lat=${lat} lon=${lon} zoom=${zoom}`);
+        }
+        await Promise.all(tileFetches);
+
+        const cropX = Math.round(originX - startTileX * OSM_TILE_SIZE);
+        const cropY = Math.round(originY - startTileY * OSM_TILE_SIZE);
+        canvas.crop({ x: cropX, y: cropY, w: width, h: height });
+
+        // DE: Markierung: zwei konzentrische Kreise (weißer Ring, roter Kern) statt manueller
+        // Pixel-Iteration - das circle()-Plugin von Jimp maskiert dafür bereits zuverlässig.
+        // EN: Marker: two concentric circles (white ring, red core) instead of manual pixel
+        // iteration - Jimp's circle() plugin already masks this reliably.
+        const outerSize = Math.max(10, Math.round(Math.min(width, height) * 0.035));
+        const innerSize = Math.round(outerSize * 0.6);
+        const outerMarker = new Jimp({ width: outerSize, height: outerSize, color: 0xffffffff });
+        outerMarker.circle();
+        const innerMarker = new Jimp({ width: innerSize, height: innerSize, color: 0xdd2020ff });
+        innerMarker.circle();
+        outerMarker.composite(
+            innerMarker,
+            Math.round((outerSize - innerSize) / 2),
+            Math.round((outerSize - innerSize) / 2),
+        );
+        canvas.composite(outerMarker, Math.round(width / 2 - outerSize / 2), Math.round(height / 2 - outerSize / 2));
+
+        // DE: OSM-Attribution (von der ODbL-Lizenz der Kartendaten vorgeschrieben) unten links,
+        // mit halbtransparentem Hintergrund für Lesbarkeit über beliebigem Kartenuntergrund.
+        // EN: OSM attribution (required by the ODbL license of the map data) at the
+        // bottom-left, with a semi-transparent background for legibility over any map
+        // background.
+        const attributionText = '© OpenStreetMap contributors';
+        const font = await loadFont(jimpFonts.SANS_8_WHITE);
+        const attributionBg = new Jimp({ width: Math.min(width, 170), height: 12, color: 0x00000099 });
+        canvas.composite(attributionBg, 0, height - 12);
+        canvas.print({ x: 2, y: height - 11, text: attributionText, font });
+
+        return canvas;
+    }
+
+    /* DE: Erzeugt (falls mapImageEnabled aktiv ist) das Einsatzkarten-PNG für lat/lon, schreibt
+       es als Datei unter mapImageDir ab und aktualisiert einsatz.kartenbildPfad. Wird von
+       handleAlarm() bewusst NICHT awaited aufgerufen (siehe dortigen Aufruf) - ein einzelner
+       langsamer/fehlschlagender Kachel-Download soll die eigentliche Alarmverarbeitung nicht
+       verzögern. Fängt daher selbst alle Fehler ab, statt sie an den (nicht wartenden) Aufrufer
+       durchzureichen.
+       EN: Generates (if mapImageEnabled is on) the incident map PNG for lat/lon, writes it as
+       a file under mapImageDir and updates einsatz.kartenbildPfad. Deliberately called
+       without awaiting from handleAlarm() (see that call site) - a single slow/failing tile
+       download shouldn't delay actual alarm processing. Therefore catches all errors itself
+       instead of passing them up to the (non-awaiting) caller. */
+    async generateEinsatzMapImage(lat, lon) {
+        if (!this.mapImageEnabled) {
+            return;
+        }
+        try {
+            await fsPromises.mkdir(this.mapImageDir, { recursive: true });
+            const image = await this.buildEinsatzMapImage(lat, lon);
+            // DE: Dateiname mit Zeitstempel-Präfix (sortierbar für pruneMapImages()) und den
+            // ersten 8 Zeichen der Einsatz-UUID (Debugging-Hilfe, keine Eindeutigkeitsgarantie -
+            // Date.now() allein reicht dafür bereits aus, da Einsätze nicht im Millisekundentakt
+            // eintreffen).
+            // EN: Filename with a timestamp prefix (sortable for pruneMapImages()) and the
+            // first 8 characters of the incident UUID (debugging aid, not a uniqueness
+            // guarantee - Date.now() alone is already sufficient for that, since incidents
+            // don't arrive at millisecond intervals).
+            const uuidFragment = (this.currentEinsatzUuid || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'na';
+            const filename = `einsatz_${Date.now()}_${uuidFragment}.png`;
+            const filePath = path.join(this.mapImageDir, filename);
+            await image.write(filePath);
+            await this.setStateAsync('einsatz.kartenbildPfad', filePath, true);
+            await this.pruneMapImages();
+        } catch (e) {
+            this.safeWarn('generateEinsatzMapImage', e);
+        }
+    }
+
+    /* DE: Löscht die ältesten Einsatzkarten-PNGs in mapImageDir, bis nur noch
+       MAP_IMAGE_RETENTION_COUNT übrig sind. Sortierung über den Zeitstempel-Präfix im
+       Dateinamen (siehe generateEinsatzMapImage()) statt über mtime - unabhängig davon, ob
+       das Dateisystem mtime zuverlässig/mit ausreichender Auflösung führt.
+       EN: Deletes the oldest incident-map PNGs in mapImageDir until only
+       MAP_IMAGE_RETENTION_COUNT remain. Sorts by the timestamp prefix in the filename (see
+       generateEinsatzMapImage()) rather than mtime - independent of whether the
+       filesystem tracks mtime reliably/with sufficient resolution. */
+    async pruneMapImages() {
+        try {
+            const entries = await fsPromises.readdir(this.mapImageDir);
+            const mapFiles = entries.filter(f => f.startsWith('einsatz_') && f.endsWith('.png')).sort();
+            const excess = mapFiles.length - MAP_IMAGE_RETENTION_COUNT;
+            if (excess <= 0) {
+                return;
+            }
+            const toDelete = mapFiles.slice(0, excess);
+            await Promise.all(
+                toDelete.map(f =>
+                    fsPromises
+                        .unlink(path.join(this.mapImageDir, f))
+                        .catch(e => this.safeWarn(`pruneMapImages ${f}`, e)),
+                ),
+            );
+        } catch (e) {
+            this.safeWarn('pruneMapImages', e);
+        }
+    }
+
     /* DE: Extrahiert aus einem Einsatz-Snapshot nur die flachen Einsatzstamm-Felder
        (ALLOWED_EINSATZ_FIELDS + lat/lon aus position), ergänzt um den zum Aufrufzeitpunkt
        registrierten Monitor - ohne routen/rueckmeldungen/emAlarmiert/emWeitere. Gemeinsam
@@ -1942,9 +2228,23 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* DE: Handler für eingehende Alarme (io.new_waip).
-       EN: Handler for incoming alarms (io.new_waip). */
+    /* DE: Handler für eingehende Alarme (io.new_waip). Ignoriert Rettungsdienst-Einsätze
+       komplett (kein State-Update, keine History, kein TTS), wenn rdAlarmierungEnabled
+       deaktiviert ist - siehe isRettungsdienstEinsatz() und den "Rettungsdienst
+       verarbeiten"-Haken auf dem Rettungsdienst-Tab. Der Check läuft VOR jedem State-Write
+       (auch vor debug.rawPayloadShort), damit "komplett ignoriert" auch wirklich stimmt.
+       EN: Handler for incoming alarms (io.new_waip). Completely ignores rescue-service
+       incidents (no state update, no history, no TTS) when rdAlarmierungEnabled is
+       disabled - see isRettungsdienstEinsatz() and the "Process rescue-service
+       incidents" checkbox on the Rescue service tab. The check runs BEFORE any state
+       write (even debug.rawPayloadShort), so "completely ignored" actually holds true. */
     async handleAlarm(incoming) {
+        if (!this.rdAlarmierungEnabled && isRettungsdienstEinsatz(incoming && incoming.einsatzart)) {
+            this.log.debug(
+                `Ignoring rescue-service incident (einsatzart="${incoming && incoming.einsatzart}") - rdAlarmierungEnabled is disabled`,
+            );
+            return;
+        }
         try {
             try {
                 await this.setStateAsync('debug.rawPayloadShort', JSON.stringify(incoming).slice(0, 500), true);
@@ -2032,6 +2332,13 @@ class WaipWeb extends utils.Adapter {
                     this.safeWarn('einsatz.longitude.setState', e);
                 }
                 this.currentEinsatzSnapshot.position = { lat, lon };
+                // DE: Nicht awaiten - ein langsamer/fehlschlagender Kachel-Download soll die
+                // Alarmverarbeitung nicht verzögern (siehe generateEinsatzMapImage(), fängt
+                // alle Fehler selbst ab). Kein-op, falls mapImageEnabled deaktiviert ist.
+                // EN: Not awaited - a slow/failing tile download shouldn't delay alarm
+                // processing (see generateEinsatzMapImage(), catches all errors itself).
+                // No-op if mapImageEnabled is disabled.
+                this.generateEinsatzMapImage(lat, lon);
             } else {
                 try {
                     await this.setStateAsync('einsatz.latitude', null, true);

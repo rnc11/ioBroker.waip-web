@@ -28,8 +28,9 @@ open.
 - [Configuration](#configuration)
   - [Connection](#connection)
   - [Why a session cookie is needed](#why-a-session-cookie-is-needed)
-  - [Rescue-service keywords](#rescue-service-keywords)
+  - [Rescue service](#rescue-service)
   - [Keyword descriptions](#keyword-descriptions)
+  - [Incident map image](#incident-map-image)
 - [States (under `waip-web.0.*`)](#states-under-waip-web0)
   - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
     [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
@@ -176,13 +177,20 @@ adapter provides – typical use in a fire station/EMS environment:
   (`einsatz.beschreibung`), resolved locally from a user-maintained
   keyword table plus an optional decoder for the `R<RTW>N<NEF>`
   rescue-service keyword scheme used by several dispatch
-  centers - see [Rescue-service keywords](#rescue-service-keywords)
+  centers - see [Rescue service](#rescue-service)
+- Rescue-service incidents can be ignored entirely (no states, no
+  history, no TTS) - useful where WAIP only signals them unreliably in
+  the first place, see [Rescue service](#rescue-service)
+- Optional incident map image: a PNG centered on the incident's
+  coordinates and marked with a dot, composed locally from OpenStreetMap
+  tiles, with its file path exposed as a state - see
+  [Incident map image](#incident-map-image)
 
 ## Configuration
 
 In the admin UI of the adapter instance, settings are grouped across
-three tabs: **Connection**, **Rescue-service keywords** and **Keyword
-descriptions** – see below for all three.
+four tabs: **Connection**, **Rescue service**, **Keyword descriptions**
+and **Incident map image** – see below for all four.
 
 ### Connection
 
@@ -216,7 +224,20 @@ observed lifetime, at least 55 seconds, at most a fixed 5-minute ceiling)
 – the exact same clamping that `/js/session_keepalive.js` on the site
 itself uses.
 
-### Rescue-service keywords
+### Rescue service
+
+**Process rescue-service incidents** (admin checkbox, **on** by
+default): incidents whose `einsatzart` identifies them as a
+rescue-service call (contains "Rettung" or "Krankentransport",
+case-insensitive - see the `einsatzart` examples in
+[einsatz](#einsatz)) are processed normally by default, matching every
+prior version of the adapter. Unchecking this box makes the adapter
+**completely ignore** such incidents instead: no `einsatz.*` states are
+updated, no history entry is written, no TTS announcement is triggered
+- as if the incident had never arrived. This exists because
+rescue-service incidents reportedly only get alarmed/signaled via WAIP
+in some regions/dispatch centers at all - where they don't, or aren't
+wanted, this box turns the noise off.
 
 `einsatz.stichwort` is passed through unchanged from the server as a
 bare code (e.g. `B2`, `H:VU mit P`) – WAIP-Web itself doesn't explain
@@ -251,7 +272,7 @@ multi-language and these labels aren't translated automatically:
 
 ### Keyword descriptions
 
-Checked only if the decoder on the [Rescue-service keywords](#rescue-service-keywords)
+Checked only if the decoder on the [Rescue service](#rescue-service)
 tab didn't match: a list of `{keyword pattern, description, match type}`
 rows – match type is `starts with` or `contains`, comparison is
 case-insensitive and treats spaces and hyphens as equivalent (any run
@@ -273,6 +294,41 @@ itself, not something this adapter controls).
 
 If neither this table nor the decoder above match, `einsatz.beschreibung`
 is simply `null` - not an error.
+
+### Incident map image
+
+**Generate a map image for each incident** (admin checkbox, off by
+default): when enabled and an incident carries valid coordinates, the
+adapter downloads the tiles it needs from the public
+`tile.openstreetmap.org` server, composites them into a single PNG
+centered on the incident's location, draws a marker (red dot, white
+ring) at the exact center, and stamps the OpenStreetMap attribution
+(required by its ODbL license) into the bottom-left corner. The file
+path is written to `einsatz.kartenbildPfad` (see [einsatz](#einsatz)) –
+typical use is attaching that file from a Blockly/JavaScript script,
+e.g. as a Pushover notification attachment. Only the 10 most recently
+generated images are kept on disk; older ones are deleted automatically
+whenever a new one is written. Image generation runs in the background
+and never delays alarm processing – a slow or failing tile download
+just means a missing/delayed image, nothing else is affected.
+
+| Field | Description | Default |
+| --- | --- | --- |
+| Image width (px) | Width of the generated PNG | `600` |
+| Image height (px) | Height of the generated PNG | `400` |
+| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) | `16` |
+
+Images are stored under this adapter instance's own data directory
+(`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
+`einsatz.kartenbildPfad` is therefore a real, absolute filesystem path
+that a script running on the same host can read directly.
+
+> **Note:** This uses the official, free `tile.openstreetmap.org`
+> server, which is intended for occasional/low-volume use (see the
+> [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)).
+> One image per incident stays well within that – don't lower the zoom
+> level to cover huge areas or otherwise turn this into bulk tile
+> fetching.
 
 ## States (under `waip-web.0.*`)
 
@@ -334,13 +390,14 @@ The most recently finished incident remains available via
 | `uuid` | string | Unique incident UUID (also used to associate feedback) |
 | `einsatzart` | string | e.g. "Brandeinsatz" (fire), "Hilfeleistungseinsatz" (technical assistance), "Rettungseinsatz" (rescue/EMS), "Krankentransport" (patient transport) |
 | `stichwort` | string | Alarm keyword |
-| `beschreibung` | string | Description for `stichwort`, resolved locally (not sent by the server) - see [Rescue-service keywords](#rescue-service-keywords)/[Keyword descriptions](#keyword-descriptions) below. `null` if nothing matched |
+| `beschreibung` | string | Description for `stichwort`, resolved locally (not sent by the server) - see [Rescue service](#rescue-service)/[Keyword descriptions](#keyword-descriptions) below. `null` if nothing matched |
 | `ort` | string | Location/town |
 | `ortsteil` | string | District (if different from `ort`) |
 | `zeitstempel` | string (date) | Alarm time |
 | `ablaufzeit` | string (date) | End of the standby display duration, basis for `restzeit` |
 | `sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
 | `latitude` / `longitude` | number | Incident location (normalized from wgs84 fields or GeoJSON centroid) |
+| `kartenbildPfad` | string | Path to the most recently generated incident map image (PNG) - see [Incident map image](#incident-map-image). Unlike the fields above, **not** cleared on `io.standby` (same pattern as `einsatz.tts.last`), so it stays available to pick up the last incident's map after it ended |
 | `routenGesamt` | number | Number of routes in the current incident |
 | `rueckmeldungGesamt` | number | Total feedback count for the current incident |
 | `rueckmeldungAnzahl.ek` | number | Feedback count as team member ("Einsatzkraft") |
@@ -411,6 +468,20 @@ example.
 
 ## Changelog
 
+### 0.7.28 (2026-08-24)
+
+- New: **Process rescue-service incidents** checkbox on the
+  [Rescue service](#rescue-service) tab (on by default) - when
+  unchecked, incidents identified as rescue-service calls via
+  `einsatzart` are ignored completely (no states, no history, no TTS).
+  The tab itself was renamed from "Rescue-service keywords" to "Rescue
+  service", with the new checkbox placed first.
+- New: [Incident map image](#incident-map-image) tab - optionally
+  generates a PNG map (OpenStreetMap tiles, marked with a dot) centered
+  on each incident's coordinates, exposed via the new
+  `einsatz.kartenbildPfad` state. Configurable image size and zoom
+  level; only the 10 most recent images are kept.
+
 ### 0.7.27 (2026-08-23)
 
 - [Keyword table](#keyword-descriptions) matching now treats spaces
@@ -432,7 +503,7 @@ example.
 
 ### 0.7.25 (2026-08-23)
 
-- Updated the admin UI text for the [rescue-service decoder](#rescue-service-keywords)
+- Updated the admin UI text for the [rescue-service decoder](#rescue-service)
   to reflect the two supported keyword spellings added in 0.7.23
   (Leitstelle Lausitz `R1N1p`/`R1N0-NT` and IRLS Brandenburg `R1N1 p`/
   `R1N0 nt`) - the checkbox label/help and the NT suffix label/help
@@ -455,7 +526,7 @@ example.
   (v2.7) - previously only the `R<ambulance>N<physician-vehicle>`
   scheme and the Brand/THL (`B:`/`H:`) table were covered, so
   `einsatz.beschreibung` stayed `null` for these.
-- Fixed the [rescue-service keyword](#rescue-service-keywords) decoder
+- Fixed the [rescue-service keyword](#rescue-service) decoder
   (`decodeRettungsdienstStichwort`): it only accepted the Leitstelle
   Lausitz spelling without a space (`R1N1p`, `R1N0-NT`) and silently
   returned `null` for the IRLS Brandenburg spelling with a space
@@ -485,7 +556,7 @@ example.
   after using it.
 - Split the admin configuration UI into 3 tabs -
   [Connection](#connection), [Rescue-service
-  keywords](#rescue-service-keywords),
+  keywords](#rescue-service),
   [Keyword descriptions](#keyword-descriptions) - each with a
   matching icon, replacing the single combined settings page.
 - Documentation: restructured the configuration section of the

@@ -1,6 +1,6 @@
 {
   "name": "iobroker.waip-web",
-  "version": "0.7.27",
+  "version": "0.7.28",
   "description": "Wachalarm IP-Web (WAIP) Adapter für ioBroker – bindet Alarmierungen, Rückmeldungen, Routen und TTS-Ansagen per Socket.IO an ioBroker an.",
   "author": {
     "name": "rnc11",
@@ -37,6 +37,7 @@
   ],
   "dependencies": {
     "@iobroker/adapter-core": "^3.4.1",
+    "jimp": "^1.6.1",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
