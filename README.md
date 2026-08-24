@@ -239,7 +239,10 @@ updated, no history entry is written, no TTS announcement is triggered
 - as if the incident had never arrived. This exists because
 rescue-service incidents reportedly only get alarmed/signaled via WAIP
 in some regions/dispatch centers at all - where they don't, or aren't
-wanted, this box turns the noise off.
+wanted, this box turns the noise off. Everything below this box on
+the tab (the decoding checkbox and its label fields) is only shown
+while it's checked - if it's unchecked, rescue-service incidents are
+ignored entirely anyway, so their keyword decoding is irrelevant.
 
 `einsatz.stichwort` is passed through unchanged from the server as a
 bare code (e.g. `B2`, `H:VU mit P`) – WAIP-Web itself doesn't explain
@@ -321,6 +324,16 @@ fit into the image at the configured zoom level, the adapter
 automatically zooms out (never in) just enough for the whole area to
 fit, instead of clipping it at the edge.
 
+**Zoom level** and **Marker & outline color** sit above that checkbox
+because both apply to *either* display mode - the zoom level as
+described above for the polygon, or as a fixed value for the marker
+dot; the color for the polygon outline, or for the marker dot's core.
+**Image width/height** and **Outline thickness** are shown only while
+**Show incident-area polygon** is checked, to keep the panel focused
+on that mode's settings - note that image width/height still apply to
+the marker dot too (only the admin fields to adjust them are hidden;
+their last-saved values keep being used either way).
+
 The file path is written to `einsatz.kartenbildPfad` (see
 [einsatz](#einsatz)) – typical use is attaching that file from a
 Blockly/JavaScript script, e.g. as a Pushover notification attachment.
@@ -337,13 +350,13 @@ blocking alarm processing indefinitely.
 
 | Field | Description | Default |
 | --- | --- | --- |
+| OSM timeout (s) | Maximum time to wait for the image (tile download and composition) before continuing without it (1-60) | `10` |
+| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum for the polygon (automatically reduced if needed to keep the incident area fully visible), a fixed value for the marker dot | `19` |
+| Marker & outline color | Color of the centered marker dot, or of the incident-area outline when a polygon is drawn instead | `#DD2020` |
 | Show incident-area polygon | Draw the original polygon WAIP-Web sends (on) vs. always show a centered marker dot instead (off) | *(on)* |
 | Image width (px) | Width of the generated PNG | `600` |
 | Image height (px) | Height of the generated PNG | `400` |
-| Zoom level | OpenStreetMap zoom level (1 = whole world, 19 = building level) - a maximum, automatically reduced if needed to keep the incident area fully visible | `19` |
-| Outline color | Color of the incident-area outline (and the fallback marker dot's core) | `#DD2020` |
 | Outline thickness (px) | Line thickness of the outline, in pixels (1-12) | `4` |
-| OSM timeout (s) | Maximum time to wait for the image (tile download and composition) before continuing without it (1-60) | `10` |
 
 Images are stored under this adapter instance's own data directory
 (`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
@@ -501,6 +514,21 @@ example.
 
 ## Changelog
 
+### 0.7.33 (2026-08-24)
+
+- Admin UI cleanup for two panels:
+  - [Rescue service](#rescue-service): the keyword-decoding checkbox
+    and its label fields are now hidden while **Process rescue-service
+    incidents** is unchecked (irrelevant otherwise, since such
+    incidents are ignored entirely anyway).
+  - [Incident map image](#incident-map-image): **Zoom level** and the
+    renamed **Marker & outline color** (used by both display modes,
+    not just the outline) now sit above **Show incident-area
+    polygon**, since both apply regardless of that setting; **OSM
+    timeout** moved directly under the enable checkbox; image
+    width/height and outline thickness are now hidden while **Show
+    incident-area polygon** is off.
+
 ### 0.7.32 (2026-08-24)
 
 - Fixed a startup-only error: if the adapter was stopped while it was
@@ -571,20 +599,6 @@ example.
   from both checkboxes' admin descriptions and reworded the decoding
   checkbox's description ("has no effect if your dispatch center
   doesn't use one of these patterns" instead of "only enable if...").
-
-### 0.7.28 (2026-08-24)
-
-- New: **Process rescue-service incidents** checkbox on the
-  [Rescue service](#rescue-service) tab (on by default) - when
-  unchecked, incidents identified as rescue-service calls via
-  `einsatzart` are ignored completely (no states, no history, no TTS).
-  The tab itself was renamed from "Rescue-service keywords" to "Rescue
-  service", with the new checkbox placed first.
-- New: [Incident map image](#incident-map-image) tab - optionally
-  generates a PNG map (OpenStreetMap tiles, marked with a dot) centered
-  on each incident's coordinates, exposed via the new
-  `einsatz.kartenbildPfad` state. Configurable image size and zoom
-  level; only the 10 most recent images are kept.
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
 section shows only the 5 most recent versions.

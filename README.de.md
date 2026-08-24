@@ -241,7 +241,11 @@ History-Eintrag geschrieben, keine TTS-Ansage ausgelöst - als wäre der
 Einsatz nie eingegangen. Hintergrund: Rettungsdienst-Einsätze werden
 über WAIP Berichten zufolge nur in manchen Regionen/Leitstellen
 überhaupt alarmiert/signalisiert - wo das nicht der Fall ist oder nicht
-gewünscht wird, schaltet diese Checkbox das Rauschen ab.
+gewünscht wird, schaltet diese Checkbox das Rauschen ab. Alles darunter
+auf diesem Tab (die Dekodierungs-Checkbox und ihre Bezeichnungsfelder)
+wird nur angezeigt, solange diese Checkbox aktiv ist - ist sie aus,
+werden Rettungsdienst-Einsätze ohnehin komplett ignoriert, ihre
+Stichwort-Dekodierung ist dann irrelevant.
 
 `einsatz.stichwort` wird unverändert vom Server als bloßer Code
 übernommen (z.B. `B2`, `H:VU mit P`) – WAIP-Web selbst erklärt nicht,
@@ -331,6 +335,17 @@ sichtbar: passt es bei der konfigurierten Zoomstufe nicht ins Bild,
 zoomt der Adapter automatisch so weit heraus (nie hinein), wie nötig,
 damit das gesamte Gebiet hineinpasst, statt es am Rand abzuschneiden.
 
+**Zoomstufe** und **Marker- & Umrissfarbe** stehen oberhalb dieser
+Checkbox, da beide für **beide** Darstellungsarten gelten - die
+Zoomstufe wie oben beschrieben für das Polygon, bzw. als fester Wert
+für die Punkt-Markierung; die Farbe für den Polygon-Umriss, bzw. für
+den Kern der Punkt-Markierung. **Bildbreite/-höhe** und
+**Umriss-Strichstärke** werden nur angezeigt, solange **Einsatzgebiet-
+Polygon anzeigen** aktiv ist, um das Panel auf diesen Modus zu
+fokussieren - Bildbreite/-höhe gelten aber weiterhin auch für die
+Punkt-Markierung (nur die Admin-Felder zum Anpassen sind ausgeblendet,
+die zuletzt gespeicherten Werte werden trotzdem verwendet).
+
 Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben (siehe
 [einsatz](#einsatz)) – typische Verwendung ist der Versand dieser Datei
 aus einem Blockly-/JavaScript-Skript heraus, z.B. als
@@ -347,13 +362,13 @@ Einsatz leer, ohne die Alarmverarbeitung unbegrenzt zu blockieren.
 
 | Feld | Beschreibung | Default |
 | --- | --- | --- |
+| OSM-Timeout (s) | Maximale Wartezeit auf das Bild (Kachel-Download und -Zusammensetzung), bevor ohne es fortgefahren wird (1-60) | `10` |
+| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert für das Polygon (wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt), ein fester Wert für die Punkt-Markierung | `19` |
+| Marker- & Umrissfarbe | Farbe der zentrierten Punkt-Markierung, bzw. des Einsatzgebiet-Umrisses, wenn stattdessen ein Polygon gezeichnet wird | `#DD2020` |
 | Einsatzgebiet-Polygon anzeigen | Das von WAIP-Web gesendete Original-Polygon zeichnen (an) vs. immer eine zentrierte Punkt-Markierung zeigen (aus) | *(an)* |
 | Bildbreite (px) | Breite des erzeugten PNGs | `600` |
 | Bildhöhe (px) | Höhe des erzeugten PNGs | `400` |
-| Zoomstufe | OpenStreetMap-Zoomstufe (1 = ganze Welt, 19 = Gebäudeebene) - ein Maximalwert, wird bei Bedarf automatisch reduziert, damit das Einsatzgebiet vollständig sichtbar bleibt | `19` |
-| Umrissfarbe | Farbe des Einsatzgebiet-Umrisses (und des Kerns der Fallback-Punkt-Markierung) | `#DD2020` |
 | Umriss-Strichstärke (px) | Linienstärke des Umrisses in Pixeln (1-12) | `4` |
-| OSM-Timeout (s) | Maximale Wartezeit auf das Bild (Kachel-Download und -Zusammensetzung), bevor ohne es fortgefahren wird (1-60) | `10` |
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
 (`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –

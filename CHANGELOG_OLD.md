@@ -1,5 +1,19 @@
 # Older changes
 
+### 0.7.28 (2026-08-24)
+
+- New: **Process rescue-service incidents** checkbox on the
+  [Rescue service](https://github.com/rnc11/ioBroker.waip-web#rescue-service) tab (on by default) - when
+  unchecked, incidents identified as rescue-service calls via
+  `einsatzart` are ignored completely (no states, no history, no TTS).
+  The tab itself was renamed from "Rescue-service keywords" to "Rescue
+  service", with the new checkbox placed first.
+- New: [Incident map image](https://github.com/rnc11/ioBroker.waip-web#incident-map-image) tab - optionally
+  generates a PNG map (OpenStreetMap tiles, marked with a dot) centered
+  on each incident's coordinates, exposed via the new
+  `einsatz.kartenbildPfad` state. Configurable image size and zoom
+  level; only the 10 most recent images are kept.
+
 ### 0.7.27 (2026-08-23)
 
 - [Keyword table](https://github.com/rnc11/ioBroker.waip-web#keyword-descriptions) matching now treats spaces
