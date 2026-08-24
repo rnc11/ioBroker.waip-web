@@ -522,32 +522,103 @@ function isValidMonitor(mon) {
  handles cases where geometry.geometry is encoded as a string.
  Returns null if no valid position was found or 0/0 was determined.
 */
+/* DE: Entpackt ein Geometry-Feld in ein rohes {type, coordinates}-Objekt: akzeptiert ein
+   Geometry-Objekt, einen JSON-String davon, ein GeoJSON-Feature (geometry-Property) oder
+   eine verschachtelte Kodierung, bei der geometry.geometry selbst wieder als String vorliegt.
+   Gemeinsam genutzt von getCenterFromGeometry() (Mittelpunkt fürs Positions-Feld) und
+   extractPolygonRings() (Umriss fürs Kartenbild, siehe buildEinsatzMapImage()).
+   EN: Unwraps a geometry field into a raw {type, coordinates} object: accepts a geometry
+   object, a JSON string of one, a GeoJSON Feature (geometry property), or a nested
+   encoding where geometry.geometry is itself a string. Shared by getCenterFromGeometry()
+   (centroid for the position field) and extractPolygonRings() (outline for the map image,
+   see buildEinsatzMapImage()). */
+function unwrapGeometryObject(g) {
+    if (!g) {
+        return null;
+    }
+    let parsed = g;
+    if (typeof parsed === 'string') {
+        try {
+            parsed = JSON.parse(parsed);
+        } catch {
+            /* DE: als String belassen / EN: leave as string */
+        }
+    }
+    const geomCandidate = parsed?.geometry ?? parsed;
+    let geom = geomCandidate;
+    if (!geom) {
+        return null;
+    }
+    if (typeof geom === 'string') {
+        try {
+            geom = JSON.parse(geom);
+        } catch {
+            /* DE: nicht parsbar / EN: cannot parse */
+        }
+    }
+    if (!geom || !geom.type || !geom.coordinates) {
+        return null;
+    }
+    return geom;
+}
+
+/* DE: Extrahiert aus einem Geometry-Feld die Außenringe aller Polygone als Arrays von
+   [lon, lat]-Punkten - für die Darstellung des vom WAIP-Server gesendeten Einsatzgebiets
+   (i.d.R. ein kreisförmiges Polygon) im Kartenbild, statt nur eines Mittelpunkt-Markers
+   (siehe buildEinsatzMapImage()). Löcher (innere Ringe) werden ignoriert, ebenso Punkt-/
+   Linien-Geometrien (kein Polygon zum Zeichnen vorhanden) - der Aufrufer fällt in diesem
+   Fall auf den Punkt-Marker zurück. Jeder Ring braucht mindestens 3 Punkte, um gezeichnet
+   zu werden.
+   EN: Extracts the outer rings of all polygons from a geometry field as arrays of
+   [lon, lat] points - for drawing the incident area WAIP-Web sends (usually a
+   circle-shaped polygon) onto the map image, instead of just a center-point marker (see
+   buildEinsatzMapImage()). Holes (inner rings) are ignored, as are point/line geometries
+   (no polygon to draw) - the caller falls back to the point marker in that case. Each ring
+   needs at least 3 points to be drawn. */
+function extractPolygonRings(g) {
+    const geom = unwrapGeometryObject(g);
+    if (!geom) {
+        return [];
+    }
+    const toRing = ring => {
+        if (!Array.isArray(ring)) {
+            return null;
+        }
+        const pts = [];
+        for (const p of ring) {
+            if (!Array.isArray(p) || p.length < 2) {
+                continue;
+            }
+            const lon = Number(p[0]);
+            const lat = Number(p[1]);
+            if (!isNaN(lon) && !isNaN(lat)) {
+                pts.push([lon, lat]);
+            }
+        }
+        return pts.length >= 3 ? pts : null;
+    };
+
+    const rings = [];
+    if (geom.type === 'Polygon' && Array.isArray(geom.coordinates) && geom.coordinates[0]) {
+        const ring = toRing(geom.coordinates[0]);
+        if (ring) {
+            rings.push(ring);
+        }
+    } else if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)) {
+        for (const poly of geom.coordinates) {
+            const ring = Array.isArray(poly) && poly[0] ? toRing(poly[0]) : null;
+            if (ring) {
+                rings.push(ring);
+            }
+        }
+    }
+    return rings;
+}
+
 function getCenterFromGeometry(g) {
     try {
-        if (!g) {
-            return null;
-        }
-        let parsed = g;
-        if (typeof parsed === 'string') {
-            try {
-                parsed = JSON.parse(parsed);
-            } catch {
-                /* DE: als String belassen / EN: leave as string */
-            }
-        }
-        const geomCandidate = parsed?.geometry ?? parsed;
-        let geom = geomCandidate;
+        const geom = unwrapGeometryObject(g);
         if (!geom) {
-            return null;
-        }
-        if (typeof geom === 'string') {
-            try {
-                geom = JSON.parse(geom);
-            } catch {
-                /* DE: nicht parsbar / EN: cannot parse */
-            }
-        }
-        if (!geom || !geom.type || !geom.coordinates) {
             return null;
         }
 
@@ -824,6 +895,50 @@ function fetchOsmTile(zoom, tileX, tileY) {
     });
 }
 
+/* DE: Zeichnet eine (optional geschlossene) Polylinie aus Bildkoordinaten auf eine
+   Jimp-Leinwand: interpoliert linear zwischen aufeinanderfolgenden Punkten und stempelt an
+   jedem Zwischenschritt ein thickness×thickness-Quadrat der angegebenen Farbe. Für das
+   Einsatzgebiet-Polygon in buildEinsatzMapImage() - reicht für ein sichtbares, ausreichend
+   dickes Umriss-Polygon, ohne eine echte Bresenham-Implementierung zu brauchen. Punkte
+   außerhalb der Leinwand werden stillschweigend übersprungen (kein Fehler) - relevant, weil
+   ein Einsatzgebiet über den konfigurierten Bildausschnitt hinausragen kann.
+   EN: Draws a (optionally closed) polyline of image coordinates onto a Jimp canvas:
+   linearly interpolates between consecutive points and stamps a thickness×thickness square
+   of the given color at each intermediate step. For the incident-area polygon in
+   buildEinsatzMapImage() - sufficient for a visible, adequately thick outline without
+   needing a real Bresenham implementation. Points outside the canvas are silently skipped
+   (not an error) - relevant because an incident area can extend beyond the configured
+   image area. */
+function drawPolyline(image, points, colorHex, thickness, closed) {
+    const w = image.bitmap.width;
+    const h = image.bitmap.height;
+    const half = Math.floor(thickness / 2);
+    const stamp = (cx, cy) => {
+        const cxr = Math.round(cx);
+        const cyr = Math.round(cy);
+        for (let dx = -half; dx < thickness - half; dx++) {
+            for (let dy = -half; dy < thickness - half; dy++) {
+                const x = cxr + dx;
+                const y = cyr + dy;
+                if (x >= 0 && x < w && y >= 0 && y < h) {
+                    image.setPixelColor(colorHex, x, y);
+                }
+            }
+        }
+    };
+    const segCount = points.length - (closed ? 0 : 1);
+    for (let i = 0; i < segCount; i++) {
+        const [x0, y0] = points[i];
+        const [x1, y1] = points[(i + 1) % points.length];
+        const dist = Math.max(1, Math.hypot(x1 - x0, y1 - y0));
+        const steps = Math.ceil(dist);
+        for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            stamp(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+        }
+    }
+}
+
 class WaipWeb extends utils.Adapter {
     constructor(options) {
         super({
@@ -880,13 +995,24 @@ class WaipWeb extends utils.Adapter {
             this.config.monitorID !== undefined && this.config.monitorID !== null
                 ? String(this.config.monitorID).trim()
                 : '';
-        // DE: Default true (im Gegensatz zu rdKeywordDecodingEnabled) - vor Einführung dieser
-        // Checkbox wurden Rettungsdienst-Einsätze immer verarbeitet, das bisherige Verhalten
-        // soll sich für bestehende Installationen also nicht ändern.
-        // EN: Defaults to true (unlike rdKeywordDecodingEnabled) - before this checkbox
-        // existed, rescue-service incidents were always processed, so existing
-        // installations shouldn't see a behavior change.
+        // DE: Fällt auf true zurück, falls der Schlüssel im gespeicherten Config-Objekt ganz
+        // fehlt (kein !!-Check) - relevant für Installationen von vor 0.7.28, deren
+        // gespeicherte Config diesen (damals noch nicht existenten) Schlüssel gar nicht
+        // enthält. io-package.json's native-Default ist ebenfalls true, das greift aber nur
+        // bei einer frischen Installation, nicht rückwirkend für bereits konfigurierte
+        // Instanzen.
+        // EN: Falls back to true if the key is entirely missing from the stored config
+        // object (not a !! check) - relevant for installations from before 0.7.28, whose
+        // stored config doesn't contain this (not yet existing back then) key at all.
+        // io-package.json's native default is also true, but that only applies to a fresh
+        // installation, not retroactively to already-configured instances.
         this.rdAlarmierungEnabled = this.config.rdAlarmierungEnabled !== false;
+        // DE: io-package.json's native-Default ist true (seit 0.7.29), gilt aber nur für
+        // Neuinstallationen - bereits konfigurierte Instanzen behalten ihren gespeicherten
+        // Wert (z.B. weiterhin false, falls vor 0.7.29 installiert und nie manuell aktiviert).
+        // EN: io-package.json's native default is true (since 0.7.29), but only applies to
+        // fresh installations - already-configured instances keep their stored value (e.g.
+        // still false if installed before 0.7.29 and never manually enabled).
         this.rdKeywordDecodingEnabled = !!this.config.rdKeywordDecodingEnabled;
         // DE: Beschriftungen für decodeRettungsdienstStichwort() - konfigurierbar statt fest im
         // Code, damit sie sich in jede Sprache übersetzen/anpassen lassen. Leerer/fehlender
@@ -1772,23 +1898,23 @@ class WaipWeb extends utils.Adapter {
 
     /* DE: Baut das PNG-Kartenbild für einen Einsatz: lädt die für width/height/zoom nötigen
        OSM-Kacheln, setzt sie zu einer Leinwand zusammen, schneidet sie exakt (nicht nur
-       kachelgenau) auf den konfigurierten Bildausschnitt um den Einsatzort zu, zeichnet
-       eine Markierung (roter Punkt, weißer Rand) in die Bildmitte und stempelt die laut
-       OSM-Lizenz (ODbL) erforderliche Attribution unten links auf. Kachel-Fehlschläge
+       kachelgenau) auf den konfigurierten Bildausschnitt um den Einsatzort zu und zeichnet
+       das vom Server gesendete Einsatzgebiet ein (siehe unten), bevor die laut OSM-Lizenz
+       (ODbL) erforderliche Attribution unten links aufgestempelt wird. Kachel-Fehlschläge
        (z.B. einzelner 404/Timeout) werden toleriert - die betroffene Kachel bleibt dann
        einfach die Hintergrundfarbe der Leinwand, ein Totalausfall aller Kacheln lässt
        Promise.all() aber durchschlagen. Wirft bei einem harten Fehler (z.B. keine einzige
        Kachel ladbar) - Aufrufer generateEinsatzMapImage() fängt das ab.
        EN: Builds the PNG map image for an incident: downloads the OSM tiles needed for
        width/height/zoom, composites them onto a canvas, crops it exactly (not just
-       tile-aligned) to the configured image area around the incident location, draws a
-       marker (red dot, white ring) at the center, and stamps the attribution required by
-       the OSM license (ODbL) in the bottom-left corner. Individual tile failures (e.g. a
-       single 404/timeout) are tolerated - the affected tile just stays the canvas
-       background color, but a total failure of all tiles propagates via Promise.all().
-       Throws on a hard failure (e.g. not a single tile loadable) - caller
+       tile-aligned) to the configured image area around the incident location, and draws
+       the incident area the server sent (see below), before stamping the attribution
+       required by the OSM license (ODbL) in the bottom-left corner. Individual tile
+       failures (e.g. a single 404/timeout) are tolerated - the affected tile just stays the
+       canvas background color, but a total failure of all tiles propagates via
+       Promise.all(). Throws on a hard failure (e.g. not a single tile loadable) - caller
        generateEinsatzMapImage() catches that. */
-    async buildEinsatzMapImage(lat, lon) {
+    async buildEinsatzMapImage(lat, lon, geometry) {
         const zoom = this.mapImageZoom;
         const width = this.mapImageWidth;
         const height = this.mapImageHeight;
@@ -1836,22 +1962,52 @@ class WaipWeb extends utils.Adapter {
         const cropY = Math.round(originY - startTileY * OSM_TILE_SIZE);
         canvas.crop({ x: cropX, y: cropY, w: width, h: height });
 
-        // DE: Markierung: zwei konzentrische Kreise (weißer Ring, roter Kern) statt manueller
-        // Pixel-Iteration - das circle()-Plugin von Jimp maskiert dafür bereits zuverlässig.
-        // EN: Marker: two concentric circles (white ring, red core) instead of manual pixel
-        // iteration - Jimp's circle() plugin already masks this reliably.
-        const outerSize = Math.max(10, Math.round(Math.min(width, height) * 0.035));
-        const innerSize = Math.round(outerSize * 0.6);
-        const outerMarker = new Jimp({ width: outerSize, height: outerSize, color: 0xffffffff });
-        outerMarker.circle();
-        const innerMarker = new Jimp({ width: innerSize, height: innerSize, color: 0xdd2020ff });
-        innerMarker.circle();
-        outerMarker.composite(
-            innerMarker,
-            Math.round((outerSize - innerSize) / 2),
-            Math.round((outerSize - innerSize) / 2),
-        );
-        canvas.composite(outerMarker, Math.round(width / 2 - outerSize / 2), Math.round(height / 2 - outerSize / 2));
+        // DE: Einsatzgebiet einzeichnen: bevorzugt das/die Original-Polygon(e), die der
+        // WAIP-Server im geometry-Feld sendet (i.d.R. ein kreisförmiges Polygon um den
+        // Einsatzort, nicht nur dessen Mittelpunkt) - jeder Ringpunkt wird über
+        // lonLatToGlobalPixel() in Bild-Pixelkoordinaten umgerechnet (Ursprung um
+        // originX/originY verschoben, siehe deren Berechnung oben) und als geschlossene
+        // Umrisslinie gezeichnet. Nur falls KEIN Polygon vorliegt (Geometrie fehlt oder ist
+        // z.B. nur ein Point/LineString), fällt die Funktion auf einen einfachen
+        // Punkt-Marker (zwei konzentrische Kreise, weißer Ring/roter Kern) in der Bildmitte
+        // zurück - das circle()-Plugin von Jimp maskiert dafür bereits zuverlässig.
+        // EN: Draw the incident area: prefers the original polygon(s) the WAIP server sends
+        // in the geometry field (usually a circle-shaped polygon around the incident
+        // location, not just its center point) - each ring point is converted to image
+        // pixel coordinates via lonLatToGlobalPixel() (origin shifted by originX/originY,
+        // see their calculation above) and drawn as a closed outline. Only if NO polygon is
+        // available (geometry missing, or e.g. just a Point/LineString) does the function
+        // fall back to a simple point marker (two concentric circles, white ring/red core)
+        // at the image center - Jimp's circle() plugin already masks that reliably.
+        const rings = extractPolygonRings(geometry);
+        if (rings.length) {
+            const outlineColor = 0xdd2020ff;
+            const thickness = Math.max(2, Math.round(Math.min(width, height) * 0.008));
+            for (const ring of rings) {
+                const pixelRing = ring.map(([plon, plat]) => {
+                    const p = lonLatToGlobalPixel(plon, plat, zoom);
+                    return [p.x - originX, p.y - originY];
+                });
+                drawPolyline(canvas, pixelRing, outlineColor, thickness, true);
+            }
+        } else {
+            const outerSize = Math.max(10, Math.round(Math.min(width, height) * 0.035));
+            const innerSize = Math.round(outerSize * 0.6);
+            const outerMarker = new Jimp({ width: outerSize, height: outerSize, color: 0xffffffff });
+            outerMarker.circle();
+            const innerMarker = new Jimp({ width: innerSize, height: innerSize, color: 0xdd2020ff });
+            innerMarker.circle();
+            outerMarker.composite(
+                innerMarker,
+                Math.round((outerSize - innerSize) / 2),
+                Math.round((outerSize - innerSize) / 2),
+            );
+            canvas.composite(
+                outerMarker,
+                Math.round(width / 2 - outerSize / 2),
+                Math.round(height / 2 - outerSize / 2),
+            );
+        }
 
         // DE: OSM-Attribution (von der ODbL-Lizenz der Kartendaten vorgeschrieben) unten links,
         // mit halbtransparentem Hintergrund für Lesbarkeit über beliebigem Kartenuntergrund.
@@ -1878,13 +2034,13 @@ class WaipWeb extends utils.Adapter {
        without awaiting from handleAlarm() (see that call site) - a single slow/failing tile
        download shouldn't delay actual alarm processing. Therefore catches all errors itself
        instead of passing them up to the (non-awaiting) caller. */
-    async generateEinsatzMapImage(lat, lon) {
+    async generateEinsatzMapImage(lat, lon, geometry) {
         if (!this.mapImageEnabled) {
             return;
         }
         try {
             await fsPromises.mkdir(this.mapImageDir, { recursive: true });
-            const image = await this.buildEinsatzMapImage(lat, lon);
+            const image = await this.buildEinsatzMapImage(lat, lon, geometry);
             // DE: Dateiname mit Zeitstempel-Präfix (sortierbar für pruneMapImages()) und den
             // ersten 8 Zeichen der Einsatz-UUID (Debugging-Hilfe, keine Eindeutigkeitsgarantie -
             // Date.now() allein reicht dafür bereits aus, da Einsätze nicht im Millisekundentakt
@@ -2332,13 +2488,21 @@ class WaipWeb extends utils.Adapter {
                     this.safeWarn('einsatz.longitude.setState', e);
                 }
                 this.currentEinsatzSnapshot.position = { lat, lon };
-                // DE: Nicht awaiten - ein langsamer/fehlschlagender Kachel-Download soll die
+                // DE: Rohe (nicht von normalizeData() bereinigte) geometry aus incoming
+                // entnehmen - normalizeData() löscht data.geometry nach der Positions-
+                // Ermittlung, buildEinsatzMapImage() braucht aber die vollen Polygon-Daten,
+                // nicht nur den daraus abgeleiteten Mittelpunkt (siehe extractPolygonRings()).
+                // Nicht awaiten - ein langsamer/fehlschlagender Kachel-Download soll die
                 // Alarmverarbeitung nicht verzögern (siehe generateEinsatzMapImage(), fängt
                 // alle Fehler selbst ab). Kein-op, falls mapImageEnabled deaktiviert ist.
-                // EN: Not awaited - a slow/failing tile download shouldn't delay alarm
-                // processing (see generateEinsatzMapImage(), catches all errors itself).
-                // No-op if mapImageEnabled is disabled.
-                this.generateEinsatzMapImage(lat, lon);
+                // EN: Take the raw (not normalizeData()-stripped) geometry from incoming -
+                // normalizeData() deletes data.geometry after determining the position, but
+                // buildEinsatzMapImage() needs the full polygon data, not just the centroid
+                // derived from it (see extractPolygonRings()). Not awaited - a slow/failing
+                // tile download shouldn't delay alarm processing (see
+                // generateEinsatzMapImage(), catches all errors itself). No-op if
+                // mapImageEnabled is disabled.
+                this.generateEinsatzMapImage(lat, lon, incoming && incoming.geometry);
             } else {
                 try {
                     await this.setStateAsync('einsatz.latitude', null, true);

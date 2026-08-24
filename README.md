@@ -182,8 +182,9 @@ adapter provides – typical use in a fire station/EMS environment:
   history, no TTS) - useful where WAIP only signals them unreliably in
   the first place, see [Rescue service](#rescue-service)
 - Optional incident map image: a PNG centered on the incident's
-  coordinates and marked with a dot, composed locally from OpenStreetMap
-  tiles, with its file path exposed as a state - see
+  coordinates, composed locally from OpenStreetMap tiles, with the
+  incident area WAIP-Web sends drawn as an outline (falls back to a
+  marker dot), file path exposed as a state - see
   [Incident map image](#incident-map-image)
 
 ## Configuration
@@ -247,7 +248,7 @@ gap **entirely locally**, no data is sent anywhere. This tab is the
 first of two sources checked, in order (see
 [Keyword descriptions](#keyword-descriptions) for the second):
 
-**Rescue-service decoding** (admin checkbox, off by default): if the
+**Rescue-service decoding** (admin checkbox, on by default): if the
 keyword matches the pattern `R<RTW-count>N<NEF-count>[p][f][-NT]`
 (e.g. `R1N0` → "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0"), a
 description is generated automatically. Two spellings of the `p`/`f`/`NT`
@@ -256,9 +257,9 @@ part are recognized: without a space and with a hyphen before `NT`
 [Leitstelle Lausitz's documented explanation](https://www.leitstelle-lausitz.de/anpassung-der-einsatzstichworte-rettungsdienst/)
 of it), and with a space and without a hyphen (e.g. `R1N1 p`, `R1N0 nt`,
 as used by the IRLS Brandenburg) – this scheme (in either spelling) is
-used by several German dispatch centers, not just these two – only
-enable it if your dispatch center actually uses one of these patterns.
-The text for each part is itself configurable (5 additional text
+used by several German dispatch centers, not just these two – has no
+effect if your dispatch center doesn't use one of these patterns, since
+the keyword just won't match. The text for each part is itself configurable (5 additional text
 fields appear once the checkbox is enabled), since the adapter is
 multi-language and these labels aren't translated automatically:
 
@@ -301,9 +302,14 @@ is simply `null` - not an error.
 default): when enabled and an incident carries valid coordinates, the
 adapter downloads the tiles it needs from the public
 `tile.openstreetmap.org` server, composites them into a single PNG
-centered on the incident's location, draws a marker (red dot, white
-ring) at the exact center, and stamps the OpenStreetMap attribution
-(required by its ODbL license) into the bottom-left corner. The file
+centered on the incident's location, and stamps the OpenStreetMap
+attribution (required by its ODbL license) into the bottom-left corner.
+The incident area WAIP-Web sends in the `geometry` field of the event
+(usually a circle-shaped polygon around the location, not just its
+center) is drawn onto the image as a red outline - the original shape
+the server sent, not a marker at its centroid. Only if no such polygon
+is available (e.g. the event carries just a point) does the adapter
+fall back to a simple marker dot at the center. The file
 path is written to `einsatz.kartenbildPfad` (see [einsatz](#einsatz)) –
 typical use is attaching that file from a Blockly/JavaScript script,
 e.g. as a Pushover notification attachment. Only the 10 most recently
@@ -467,6 +473,23 @@ message the adapter can produce, grouped by level, with its cause and an
 example.
 
 ## Changelog
+
+### 0.7.29 (2026-08-24)
+
+- [Incident map image](#incident-map-image): draws the actual incident
+  area WAIP-Web sends in the event's `geometry` field (usually a
+  circle-shaped polygon around the location) as an outline, instead of
+  just a marker dot at its centroid. Falls back to the dot marker if no
+  polygon is available (e.g. only a point).
+- **Rescue-service decoding** (on the [Rescue service](#rescue-service)
+  tab) now defaults to **on** for new installations, matching **Process
+  rescue-service incidents** (already on by default) - previously it
+  defaulted to off. Already-configured instances keep their stored
+  value, this only affects fresh installs.
+- Trimmed the self-justifying "kept the previous behavior" sentence
+  from both checkboxes' admin descriptions and reworded the decoding
+  checkbox's description ("has no effect if your dispatch center
+  doesn't use one of these patterns" instead of "only enable if...").
 
 ### 0.7.28 (2026-08-24)
 
