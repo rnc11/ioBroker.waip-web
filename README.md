@@ -514,6 +514,16 @@ example.
 
 ## Changelog
 
+### 0.7.37 (2026-08-26)
+
+- Fixed a bug where a routes update (`io.routes`) or TTS announcement
+  (`io.playtts`) arriving after an incident had already ended
+  (`io.standby`) could revive `einsatz.json.current`/`.routen`/
+  `einsatz.routenGesamt` or `einsatz.tts.last`/`.lastTimestamp` for the
+  already-finished incident, while every other `einsatz.*` field
+  correctly stayed cleared. Both handlers now ignore such events while
+  no incident is active.
+
 ### 0.7.36 (2026-08-25)
 
 - Object structure change: `einsatz.rueckmeldungAnzahl` is now
@@ -559,15 +569,6 @@ example.
     checkbox; only **Outline thickness** (genuinely polygon-only, the
     marker dot's size isn't configurable) is now hidden while **Show
     incident-area polygon** is off.
-
-### 0.7.32 (2026-08-24)
-
-- Fixed a startup-only error: if the adapter was stopped while it was
-  still creating its ioBroker objects (e.g. a fast restart right after
-  an update), a "Connection is closed" failure could surface as an
-  `unhandled promise rejection` error in the log instead of being
-  caught - harmless, but noisy. Object initialization now stops
-  cleanly and logs a single warning instead.
 
 Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
 section shows only the 5 most recent versions.

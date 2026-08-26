@@ -3216,6 +3216,25 @@ class WaipWeb extends utils.Adapter {
        as an array within einsatz.json.routen[]. */
     async handleRoutes(incoming) {
         try {
+            // DE: Ohne aktiven Einsatz ignorieren - anders als bei Rückmeldungen enthält die
+            // Routen-Payload keine waip_uuid zum gezielten Abgleich (siehe README, Abschnitt
+            // einsatz.json.routen), daher hier nur die schwächere Prüfung "läuft überhaupt
+            // noch ein Einsatz". Verhindert, dass ein verspätetes io.routes-Event, das erst
+            // NACH einem bereits verarbeiteten io.standby eintrifft, einsatz.json.current/
+            // .routen und einsatz.routenGesamt für den bereits beendeten Einsatz wiederbelebt,
+            // während alle anderen einsatz.*-Felder korrekt geleert bleiben.
+            // EN: Ignore without an active incident - unlike feedback, the routes payload
+            // carries no waip_uuid to match against (see README, einsatz.json.routen
+            // section), so this only applies the weaker check "is an incident still being
+            // tracked at all". Prevents a late io.routes event that arrives AFTER an
+            // already-processed io.standby from reviving einsatz.json.current/.routen and
+            // einsatz.routenGesamt for the already-finished incident, while every other
+            // einsatz.* field correctly stays cleared.
+            if (!this.currentEinsatzUuid) {
+                this.log.debug('Ignoring routes update - no incident is currently active');
+                return;
+            }
+
             let data = incoming;
             if (Array.isArray(incoming)) {
                 data = incoming.map(i => normalizeData(i));
@@ -3257,6 +3276,22 @@ class WaipWeb extends utils.Adapter {
        explicitly resolved to a full absolute URL here. */
     async handleTTS(incoming) {
         try {
+            // DE: Ohne aktiven Einsatz ignorieren - die io.playtts-Payload ist laut
+            // client_waip.js nur eine nackte URL-Zeichenkette, enthält also keine waip_uuid
+            // zum gezielten Abgleich (anders als bei Rückmeldungen). Verhindert, dass eine
+            // verspätete TTS-Ansage, die erst NACH einem bereits verarbeiteten io.standby
+            // eintrifft, einsatz.tts.last/.lastTimestamp für den bereits beendeten Einsatz
+            // wiederbelebt.
+            // EN: Ignore without an active incident - per client_waip.js the io.playtts
+            // payload is just a bare URL string, so it carries no waip_uuid to match against
+            // (unlike feedback). Prevents a late TTS announcement that arrives AFTER an
+            // already-processed io.standby from reviving einsatz.tts.last/.lastTimestamp for
+            // the already-finished incident.
+            if (!this.currentEinsatzUuid) {
+                this.log.debug('Ignoring TTS announcement - no incident is currently active');
+                return;
+            }
+
             const data = normalizeData(incoming || {});
             const ts = new Date().toISOString();
             await this.setField('einsatz.tts.last', this.resolveTtsUrl(data));
