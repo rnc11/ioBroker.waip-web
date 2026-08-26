@@ -1,5 +1,14 @@
 # Older changes
 
+### 0.7.32 (2026-08-24)
+
+- Fixed a startup-only error: if the adapter was stopped while it was
+  still creating its ioBroker objects (e.g. a fast restart right after
+  an update), a "Connection is closed" failure could surface as an
+  `unhandled promise rejection` error in the log instead of being
+  caught - harmless, but noisy. Object initialization now stops
+  cleanly and logs a single warning instead.
+
 ### 0.7.31 (2026-08-24)
 
 - Fixed two `einsatz.kartenbildPfad` timing/staleness issues:
