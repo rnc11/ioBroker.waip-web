@@ -515,9 +515,11 @@ example.
 ## Changelog
 
 <!--
-    Placeholder for the next version (at the beginning of the line):
-    ### **WORK IN PROGRESS**
+    Placeholder for the next version. @alcalzone/release-script replaces the
+    line below with the new version heading on every release, then re-adds it.
+    Collect changes for the upcoming release underneath it.
 -->
+### **WORK IN PROGRESS**
 
 ### 0.7.37 (2026-08-26)
 
