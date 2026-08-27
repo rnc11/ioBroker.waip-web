@@ -521,6 +521,26 @@ example.
 -->
 ### **WORK IN PROGRESS**
 
+- Fixed a race condition where a routes update (`io.routes`) or TTS
+  announcement (`io.playtts`) arriving while an incident was being
+  finalized could still repopulate `einsatz.json.current`,
+  `einsatz.json.routen` and `einsatz.routenGesamt` for the already
+  finished incident. The 0.7.37 guard checked a flag that was only
+  cleared at the very end of the finalization, leaving a window open
+  across several `await` points.
+- Fixed lost entries in `debug.monitorAudit`: the log was written with an
+  unsynchronized read-modify-write, so two entries created within
+  milliseconds of each other (e.g. `connect_called` followed by
+  `emit_WAIP`) could overwrite one another. Writes are now serialized.
+- Fixed configuration values falling back to the minimum instead of the
+  default when a numeric admin field is left empty - an empty zoom field
+  produced zoom 1 (the whole world map) instead of the configured
+  default, and an empty width field produced 100px instead of 600px.
+- Added a unit test suite (`npm run test:unit`, 75 tests) covering the
+  geo normalization, the keyword decoder/table, the monitor matching and
+  the state-definition consistency. `npm test` now runs it alongside the
+  package tests.
+
 ### 0.7.37 (2026-08-26)
 
 - Fixed a bug where a routes update (`io.routes`) or TTS announcement
