@@ -69,6 +69,11 @@ const DEFAULT_SESSION_KEEPALIVE_SEC = 300;
 // expiry time the server reports, instead of assuming a fixed value.
 const SESSION_KEEPALIVE_MIN_MS = 55 * 1000;
 const HISTORY_SIZE = 10;
+// DE: Obergrenze für debug.monitorAudit (siehe appendMonitorAudit()). Der State überlebt
+// Neustarts (RESET_EXCLUDED_STATE_IDS), muss also selbst begrenzt werden.
+// EN: Upper bound for debug.monitorAudit (see appendMonitorAudit()). The state survives
+// restarts (RESET_EXCLUDED_STATE_IDS), so it has to cap itself.
+const MONITOR_AUDIT_SIZE = 200;
 // DE: Default-Beschriftungen für decodeRettungsdienstStichwort() - in der Admin-UI unter dem
 // "Automatically decode rescue-service keywords"-Häkchen als Textfelder überschreibbar, da der
 // Adapter mehrsprachig ist und die Bezeichnungen daher nicht fest im Code stehen dürfen.
@@ -954,6 +959,19 @@ function isRettungsdienstEinsatz(einsatzart) {
 // EN: Clamps a configuration value to [min, max], falling back to def for a missing/invalid
 // value - for mapImageWidth/-Height/-Zoom (see onReady()).
 function clampNumber(value, min, max, def) {
+    // DE: Leere Werte VOR der Number()-Konvertierung abfangen: Number(null), Number('') und
+    // Number('   ') ergeben jeweils 0, was Number.isFinite() passiert - der Wert würde dann
+    // auf min geklemmt statt auf den Default zu fallen. Ein im Admin geleertes Feld ergäbe
+    // so z.B. Zoom 1 (Weltkarte) statt des konfigurierten Defaults 19, oder 100px
+    // Bildbreite statt 600px.
+    // EN: Catch empty values BEFORE the Number() conversion: Number(null), Number('') and
+    // Number('   ') each yield 0, which passes Number.isFinite() - the value would then be
+    // clamped to min instead of falling back to the default. A field cleared in the admin
+    // UI would thus give e.g. zoom 1 (whole world map) instead of the configured default
+    // 19, or 100px image width instead of 600px.
+    if (value === null || value === undefined || String(value).trim() === '') {
+        return def;
+    }
     const n = Number(value);
     if (!Number.isFinite(n)) {
         return def;
@@ -1171,6 +1189,16 @@ class WaipWeb extends utils.Adapter {
         this.currentEinsatzSnapshot = null; // -> einsatz.json.current/.routen/.rueckmeldungen/...
         this._restzeitZeroSince = null; // DE: -> Watchdog gegen verpasstes io.standby, siehe restzeitInterval / EN: -> watchdog for a missed io.standby, see restzeitInterval
         this._recurringFailureKeys = new Set(); // -> logRecurringFailure()/logRecovered()
+        // DE: Serialisierungskette + Cache für appendMonitorAudit() - verhindert, dass zwei
+        // millisekundennahe Aufrufe denselben Ausgangsstand lesen und der zweite Write den
+        // Eintrag des ersten überschreibt (siehe dort). Cache startet null = noch nicht aus
+        // der DB geladen.
+        // EN: Serialization chain + cache for appendMonitorAudit() - prevents two calls
+        // milliseconds apart from reading the same starting state, with the second write
+        // overwriting the first one's entry (see there). Cache starts as null = not yet
+        // loaded from the DB.
+        this._monitorAuditQueue = Promise.resolve();
+        this._monitorAuditCache = null;
         this._wrongMonitorWindowStart = 0; // -> checkWrongMonitorRate()
         this._wrongMonitorWindowCount = 0;
         this.lastServerVersion = null;
@@ -1969,22 +1997,57 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
-    /* DE: Hängt einen Eintrag an das Monitor-Audit-Log an (max. 200 Einträge).
-       EN: Appends an entry to the monitor audit log (max. 200 entries). */
-    async appendMonitorAudit(entry) {
+    /* DE: Hängt einen Eintrag an das Monitor-Audit-Log an (max. MONITOR_AUDIT_SIZE Einträge).
+       Die Schreibvorgänge werden über this._monitorAuditQueue serialisiert: appendMonitorAudit()
+       wird an ~10 Stellen fire-and-forget aufgerufen (siehe die .catch(() => {})-Aufrufe), und
+       mehrere davon feuern millisekundennah hintereinander (z.B. connect_called -> emit_WAIP,
+       oder manual_reconnect_triggered -> connect_called). Als reines
+       getStateAsync -> unshift -> setStateAsync wäre das ein klassisches Read-Modify-Write-
+       Rennen: beide Aufrufe lesen denselben Ausgangsstand, und der zweite Write überschreibt
+       den Eintrag des ersten - Einträge gingen also genau dann verloren, wenn am meisten
+       passiert. Zusätzlich wird der Stand in this._monitorAuditCache gehalten, damit nicht bei
+       jedem Eintrag erneut aus der DB gelesen werden muss.
+       EN: Appends an entry to the monitor audit log (max. MONITOR_AUDIT_SIZE entries).
+       Writes are serialized through this._monitorAuditQueue: appendMonitorAudit() is called
+       fire-and-forget from ~10 places (see the .catch(() => {}) calls), several of which fire
+       within milliseconds of each other (e.g. connect_called -> emit_WAIP, or
+       manual_reconnect_triggered -> connect_called). As a plain
+       getStateAsync -> unshift -> setStateAsync this would be a classic read-modify-write
+       race: both calls read the same starting state and the second write overwrites the
+       first one's entry - so entries would be lost exactly when most is happening. The
+       current state is additionally kept in this._monitorAuditCache to avoid re-reading
+       from the DB for every entry. */
+    appendMonitorAudit(entry) {
+        // DE: An die bestehende Kette anhängen statt sofort auszuführen - dadurch läuft immer
+        // höchstens ein Read-Modify-Write gleichzeitig. Der Rückgabewert bleibt ein Promise,
+        // damit die bestehenden .catch(() => {})-Aufrufstellen unverändert funktionieren.
+        // EN: Append to the existing chain instead of running immediately - that way at most
+        // one read-modify-write runs at a time. The return value stays a promise so the
+        // existing .catch(() => {}) call sites keep working unchanged.
+        this._monitorAuditQueue = this._monitorAuditQueue.then(() => this._appendMonitorAuditNow(entry));
+        return this._monitorAuditQueue;
+    }
+
+    async _appendMonitorAuditNow(entry) {
         try {
-            const st = await this.getStateAsync('debug.monitorAudit');
-            let arr = [];
-            try {
-                arr = st && st.val ? JSON.parse(st.val) : [];
-            } catch {
-                arr = [];
+            // DE: Beim ersten Aufruf einmalig aus der DB laden (der State überlebt Neustarts,
+            // siehe RESET_EXCLUDED_STATE_IDS), danach den Cache fortschreiben.
+            // EN: Load from the DB once on the first call (the state survives restarts, see
+            // RESET_EXCLUDED_STATE_IDS), then keep updating the cache.
+            if (this._monitorAuditCache === null) {
+                const st = await this.getStateAsync('debug.monitorAudit');
+                try {
+                    const parsed = st && st.val ? JSON.parse(st.val) : [];
+                    this._monitorAuditCache = Array.isArray(parsed) ? parsed : [];
+                } catch {
+                    this._monitorAuditCache = [];
+                }
             }
-            arr.unshift(entry);
-            if (arr.length > 200) {
-                arr = arr.slice(0, 200);
+            this._monitorAuditCache.unshift(entry);
+            if (this._monitorAuditCache.length > MONITOR_AUDIT_SIZE) {
+                this._monitorAuditCache = this._monitorAuditCache.slice(0, MONITOR_AUDIT_SIZE);
             }
-            await this.setStateAsync('debug.monitorAudit', JSON.stringify(arr), true);
+            await this.setStateAsync('debug.monitorAudit', JSON.stringify(this._monitorAuditCache), true);
         } catch (e) {
             // DE: betrifft nur das interne Audit-Log, keine echten Einsatzdaten -> debug statt warn
             // EN: only affects the internal audit log, not real incident data -> debug instead of warn
@@ -2706,13 +2769,20 @@ class WaipWeb extends utils.Adapter {
        (z.B. bei io.standby oder wenn ein neuer Einsatz beginnt, ohne dass zuvor io.standby kam).
        Dedupliziert über die uuid, damit derselbe Einsatz nicht doppelt eingetragen wird, falls
        sowohl io.standby als auch der nächste io.new_waip diese Methode auslösen.
+       snapshot ist optional: finalizeCurrentEinsatz() übergibt ihn explizit, weil es
+       this.currentEinsatzSnapshot bereits vor dem ersten await genullt hat (siehe dort);
+       ohne Argument wird wie bisher der aktuelle Snapshot verwendet.
        EN: Records the current incident snapshot as a completed entry at the front of
        einsatz.json.history10 (e.g. on io.standby, or when a new incident starts without a
        preceding io.standby). Deduplicates by uuid so the same incident isn't recorded twice
-       if both io.standby and the next io.new_waip trigger this method. */
-    async pushEinsatzToHistory() {
+       if both io.standby and the next io.new_waip trigger this method.
+       snapshot is optional: finalizeCurrentEinsatz() passes it explicitly because it has
+       already nulled this.currentEinsatzSnapshot before its first await (see there);
+       without an argument the current snapshot is used as before. */
+    async pushEinsatzToHistory(snapshot) {
         try {
-            if (!this.currentEinsatzSnapshot || !this.currentEinsatzSnapshot.uuid) {
+            const src = snapshot !== undefined ? snapshot : this.currentEinsatzSnapshot;
+            if (!src || !src.uuid) {
                 return;
             }
             const st = await this.getStateAsync('einsatz.json.history10');
@@ -2722,14 +2792,14 @@ class WaipWeb extends utils.Adapter {
             } catch {
                 arr = [];
             }
-            if (arr.length && arr[0] && arr[0].uuid === this.currentEinsatzSnapshot.uuid) {
+            if (arr.length && arr[0] && arr[0].uuid === src.uuid) {
                 return;
             }
             // DE: Nur den flachen Einsatzstamm archivieren - Routen/Rückmeldungen/Alarmierungen
             // gelten nur für den jeweils aktuellen Einsatz und werden nicht historisiert.
             // EN: Only archive the flat incident master data - routes/feedback/alerting only
             // apply to the current incident and aren't kept in history.
-            arr.unshift(this.buildFlatEinsatzJson(this.currentEinsatzSnapshot));
+            arr.unshift(this.buildFlatEinsatzJson(src));
             if (arr.length > this.HISTORY_SIZE) {
                 arr = arr.slice(0, this.HISTORY_SIZE);
             }
@@ -3073,12 +3143,35 @@ class WaipWeb extends utils.Adapter {
        (handleStandby()) and the watchdog in restzeitInterval in case io.standby was missed
        (see there). */
     async finalizeCurrentEinsatz() {
+        // DE: currentEinsatzUuid/-Snapshot SOFORT nullen, bevor der erste await läuft.
+        // handleRoutes()/handleTTS() prüfen genau diese Felder, um verspätete Events nach
+        // einem io.standby zu verwerfen (siehe dort). Würden sie erst am Ende von
+        // clearCurrentEinsatzStates() genullt, könnte die Event-Loop während der awaits
+        // unten ein wartendes io.routes verarbeiten: dessen Guard sähe die uuid noch als
+        // gesetzt, ließe das Event passieren und schriebe einsatz.json.current/.routen
+        // womöglich NACH den Leer-Writes - also genau das Symptom, gegen das der Guard
+        // eingeführt wurde.
+        // Der Snapshot wird vorher in eine lokale Variable gerettet, da
+        // pushEinsatzToHistory() ihn zum Archivieren noch braucht.
+        // EN: Null currentEinsatzUuid/snapshot IMMEDIATELY, before the first await.
+        // handleRoutes()/handleTTS() check exactly these fields to discard late events
+        // after an io.standby (see there). If they were only nulled at the end of
+        // clearCurrentEinsatzStates(), the event loop could process a pending io.routes
+        // during the awaits below: its guard would still see the uuid as set, let the
+        // event through, and possibly write einsatz.json.current/.routen AFTER the
+        // clearing writes - exactly the symptom the guard was introduced against.
+        // The snapshot is saved into a local first, since pushEinsatzToHistory() still
+        // needs it for archiving.
+        const snapshot = this.currentEinsatzSnapshot;
+        this.currentEinsatzUuid = null;
+        this.currentEinsatzSnapshot = null;
+
         try {
             await this.setStateAsync('einsatz.alarmAktiv', false, true);
         } catch (e) {
             this.safeWarn('einsatz.alarmAktiv.setState', e);
         }
-        await this.pushEinsatzToHistory();
+        await this.pushEinsatzToHistory(snapshot);
         await this.clearCurrentEinsatzStates();
         this._restzeitZeroSince = null;
     }
@@ -3138,6 +3231,16 @@ class WaipWeb extends utils.Adapter {
 
         this.currentEinsatzUuid = null;
         this.currentEinsatzSnapshot = null;
+        // DE: Defensiv erneut genullt. finalizeCurrentEinsatz() - der einzige Aufrufer -
+        // erledigt das bereits vor seinem ersten await (dort steht die Begründung; das ist
+        // die eigentlich wirksame Stelle gegen verspätete Events). Hier bleibt es stehen,
+        // damit die Methode auch bei einem künftigen zweiten Aufrufer für sich genommen
+        // einen konsistenten Zustand hinterlässt.
+        // EN: Defensively nulled again. finalizeCurrentEinsatz() - the only caller -
+        // already does this before its first await (the reasoning is documented there;
+        // that is the location that actually protects against late events). Kept here so
+        // the method still leaves a consistent state on its own should a second caller be
+        // added later.
         // DE: rueckmeldungenGesamt/rueckmeldungen.* liest aus this.currentEinsatzSnapshot,
         // ist jetzt also null -> alle Zähler werden konsistent auf 0 zurückgesetzt.
         // EN: rueckmeldungenGesamt/rueckmeldungen.* reads from this.currentEinsatzSnapshot,
@@ -3706,6 +3809,47 @@ class WaipWeb extends utils.Adapter {
 
 if (require.main !== module) {
     module.exports = options => new WaipWeb(options);
+    /* DE: Interne, ioBroker-freie Hilfsfunktionen für Unit-Tests zugänglich machen (siehe
+       test/unit.js). Bewusst als Property AN der Factory-Funktion, nicht als eigenes
+       Export-Objekt: @iobroker/adapter-core erwartet, dass module.exports selbst die
+       Factory ist (options => new WaipWeb(options)) - ein { default, testables }-Objekt
+       würde den Adapter-Start brechen. Diese Funktionen sind rein (keine this-Bindung,
+       keine State-Zugriffe) und dadurch ohne Mock testbar; genau hier lagen mehrere
+       vergangene Fehler (payloadMonitorMatch/wache_nr in 0.7.19, das Modifikator-Regex in
+       0.7.23, die Bitshift-Falle in hexColorToJimpInt).
+       EN: Expose internal, ioBroker-free helpers for unit tests (see test/unit.js).
+       Deliberately as a property ON the factory function rather than as a separate export
+       object: @iobroker/adapter-core expects module.exports itself to be the factory
+       (options => new WaipWeb(options)) - a { default, testables } object would break
+       adapter startup. These functions are pure (no this binding, no state access) and
+       therefore testable without a mock; several past bugs lived exactly here
+       (payloadMonitorMatch/wache_nr in 0.7.19, the modifier regex in 0.7.23, the bit-shift
+       trap in hexColorToJimpInt). */
+    module.exports.testables = {
+        isValidMonitor,
+        unwrapGeometryObject,
+        extractPolygonRings,
+        getCenterFromGeometry,
+        normalizeData,
+        decodeHtmlEntities,
+        normalizeStichwortForMatch,
+        isRettungsdienstEinsatz,
+        clampNumber,
+        hexColorToJimpInt,
+        lonLatToGlobalPixel,
+        fitZoomToPolygon,
+        STATE_DEFS,
+        CHANNEL_DEFS,
+        JSON_ARRAY_STATE_IDS,
+        NULLABLE_NUMBER_STATE_IDS,
+        RESET_EXCLUDED_STATE_IDS,
+        ALLOWED_EINSATZ_FIELDS,
+        OBSOLETE_OBJECT_IDS,
+        OBSOLETE_FOLDER_IDS,
+        HISTORY_SIZE,
+        MONITOR_AUDIT_SIZE,
+        WaipWeb,
+    };
 } else {
     new WaipWeb();
 }
