@@ -1,567 +1,567 @@
 {
-  "common": {
-    "name": "waip-web",
-    "version": "0.7.37",
-    "news": {
-      "0.7.37": {
-        "en": "Fixed a bug where a routes update (io.routes) or TTS announcement (io.playtts) arriving after an incident had already ended (io.standby) could revive einsatz.json.current/.routen/einsatz.routenGesamt or einsatz.tts.last/.lastTimestamp for the already-finished incident, while every other einsatz.* field correctly stayed cleared. Both handlers now ignore such events while no incident is active.",
-        "de": "Einen Fehler behoben, bei dem eine Routen-Aktualisierung (io.routes) oder eine TTS-Ansage (io.playtts), die erst nach Abschluss eines Einsatzes (io.standby) eintraf, einsatz.json.current/.routen/einsatz.routenGesamt bzw. einsatz.tts.last/.lastTimestamp für den bereits beendeten Einsatz wiederbeleben konnte, während alle anderen einsatz.*-Felder korrekt geleert blieben. Beide Handler ignorieren solche Events jetzt, solange kein Einsatz aktiv ist.",
-        "ru": "Исправлена ​​ошибка, из-за которой обновление маршрутов (io.routes) или объявление TTS (io.playtts), поступившее после того, как инцидент уже завершился (io.standby), могло восстановить einsatz.json.current/.routen/einsatz.routenGesamt или einsatz.tts.last/.lastTimestamp для уже завершенного инцидента, в то время как все остальные поля einsatz.* корректно оставались очищенными. Оба обработчика теперь игнорируют такие события, пока ни один инцидент не активен.",
-        "pt": "Corrigido um bug onde uma atualização de rotas (io.routes) ou anúncio de TTS (io.playtts) chegando após um incidente já ter terminado (io.standby) poderia reviver einsatz.json.current/.routen/einsatz.routenGesamt ou einsatz.tts.last/.lastTimestamp para o incidente já concluído, enquanto todos os outros campos einsatz.* permaneciam corretamente limpos. Ambos os manipuladores agora ignoram tais eventos enquanto nenhum incidente estiver ativo.",
-        "nl": "Een bug opgelost waarbij een route-update (io.routes) of TTS-aankondiging (io.playtts) die binnenkwam nadat een incident al was geëindigd (io.standby) einsatz.json.current/.routen/einsatz.routenGesamt of einsatz.tts.last/.lastTimestamp voor het reeds voltooide incident kon doen herleven, terwijl elk ander einsatz.*-veld correct leeg bleef. Beide handlers negeren nu dergelijke gebeurtenissen terwijl er geen incident actief is.",
-        "fr": "Correction d'un bug où une mise à jour des itinéraires (io.routes) ou une annonce TTS (io.playtts) arrivant après la fin d'un incident (io.standby) pouvait relancer einsatz.json.current/.routen/einsatz.routenGesamt ou einsatz.tts.last/.lastTimestamp pour l'incident déjà terminé, tandis que tous les autres champs einsatz.* restaient correctement effacés. Les deux gestionnaires ignorent désormais ces événements tant qu’aucun incident n’est actif.",
-        "it": "Risolto un bug per il quale un aggiornamento dei percorsi (io.routes) o un annuncio TTS (io.playtts) arrivato dopo che un incidente era già terminato (io.standby) poteva riattivare einsatz.json.current/.routen/einsatz.routenGesamt o einsatz.tts.last/.lastTimestamp per l'incidente già terminato, mentre ogni altro campo einsatz.* rimaneva correttamente cancellato. Entrambi i gestori ora ignorano tali eventi mentre non è attivo alcun incidente.",
-        "es": "Se corrigió un error por el cual una actualización de rutas (io.routes) o un anuncio TTS (io.playtts) que llegaba después de que un incidente ya había finalizado (io.standby) podía reactivar einsatz.json.current/.routen/einsatz.routenGesamt o einsatz.tts.last/.lastTimestamp para el incidente ya finalizado, mientras que todos los demás campos einsatz.* permanecían correctamente despejados. Ambos controladores ahora ignoran dichos eventos mientras no haya ningún incidente activo.",
-        "pl": "Naprawiono błąd, który powodował, że aktualizacja tras (io.routes) lub ogłoszenie TTS (io.playtts) pojawiające się po zakończeniu incydentu (io.standby) mogły przywrócić einsatz.json.current/.routen/einsatz.routenGesamt lub einsatz.tts.last/.lastTimestamp dla już zakończonego zdarzenia, podczas gdy wszystkie pozostałe pola einsatz.* pozostały poprawnie wyczyszczone. Obydwa programy obsługi ignorują teraz takie zdarzenia, dopóki żadne zdarzenie nie jest aktywne.",
-        "uk": "Виправлено помилку, через яку оновлення маршрутів (io.routes) або повідомлення TTS (io.playtts), що надходить після завершення інциденту (io.standby), могло відновити einsatz.json.current/.routen/einsatz.routenGesamt або einsatz.tts.last/.lastTimestamp для вже завершеного інциденту, тоді як усі інші einsatz.* поле правильно залишилося очищеним. Обидва обробники тепер ігнорують такі події, поки немає активних інцидентів.",
-        "zh-cn": "修复了以下错误：在事件已经结束 (io.standby) 后到达的路线更新 (io.routes) 或 TTS 公告 (io.playtts) 可能会恢复已完成事件的 einsatz.json.current/.routen/einsatz.routenGesamt 或 einsatz.tts.last/.lastTimestamp，而所有其他 einsatz.* 字段正确保持清除状态。现在，当没有事件处于活动状态时，两个处理程序都会忽略此类事件。"
-      },
-      "0.7.36": {
-        "en": "Object structure change: einsatz.rueckmeldungAnzahl is now einsatz.rueckmeldungen (rollen.*/funktionen.* sub-channels unchanged), einsatz.rueckmeldungGesamt is now einsatz.rueckmeldungenGesamt, and einsatz.zeitstempel is now einsatz.alarmierungszeit. Old objects are automatically removed on upgrade (including now-orphaned channel/folder objects, not just states); scripts/VIS bindings referencing the old paths need to be updated.",
-        "de": "Objektstruktur geändert: einsatz.rueckmeldungAnzahl heißt jetzt einsatz.rueckmeldungen (Unter-Kanäle rollen.*/funktionen.* unverändert), einsatz.rueckmeldungGesamt heißt jetzt einsatz.rueckmeldungenGesamt, und einsatz.zeitstempel heißt jetzt einsatz.alarmierungszeit. Alte Objekte werden beim Update automatisch entfernt (auch jetzt verwaiste Kanal-/Ordner-Objekte, nicht nur States); Skripte/VIS-Bindings, die die alten Pfade nutzen, müssen angepasst werden.",
-        "es": "Cambio en la estructura de objetos: einsatz.rueckmeldungAnzahl ahora es einsatz.rueckmeldungen (los subcanales rollen.*/funktionen.* no cambian), einsatz.rueckmeldungGesamt ahora es einsatz.rueckmeldungenGesamt, y einsatz.zeitstempel ahora es einsatz.alarmierungszeit. Los objetos antiguos se eliminan automáticamente al actualizar (incluidos los objetos de canal/carpeta ahora huérfanos, no solo los estados); los scripts/vinculaciones de VIS que hagan referencia a las rutas antiguas deben actualizarse.",
-        "fr": "Changement de la structure des objets : einsatz.rueckmeldungAnzahl s'appelle désormais einsatz.rueckmeldungen (les sous-canaux rollen.*/funktionen.* restent inchangés), einsatz.rueckmeldungGesamt s'appelle désormais einsatz.rueckmeldungenGesamt, et einsatz.zeitstempel s'appelle désormais einsatz.alarmierungszeit. Les anciens objets sont automatiquement supprimés lors de la mise à jour (y compris les objets de canal/dossier désormais orphelins, pas seulement les états) ; les scripts/liaisons VIS référençant les anciens chemins doivent être mis à jour.",
-        "it": "Modifica della struttura degli oggetti: einsatz.rueckmeldungAnzahl ora si chiama einsatz.rueckmeldungen (i sottocanali rollen.*/funktionen.* restano invariati), einsatz.rueckmeldungGesamt ora si chiama einsatz.rueckmeldungenGesamt, e einsatz.zeitstempel ora si chiama einsatz.alarmierungszeit. I vecchi oggetti vengono rimossi automaticamente durante l'aggiornamento (inclusi gli oggetti canale/cartella ora orfani, non solo gli stati); script/binding VIS che fanno riferimento ai vecchi percorsi devono essere aggiornati.",
-        "nl": "Wijziging in de objectstructuur: einsatz.rueckmeldungAnzahl heet nu einsatz.rueckmeldungen (subkanalen rollen.*/funktionen.* ongewijzigd), einsatz.rueckmeldungGesamt heet nu einsatz.rueckmeldungenGesamt, en einsatz.zeitstempel heet nu einsatz.alarmierungszeit. Oude objecten worden bij een update automatisch verwijderd (ook nu wees geworden kanaal-/mapobjecten, niet alleen states); scripts/VIS-bindingen die naar de oude paden verwijzen, moeten worden aangepast.",
-        "pl": "Zmiana struktury obiektów: einsatz.rueckmeldungAnzahl nazywa się teraz einsatz.rueckmeldungen (podkanały rollen.*/funktionen.* bez zmian), einsatz.rueckmeldungGesamt nazywa się teraz einsatz.rueckmeldungenGesamt, a einsatz.zeitstempel nazywa się teraz einsatz.alarmierungszeit. Stare obiekty są automatycznie usuwane podczas aktualizacji (w tym osierocone teraz obiekty kanałów/folderów, nie tylko stany); skrypty/powiązania VIS odwołujące się do starych ścieżek należy zaktualizować.",
-        "pt": "Alteração na estrutura de objetos: einsatz.rueckmeldungAnzahl agora chama-se einsatz.rueckmeldungen (subcanais rollen.*/funktionen.* inalterados), einsatz.rueckmeldungGesamt agora chama-se einsatz.rueckmeldungenGesamt, e einsatz.zeitstempel agora chama-se einsatz.alarmierungszeit. Os objetos antigos são removidos automaticamente na atualização (incluindo objetos de canal/pasta agora órfãos, não apenas estados); scripts/vinculações do VIS que referenciam os caminhos antigos devem ser atualizados.",
-        "ru": "Изменение структуры объектов: einsatz.rueckmeldungAnzahl теперь называется einsatz.rueckmeldungen (подканалы rollen.*/funktionen.* без изменений), einsatz.rueckmeldungGesamt теперь называется einsatz.rueckmeldungenGesamt, а einsatz.zeitstempel теперь называется einsatz.alarmierungszeit. Старые объекты автоматически удаляются при обновлении (включая ставшие теперь бесхозными объекты каналов/папок, а не только состояния); скрипты/привязки VIS, ссылающиеся на старые пути, необходимо обновить.",
-        "uk": "Зміна структури об'єктів: einsatz.rueckmeldungAnzahl тепер називається einsatz.rueckmeldungen (підканали rollen.*/funktionen.* без змін), einsatz.rueckmeldungGesamt тепер називається einsatz.rueckmeldungenGesamt, а einsatz.zeitstempel тепер називається einsatz.alarmierungszeit. Старі об'єкти автоматично видаляються під час оновлення (включно з тепер осиротілими об'єктами каналів/папок, а не лише станами); скрипти/прив'язки VIS, що посилаються на старі шляхи, потрібно оновити.",
-        "zh-cn": "对象结构变更：einsatz.rueckmeldungAnzahl 现更名为 einsatz.rueckmeldungen（子通道 rollen.*/funktionen.* 保持不变），einsatz.rueckmeldungGesamt 现更名为 einsatz.rueckmeldungenGesamt，einsatz.zeitstempel 现更名为 einsatz.alarmierungszeit。旧对象会在更新时自动移除（包括现已成为孤立对象的通道/文件夹对象，不仅仅是状态）；引用旧路径的脚本/VIS 绑定需要更新。"
-      },
-      "0.7.35": {
-        "en": "Object structure change: the eight feedback counters under einsatz.rueckmeldungAnzahl are now grouped into two sub-channels - rollen (ek/gf/zf/vf, by role) and funktionen (agt/fzf/ma/med, by qualification) - instead of sitting flat next to each other. The old flat states are automatically removed on upgrade; scripts/VIS bindings referencing the old paths need to be updated to the new einsatz.rueckmeldungAnzahl.rollen.*/funktionen.* paths.",
-        "de": "Objektstruktur geändert: Die acht Rückmeldungs-Zähler unter einsatz.rueckmeldungAnzahl sind jetzt in zwei Unter-Kanälen gruppiert - rollen (ek/gf/zf/vf, nach Rolle) und funktionen (agt/fzf/ma/med, nach Zusatzfunktion) - statt flach nebeneinander zu liegen. Die alten flachen States werden beim Update automatisch entfernt; Skripte/VIS-Bindings, die die alten Pfade nutzen, müssen auf die neuen Pfade einsatz.rueckmeldungAnzahl.rollen.*/funktionen.* angepasst werden.",
-        "es": "Cambio en la estructura de objetos: los ocho contadores de confirmaciones bajo einsatz.rueckmeldungAnzahl ahora están agrupados en dos subcanales - rollen (ek/gf/zf/vf, por rol) y funktionen (agt/fzf/ma/med, por cualificación) - en lugar de estar planos uno junto al otro. Los antiguos estados planos se eliminan automáticamente al actualizar; los scripts/vinculaciones de VIS que hagan referencia a las rutas antiguas deben actualizarse a las nuevas rutas einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "fr": "Changement de la structure des objets : les huit compteurs de confirmations sous einsatz.rueckmeldungAnzahl sont désormais regroupés en deux sous-canaux - rollen (ek/gf/zf/vf, par rôle) et funktionen (agt/fzf/ma/med, par qualification) - au lieu d'être placés à plat les uns à côté des autres. Les anciens états à plat sont automatiquement supprimés lors de la mise à jour ; les scripts/liaisons VIS référençant les anciens chemins doivent être mis à jour vers les nouveaux chemins einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "it": "Modifica della struttura degli oggetti: gli otto contatori di conferme sotto einsatz.rueckmeldungAnzahl sono ora raggruppati in due sottocanali - rollen (ek/gf/zf/vf, per ruolo) e funktionen (agt/fzf/ma/med, per qualifica) - invece di trovarsi allo stesso livello uno accanto all'altro. I vecchi stati piatti vengono rimossi automaticamente durante l'aggiornamento; script/binding VIS che fanno riferimento ai vecchi percorsi devono essere aggiornati ai nuovi percorsi einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "nl": "Wijziging in de objectstructuur: de acht terugmeldingstellers onder einsatz.rueckmeldungAnzahl zijn nu gegroepeerd in twee subkanalen - rollen (ek/gf/zf/vf, per rol) en funktionen (agt/fzf/ma/med, per kwalificatie) - in plaats van plat naast elkaar te staan. De oude platte states worden bij een update automatisch verwijderd; scripts/VIS-bindingen die naar de oude paden verwijzen, moeten worden aangepast naar de nieuwe paden einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "pl": "Zmiana struktury obiektów: osiem liczników potwierdzeń pod einsatz.rueckmeldungAnzahl jest teraz zgrupowanych w dwóch podkanałach - rollen (ek/gf/zf/vf, według roli) i funktionen (agt/fzf/ma/med, według kwalifikacji) - zamiast leżeć płasko obok siebie. Stare płaskie stany są automatycznie usuwane podczas aktualizacji; skrypty/powiązania VIS odwołujące się do starych ścieżek należy zaktualizować do nowych ścieżek einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "pt": "Alteração na estrutura de objetos: os oito contadores de confirmações em einsatz.rueckmeldungAnzahl agora estão agrupados em dois subcanais - rollen (ek/gf/zf/vf, por função) e funktionen (agt/fzf/ma/med, por qualificação) - em vez de estarem lado a lado de forma plana. Os estados antigos planos são removidos automaticamente na atualização; scripts/vinculações do VIS que referenciam os caminhos antigos devem ser atualizados para os novos caminhos einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "ru": "Изменение структуры объектов: восемь счётчиков подтверждений в einsatz.rueckmeldungAnzahl теперь сгруппированы в два подканала - rollen (ek/gf/zf/vf, по роли) и funktionen (agt/fzf/ma/med, по квалификации) - вместо того чтобы находиться плоско рядом друг с другом. Старые плоские состояния автоматически удаляются при обновлении; скрипты/привязки VIS, ссылающиеся на старые пути, необходимо обновить на новые пути einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "uk": "Зміна структури об'єктів: вісім лічильників підтверджень у einsatz.rueckmeldungAnzahl тепер згруповано у два підканали - rollen (ek/gf/zf/vf, за роллю) і funktionen (agt/fzf/ma/med, за кваліфікацією) - замість того, щоб лежати пласко поруч одне з одним. Старі пласкі стани автоматично видаляються під час оновлення; скрипти/прив'язки VIS, що посилаються на старі шляхи, потрібно оновити на нові шляхи einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
-        "zh-cn": "对象结构变更：einsatz.rueckmeldungAnzahl 下的八个反馈计数器现已分组到两个子通道 - rollen（按角色分类：ek/gf/zf/vf）和 funktionen（按资质分类：agt/fzf/ma/med）- 而不再是平铺排列。旧的扁平状态会在更新时自动移除；引用旧路径的脚本/VIS 绑定需要更新为新路径 einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*。"
-      },
-      "0.7.34": {
-        "en": "Incident map image tab: fixed help texts for Zoom level, Marker & outline color, Image width/height that referenced \"both display modes below\" and no longer made sense after the previous release moved those fields above the display-mode checkbox; the Zoom level text was also considerably shortened.",
-        "de": "Reiter Einsatzkarte: Hilfetexte für Zoomstufe, Marker- & Umrissfarbe sowie Bildbreite/-höhe korrigiert, die sich auf \"beide Darstellungsarten unten\" bezogen und seit der Feldumsortierung im letzten Release keinen Sinn mehr ergaben; der Zoomstufe-Text wurde zudem deutlich gekürzt.",
-        "es": "Pestaña Imagen de mapa del incidente: se corrigieron los textos de ayuda de Nivel de zoom, Color del marcador y del contorno, y Ancho/alto de imagen, que hacían referencia a \"ambos modos de visualización siguientes\" y ya no tenían sentido tras el reordenamiento de campos de la versión anterior; el texto de Nivel de zoom también se acortó considerablemente.",
-        "fr": "Onglet Image de carte de l'incident : correction des textes d'aide de Niveau de zoom, Couleur du marqueur et du contour, ainsi que Largeur/hauteur d'image, qui faisaient référence aux \"deux modes d'affichage ci-dessous\" et n'avaient plus de sens depuis la réorganisation des champs de la version précédente ; le texte de Niveau de zoom a également été considérablement raccourci.",
-        "it": "Scheda Immagine della mappa dell'incidente: corretti i testi di aiuto di Livello di zoom, Colore del marcatore e del contorno e Larghezza/altezza dell'immagine, che facevano riferimento a \"entrambe le modalità di visualizzazione sottostanti\" e non avevano più senso dopo il riordino dei campi della versione precedente; il testo di Livello di zoom è stato anche notevolmente accorciato.",
-        "nl": "Tabblad Incidentkaartafbeelding: hulpteksten voor Zoomniveau, Marker- en contourkleur en Afbeeldingsbreedte/-hoogte gecorrigeerd, die verwezen naar \"beide onderstaande weergavemodi\" en na de herordening van velden in de vorige release geen zin meer hadden; de tekst voor Zoomniveau is bovendien aanzienlijk ingekort.",
-        "pl": "Karta Obraz mapy zdarzenia: poprawiono teksty pomocy dla Poziomu powiększenia, Koloru znacznika i konturu oraz Szerokości/wysokości obrazu, które odnosiły się do \"obu poniższych trybów wyświetlania\" i przestały mieć sens po zmianie kolejności pól w poprzedniej wersji; tekst Poziomu powiększenia został również znacznie skrócony.",
-        "pt": "Aba Imagem de mapa da ocorrência: corrigidos os textos de ajuda de Nível de zoom, Cor do marcador e do contorno, e Largura/altura da imagem, que faziam referência a \"ambos os modos de exibição abaixo\" e deixaram de fazer sentido após a reordenação de campos da versão anterior; o texto de Nível de zoom também foi consideravelmente encurtado.",
-        "ru": "Вкладка Изображение карты вызова: исправлены тексты справки для Уровня масштабирования, Цвета маркера и контура, а также Ширины/высоты изображения, которые ссылались на \"оба режима отображения ниже\" и утратили смысл после изменения порядка полей в предыдущей версии; текст Уровня масштабирования также значительно сокращён.",
-        "uk": "Вкладка Зображення карти виклику: виправлено тексти довідки для Рівня масштабування, Кольору маркера і контуру та Ширини/висоти зображення, які посилалися на \"обидва режими відображення нижче\" і втратили сенс після зміни порядку полів у попередній версії; текст Рівня масштабування також значно скорочено.",
-        "zh-cn": "事件地图图片标签页：修正了缩放级别、标记与轮廓颜色以及图片宽度/高度的帮助文本，这些文本原先引用\"下方两种显示模式\"，在上一版本调整字段顺序后已不再合理；缩放级别的说明文字也大幅缩短。"
-      },
-      "0.7.33": {
-        "en": "Admin UI cleanup for two panels. Rescue service tab: the keyword-decoding checkbox and its label fields are now hidden while \"Process rescue-service incidents\" is unchecked (irrelevant otherwise). Incident map image tab: Zoom level, the renamed Marker & outline color (used by both the polygon outline and the marker dot, not just the outline) and Image width/height now sit above \"Show incident-area polygon\", since all three apply regardless of that setting; OSM timeout moved directly under the enable checkbox; only Outline thickness (genuinely polygon-only) is now hidden while \"Show incident-area polygon\" is off.",
-        "de": "Admin-Oberfläche für zwei Panels aufgeräumt. Reiter Rettungsdienst: Die Stichwort-Dekodierungs-Checkbox und ihre Bezeichnungsfelder werden jetzt ausgeblendet, solange \"Rettungsdienst-Einsätze verarbeiten\" deaktiviert ist (sonst irrelevant). Reiter Einsatzkarte: Zoomstufe, die umbenannte Marker- & Umrissfarbe (wird sowohl vom Polygon-Umriss als auch von der Punkt-Markierung genutzt, nicht nur vom Umriss) und Bildbreite/-höhe stehen jetzt oberhalb von \"Einsatzgebiet-Polygon anzeigen\", da alle drei unabhängig davon gelten; OSM-Timeout direkt unter die Aktivierungs-Checkbox verschoben; nur die Umriss-Strichstärke (betrifft wirklich nur das Polygon) wird jetzt ausgeblendet, solange \"Einsatzgebiet-Polygon anzeigen\" aus ist.",
-        "es": "Limpieza de la interfaz de administración en dos paneles. Pestaña Servicio de rescate: la casilla de decodificación de palabras clave y sus campos de etiqueta ahora se ocultan mientras \"Procesar incidentes del servicio de rescate\" esté desmarcada (irrelevante en caso contrario). Pestaña Imagen de mapa del incidente: Nivel de zoom, el renombrado Color del marcador y del contorno (usado tanto por el contorno del polígono como por el punto marcador, no solo por el contorno) y el ancho/alto de la imagen ahora se sitúan encima de \"Mostrar polígono del área del incidente\", ya que los tres aplican independientemente de esa opción; Tiempo de espera de OSM movido directamente debajo de la casilla de activación; solo el grosor del contorno (que solo afecta realmente al polígono) ahora se oculta mientras \"Mostrar polígono del área del incidente\" esté desactivada.",
-        "fr": "Nettoyage de l'interface d'administration pour deux panneaux. Onglet Service de secours : la case de décodage des mots-clés et ses champs d'étiquette sont désormais masqués tant que \"Traiter les incidents du service de secours\" est décochée (sans objet sinon). Onglet Image de carte de l'incident : Niveau de zoom, la Couleur du marqueur et du contour renommée (utilisée à la fois par le contour du polygone et par le point marqueur, pas seulement par le contour) et la largeur/hauteur de l'image se trouvent désormais au-dessus de \"Afficher le polygone de la zone d'intervention\", car ces trois réglages s'appliquent indépendamment de ce paramètre ; Délai d'attente OSM déplacé directement sous la case d'activation ; seule l'épaisseur du contour (qui ne concerne réellement que le polygone) est désormais masquée tant que \"Afficher le polygone de la zone d'intervention\" est désactivée.",
-        "it": "Pulizia dell'interfaccia di amministrazione per due pannelli. Scheda Servizio di soccorso: la casella di decodifica delle parole chiave e i relativi campi etichetta sono ora nascosti finché \"Elaborare gli incidenti del servizio di soccorso\" è deselezionata (altrimenti irrilevante). Scheda Immagine della mappa dell'incidente: Livello di zoom, il rinominato Colore del marcatore e del contorno (usato sia dal contorno del poligono sia dal punto marcatore, non solo dal contorno) e larghezza/altezza dell'immagine ora si trovano sopra \"Mostra il poligono dell'area dell'incidente\", poiché tutti e tre si applicano indipendentemente da questa impostazione; Timeout OSM spostato direttamente sotto la casella di attivazione; solo lo spessore del contorno (che riguarda davvero solo il poligono) è ora nascosto finché \"Mostra il poligono dell'area dell'incidente\" è disattivata.",
-        "nl": "Admin-interface opgeschoond voor twee panelen. Tabblad Reddingsdienst: het selectievakje voor trefwoord-decodering en de bijbehorende labelvelden worden nu verborgen zolang \"Reddingsdienst-incidenten verwerken\" is uitgeschakeld (anders niet relevant). Tabblad Incidentkaartafbeelding: Zoomniveau, de hernoemde Marker- en contourkleur (gebruikt zowel door de polygoon-contour als door de puntmarkering, niet alleen door de contour) en afbeeldingsbreedte/-hoogte staan nu boven \"Incidentgebied-polygoon tonen\", omdat alle drie onafhankelijk van die instelling gelden; OSM-time-out direct onder het activeringsvakje verplaatst; alleen de contourdikte (die echt alleen de polygoon betreft) wordt nu verborgen zolang \"Incidentgebied-polygoon tonen\" is uitgeschakeld.",
-        "pl": "Uporządkowano interfejs administratora dla dwóch paneli. Karta Pogotowie ratunkowe: pole wyboru dekodowania słów kluczowych i jego pola etykiet są teraz ukrywane, dopóki \"Przetwarzaj zdarzenia pogotowia ratunkowego\" jest odznaczone (w przeciwnym razie nieistotne). Karta Obraz mapy zdarzenia: Poziom powiększenia, przemianowany Kolor znacznika i konturu (używany zarówno przez kontur poligonu, jak i przez znacznik punktowy, nie tylko przez kontur) oraz szerokość/wysokość obrazu znajdują się teraz powyżej \"Pokaż poligon obszaru zdarzenia\", ponieważ wszystkie trzy obowiązują niezależnie od tej opcji; Limit czasu OSM przeniesiony bezpośrednio pod pole wyboru aktywacji; tylko grubość konturu (dotycząca naprawdę wyłącznie poligonu) jest teraz ukrywana, dopóki \"Pokaż poligon obszaru zdarzenia\" jest wyłączone.",
-        "pt": "Limpeza da interface de administração em dois painéis. Aba Serviço de resgate: a caixa de decodificação de palavras-chave e os seus campos de rótulo agora ficam ocultos enquanto \"Processar ocorrências do serviço de resgate\" estiver desmarcada (irrelevante caso contrário). Aba Imagem de mapa da ocorrência: Nível de zoom, a renomeada Cor do marcador e do contorno (usada tanto pelo contorno do polígono quanto pelo ponto marcador, não apenas pelo contorno) e a largura/altura da imagem agora ficam acima de \"Mostrar polígono da área da ocorrência\", já que os três se aplicam independentemente dessa opção; Tempo limite OSM movido para diretamente abaixo da caixa de ativação; apenas a espessura do contorno (que realmente só afeta o polígono) agora fica oculta enquanto \"Mostrar polígono da área da ocorrência\" estiver desativada.",
-        "ru": "Упорядочен интерфейс администрирования для двух панелей. Вкладка Скорая помощь: флажок декодирования ключевых слов и его текстовые поля теперь скрыты, пока \"Обрабатывать вызовы скорой помощи\" снят (иначе неактуально). Вкладка Изображение карты вызова: Уровень масштабирования, переименованный Цвет маркера и контура (используется как контуром полигона, так и точечным маркером, а не только контуром) и ширина/высота изображения теперь расположены над \"Показывать полигон зоны вызова\", так как все три применяются независимо от этой настройки; Тайм-аут OSM перемещён сразу под флажок активации; только толщина контура (действительно относится лишь к полигону) теперь скрыта, пока \"Показывать полигон зоны вызова\" отключено.",
-        "uk": "Впорядковано інтерфейс адміністрування для двох панелей. Вкладка Швидка допомога: прапорець декодування ключових слів та його текстові поля тепер приховані, поки \"Обробляти виклики швидкої допомоги\" знято (інакше неактуально). Вкладка Зображення карти виклику: Рівень масштабування, перейменований Колір маркера і контуру (використовується як контуром полігона, так і точковим маркером, а не лише контуром) та ширина/висота зображення тепер розташовані над \"Показувати полігон зони виклику\", оскільки всі три застосовуються незалежно від цього налаштування; Тайм-аут OSM переміщено одразу під прапорець активації; лише товщина контуру (справді стосується лише полігона) тепер прихована, поки \"Показувати полігон зони виклику\" вимкнено.",
-        "zh-cn": "整理了两个面板的管理界面。急救服务标签页：只要\"处理急救服务事件\"未勾选，关键字解码复选框及其标签字段现在都会隐藏（否则无关紧要）。事件地图图片标签页：缩放级别、重命名后的标记点与轮廓颜色（用于多边形轮廓和标记点两者，而不仅仅是轮廓）以及图片宽度/高度现在都位于\"显示事件区域多边形\"上方，因为这三项都与该设置无关；OSM 超时已移动到启用复选框正下方；只有轮廓粗细（确实只影响多边形）在\"显示事件区域多边形\"关闭时才会隐藏。"
-      },
-      "0.7.32": {
-        "en": "Fixed a startup-only error: if the adapter was stopped while it was still creating its ioBroker objects (e.g. a fast restart right after an update), a \"Connection is closed\" failure could surface as an unhandled promise rejection error in the log instead of being caught - harmless, but noisy. Object initialization now stops cleanly and logs a single warning instead.",
-        "de": "Einen reinen Start-Fehler behoben: Wurde der Adapter gestoppt, während er noch seine ioBroker-Objekte anlegte (z.B. ein schneller Neustart direkt nach einem Update), konnte ein Fehler \"Connection is closed\" als unhandled promise rejection im Log auftauchen, statt abgefangen zu werden - harmlos, aber unschön. Die Objekt-Initialisierung bricht jetzt sauber ab und loggt stattdessen eine einzelne Warnung.",
-        "es": "Se corrigió un error exclusivo del inicio: si el adaptador se detenía mientras aún estaba creando sus objetos de ioBroker (p. ej. un reinicio rápido justo después de una actualización), un fallo \"Connection is closed\" podía aparecer como un error de unhandled promise rejection en el registro en lugar de ser capturado - inofensivo, pero ruidoso. La inicialización de objetos ahora se detiene limpiamente y registra una única advertencia.",
-        "fr": "Correction d'une erreur limitée au démarrage : si l'adaptateur était arrêté pendant qu'il créait encore ses objets ioBroker (par ex. un redémarrage rapide juste après une mise à jour), une défaillance \"Connection is closed\" pouvait apparaître comme une erreur unhandled promise rejection dans le journal au lieu d'être interceptée - inoffensif, mais bruyant. L'initialisation des objets s'arrête désormais proprement et consigne un seul avertissement à la place.",
-        "it": "Risolto un errore limitato all'avvio: se l'adattatore veniva fermato mentre stava ancora creando i suoi oggetti ioBroker (ad es. un riavvio rapido subito dopo un aggiornamento), un errore \"Connection is closed\" poteva comparire come unhandled promise rejection nel log invece di essere intercettato - innocuo, ma fastidioso. L'inizializzazione degli oggetti ora si interrompe in modo pulito e registra un singolo avviso.",
-        "nl": "Een fout die alleen bij het opstarten optrad, is verholpen: als de adapter werd gestopt terwijl deze nog bezig was met het aanmaken van zijn ioBroker-objecten (bijv. een snelle herstart direct na een update), kon een fout \"Connection is closed\" als unhandled promise rejection in het log verschijnen in plaats van te worden afgevangen - onschadelijk, maar storend. De objectinitialisatie stopt nu netjes en logt in plaats daarvan één enkele waarschuwing.",
-        "pl": "Naprawiono błąd występujący wyłącznie przy starcie: jeśli adapter został zatrzymany w trakcie tworzenia swoich obiektów ioBroker (np. szybki restart tuż po aktualizacji), błąd \"Connection is closed\" mógł pojawić się w dzienniku jako unhandled promise rejection zamiast zostać przechwycony - nieszkodliwe, ale uciążliwe. Inicjalizacja obiektów teraz zatrzymuje się czysto i zamiast tego rejestruje pojedyncze ostrzeżenie.",
-        "pt": "Corrigido um erro exclusivo do arranque: se o adaptador fosse parado enquanto ainda estava a criar os seus objetos ioBroker (por exemplo, um reinício rápido logo após uma atualização), uma falha \"Connection is closed\" podia aparecer como um erro unhandled promise rejection no registo em vez de ser capturada - inofensivo, mas incômodo. A inicialização de objetos agora para de forma limpa e regista um único aviso.",
-        "ru": "Исправлена ошибка, возникавшая только при запуске: если адаптер останавливался в тот момент, когда он ещё создавал свои объекты ioBroker (например, при быстром перезапуске сразу после обновления), сбой \"Connection is closed\" мог появиться в журнале как unhandled promise rejection вместо того, чтобы быть перехваченным - безобидно, но шумно. Теперь инициализация объектов корректно прерывается и вместо этого записывается одно предупреждение.",
-        "uk": "Виправлено помилку, яка виникала лише під час запуску: якщо адаптер зупинявся, поки він ще створював свої об'єкти ioBroker (наприклад, швидкий перезапуск одразу після оновлення), збій \"Connection is closed\" міг з'явитися в журналі як unhandled promise rejection замість того, щоб бути перехопленим - нешкідливо, але шумно. Тепер ініціалізація об'єктів коректно зупиняється і замість цього записується одне попередження.",
-        "zh-cn": "修复了一个仅在启动时出现的错误：如果适配器在仍在创建其 ioBroker 对象时被停止（例如更新后立即快速重启），\"Connection is closed\" 故障可能会作为 unhandled promise rejection 错误出现在日志中，而不是被正确捕获——虽然无害，但很扰人。现在对象初始化会干净地停止，并只记录一条警告。"
-      },
-      "0.7.31": {
-        "en": "Fixed two einsatz.kartenbildPfad timing/staleness issues: alarm processing now waits for the incident map image (bounded by a new configurable OSM timeout, 1-60s, default 10s) before continuing, so kartenbildPfad and alarmAktiv become available together instead of kartenbildPfad catching up asynchronously later - if the image isn't ready in time, a warning is logged and kartenbildPfad stays empty. Also, kartenbildPfad is now reset immediately when a new incident starts, instead of possibly still showing a previous incident's stale image path.",
-        "de": "Zwei Zeitprobleme bei einsatz.kartenbildPfad behoben: Die Alarmverarbeitung wartet jetzt auf das Einsatzkarten-Bild (begrenzt durch das neue konfigurierbare OSM-Timeout, 1-60s, Standard 10s), bevor sie fortfährt - kartenbildPfad und alarmAktiv werden dadurch gemeinsam verfügbar, statt dass kartenbildPfad erst später asynchron nachzieht. Ist das Bild nicht rechtzeitig fertig, wird eine Warnung geloggt und kartenbildPfad bleibt leer. Außerdem wird kartenbildPfad jetzt sofort bei Beginn eines neuen Einsatzes zurückgesetzt, statt ggf. noch den alten Bildpfad des vorherigen Einsatzes zu zeigen.",
-        "es": "Se corrigieron dos problemas de sincronización de einsatz.kartenbildPfad: el procesamiento de la alarma ahora espera la imagen del mapa del incidente (limitado por un nuevo tiempo de espera de OSM configurable, 1-60s, 10s por defecto) antes de continuar, de modo que kartenbildPfad y alarmAktiv están disponibles juntos en lugar de que kartenbildPfad se actualice después de forma asíncrona. Si la imagen no está lista a tiempo, se registra una advertencia y kartenbildPfad permanece vacío. Además, kartenbildPfad ahora se restablece inmediatamente al iniciar un nuevo incidente, en lugar de seguir mostrando la ruta de imagen obsoleta del incidente anterior.",
-        "fr": "Correction de deux problèmes de synchronisation de einsatz.kartenbildPfad : le traitement de l'alarme attend désormais l'image de carte de l'incident (limité par un nouveau délai d'attente OSM configurable, 1-60s, 10s par défaut) avant de continuer, afin que kartenbildPfad et alarmAktiv soient disponibles ensemble au lieu que kartenbildPfad se mette à jour de façon asynchrone plus tard. Si l'image n'est pas prête à temps, un avertissement est consigné et kartenbildPfad reste vide. De plus, kartenbildPfad est désormais réinitialisé immédiatement au début d'un nouvel incident, au lieu de pouvoir encore afficher le chemin d'image obsolète de l'incident précédent.",
-        "it": "Risolti due problemi di temporizzazione di einsatz.kartenbildPfad: l'elaborazione dell'allarme ora attende l'immagine della mappa dell'incidente (limitata da un nuovo timeout OSM configurabile, 1-60s, predefinito 10s) prima di continuare, così kartenbildPfad e alarmAktiv diventano disponibili insieme invece che kartenbildPfad si aggiorni in modo asincrono più tardi. Se l'immagine non è pronta in tempo, viene registrato un avviso e kartenbildPfad rimane vuoto. Inoltre, kartenbildPfad viene ora reimpostato immediatamente all'inizio di un nuovo incidente, invece di poter ancora mostrare il percorso dell'immagine obsoleta dell'incidente precedente.",
-        "nl": "Twee timingproblemen met einsatz.kartenbildPfad opgelost: de alarmverwerking wacht nu op de incidentkaartafbeelding (begrensd door een nieuwe instelbare OSM-time-out, 1-60s, standaard 10s) voordat wordt doorgegaan, zodat kartenbildPfad en alarmAktiv tegelijk beschikbaar komen in plaats van dat kartenbildPfad later asynchroon bijwerkt. Is de afbeelding niet op tijd klaar, dan wordt een waarschuwing gelogd en blijft kartenbildPfad leeg. Bovendien wordt kartenbildPfad nu direct gereset bij de start van een nieuw incident, in plaats van mogelijk nog het verouderde afbeeldingspad van het vorige incident te tonen.",
-        "pl": "Naprawiono dwa problemy z synchronizacją czasową einsatz.kartenbildPfad: przetwarzanie alarmu czeka teraz na obraz mapy zdarzenia (ograniczone nowym konfigurowalnym limitem czasu OSM, 1-60s, domyślnie 10s), zanim będzie kontynuowane, dzięki czemu kartenbildPfad i alarmAktiv stają się dostępne razem zamiast kartenbildPfad aktualizującego się później asynchronicznie. Jeśli obraz nie jest gotowy na czas, rejestrowane jest ostrzeżenie, a kartenbildPfad pozostaje puste. Ponadto kartenbildPfad jest teraz natychmiast resetowany na początku nowego zdarzenia, zamiast nadal pokazywać nieaktualną ścieżkę obrazu poprzedniego zdarzenia.",
-        "pt": "Corrigidos dois problemas de temporização do einsatz.kartenbildPfad: o processamento do alarme agora aguarda a imagem do mapa da ocorrência (limitado por um novo tempo limite OSM configurável, 1-60s, padrão 10s) antes de continuar, para que kartenbildPfad e alarmAktiv fiquem disponíveis juntos, em vez de kartenbildPfad ser atualizado de forma assíncrona depois. Se a imagem não estiver pronta a tempo, um aviso é registado e kartenbildPfad permanece vazio. Além disso, kartenbildPfad agora é redefinido imediatamente no início de uma nova ocorrência, em vez de continuar a mostrar o caminho de imagem desatualizado da ocorrência anterior.",
-        "ru": "Исправлены две проблемы синхронизации einsatz.kartenbildPfad: обработка тревоги теперь ожидает изображение карты вызова (ограничено новым настраиваемым тайм-аутом OSM, 1-60с, по умолчанию 10с) перед продолжением, поэтому kartenbildPfad и alarmAktiv становятся доступны одновременно, а не kartenbildPfad обновляется позже асинхронно. Если изображение не готово вовремя, регистрируется предупреждение, а kartenbildPfad остаётся пустым. Кроме того, kartenbildPfad теперь сразу сбрасывается в начале нового вызова, вместо того чтобы по-прежнему показывать устаревший путь изображения предыдущего вызова.",
-        "uk": "Виправлено дві проблеми синхронізації einsatz.kartenbildPfad: обробка тривоги тепер очікує зображення карти виклику (обмежено новим налаштовуваним тайм-аутом OSM, 1-60с, типово 10с) перед продовженням, тому kartenbildPfad і alarmAktiv стають доступні одночасно, а не kartenbildPfad оновлюється пізніше асинхронно. Якщо зображення не готове вчасно, реєструється попередження, а kartenbildPfad залишається порожнім. Крім того, kartenbildPfad тепер одразу скидається на початку нового виклику, замість того щоб і далі показувати застарілий шлях зображення попереднього виклику.",
-        "zh-cn": "修复了 einsatz.kartenbildPfad 的两个时序问题：警报处理现在会等待事件地图图片生成完毕（受新增可配置的 OSM 超时限制，1-60秒，默认10秒）后再继续，因此 kartenbildPfad 与 alarmAktiv 会同时可用，而不是 kartenbildPfad 之后才异步补上。如果图片未能按时生成，将记录一条警告，且 kartenbildPfad 保持为空。此外，kartenbildPfad 现在会在新事件开始时立即重置，而不是可能仍显示上一个事件的过期图片路径。"
-      }
+    "common": {
+        "name": "waip-web",
+        "version": "0.7.38",
+        "news": {
+            "0.7.38": {
+                "en": "Fixed a race condition where a late io.routes/io.playtts could still repopulate einsatz.json.current/.routen/einsatz.routenGesamt while an incident was being finalized - the 0.7.37 guard left a window open across several await points. Also fixed lost debug.monitorAudit entries (unsynchronized read-modify-write) and numeric config fields falling back to the minimum instead of the default when left empty (an empty zoom field gave zoom 1 instead of 19). Added a 75-test unit suite.",
+                "de": "Race Condition behoben, bei der ein verspätetes io.routes/io.playtts während des Einsatzabschlusses einsatz.json.current/.routen/einsatz.routenGesamt erneut befüllen konnte - der Guard aus 0.7.37 ließ über mehrere await-Punkte hinweg ein Fenster offen. Außerdem behoben: verlorene debug.monitorAudit-Einträge (unsynchronisiertes Read-Modify-Write) und numerische Konfigurationsfelder, die bei leerem Wert auf das Minimum statt auf den Default zurückfielen (leeres Zoom-Feld ergab Zoom 1 statt 19). Neue Unit-Test-Suite mit 75 Tests.",
+                "es": "Corregida una condición de carrera en la que un io.routes/io.playtts tardío podía volver a rellenar einsatz.json.current/.routen/einsatz.routenGesamt mientras se finalizaba una intervención: la protección de 0.7.37 dejaba una ventana abierta a lo largo de varios puntos await. También corregidas las entradas perdidas en debug.monitorAudit y los campos numéricos de configuración que, al quedar vacíos, volvían al mínimo en lugar de al valor predeterminado. Añadida una suite de 75 pruebas unitarias.",
+                "fr": "Correction d'une situation de compétition où un io.routes/io.playtts tardif pouvait encore remplir einsatz.json.current/.routen/einsatz.routenGesamt pendant la finalisation d'une intervention - la protection de 0.7.37 laissait une fenêtre ouverte sur plusieurs points await. Corrigé également : les entrées perdues de debug.monitorAudit et les champs de configuration numériques qui revenaient au minimum au lieu de la valeur par défaut lorsqu'ils étaient vides. Ajout d'une suite de 75 tests unitaires.",
+                "it": "Corretta una race condition in cui un io.routes/io.playtts in ritardo poteva ripopolare einsatz.json.current/.routen/einsatz.routenGesamt durante la finalizzazione di un intervento: la protezione della 0.7.37 lasciava una finestra aperta su più punti await. Corretti anche le voci perse in debug.monitorAudit e i campi di configurazione numerici che, se vuoti, tornavano al minimo invece che al valore predefinito. Aggiunta una suite di 75 test unitari.",
+                "nl": "Race condition opgelost waarbij een late io.routes/io.playtts einsatz.json.current/.routen/einsatz.routenGesamt opnieuw kon vullen terwijl een inzet werd afgesloten - de guard uit 0.7.37 liet over meerdere await-punten een venster open. Ook opgelost: verloren debug.monitorAudit-vermeldingen en numerieke configuratievelden die bij een lege waarde terugvielen op het minimum in plaats van de standaardwaarde. Nieuwe unittest-suite met 75 tests.",
+                "pl": "Naprawiono sytuację wyścigu, w której spóźnione io.routes/io.playtts mogło ponownie wypełnić einsatz.json.current/.routen/einsatz.routenGesamt podczas kończenia zdarzenia - zabezpieczenie z 0.7.37 pozostawiało otwarte okno na kilku punktach await. Naprawiono też utracone wpisy debug.monitorAudit oraz liczbowe pola konfiguracji, które przy pustej wartości wracały do minimum zamiast do wartości domyślnej. Dodano zestaw 75 testów jednostkowych.",
+                "pt": "Corrigida uma condição de corrida em que um io.routes/io.playtts tardio podia voltar a preencher einsatz.json.current/.routen/einsatz.routenGesamt durante a finalização de uma ocorrência - a proteção da 0.7.37 deixava uma janela aberta ao longo de vários pontos await. Também corrigidas as entradas perdidas em debug.monitorAudit e os campos numéricos de configuração que, quando vazios, voltavam ao mínimo em vez do valor padrão. Adicionada uma suite de 75 testes unitários.",
+                "ru": "Исправлено состояние гонки, при котором запоздавшее io.routes/io.playtts могло повторно заполнить einsatz.json.current/.routen/einsatz.routenGesamt во время завершения вызова - защита из 0.7.37 оставляла открытое окно на нескольких точках await. Также исправлены потерянные записи debug.monitorAudit и числовые поля конфигурации, которые при пустом значении откатывались к минимуму вместо значения по умолчанию. Добавлен набор из 75 модульных тестов.",
+                "uk": "Виправлено стан гонки, за якого запізніле io.routes/io.playtts могло повторно заповнити einsatz.json.current/.routen/einsatz.routenGesamt під час завершення виклику - захист із 0.7.37 залишав відкрите вікно на кількох точках await. Також виправлено втрачені записи debug.monitorAudit і числові поля конфігурації, які за порожнього значення поверталися до мінімуму замість значення за замовчуванням. Додано набір із 75 модульних тестів.",
+                "zh-cn": "修复了一个竞态条件：在警情结束处理期间，迟到的 io.routes/io.playtts 仍可能重新写入 einsatz.json.current/.routen/einsatz.routenGesamt——0.7.37 的防护在多个 await 点上留有空隙。同时修复了 debug.monitorAudit 条目丢失的问题，以及数值配置字段留空时回退到最小值而非默认值的问题（空的缩放字段会得到缩放级别 1 而不是 19）。新增了包含 75 个用例的单元测试套件。"
+            },
+            "0.7.37": {
+                "en": "Fixed a bug where a routes update (io.routes) or TTS announcement (io.playtts) arriving after an incident had already ended (io.standby) could revive einsatz.json.current/.routen/einsatz.routenGesamt or einsatz.tts.last/.lastTimestamp for the already-finished incident, while every other einsatz.* field correctly stayed cleared. Both handlers now ignore such events while no incident is active.",
+                "de": "Einen Fehler behoben, bei dem eine Routen-Aktualisierung (io.routes) oder eine TTS-Ansage (io.playtts), die erst nach Abschluss eines Einsatzes (io.standby) eintraf, einsatz.json.current/.routen/einsatz.routenGesamt bzw. einsatz.tts.last/.lastTimestamp für den bereits beendeten Einsatz wiederbeleben konnte, während alle anderen einsatz.*-Felder korrekt geleert blieben. Beide Handler ignorieren solche Events jetzt, solange kein Einsatz aktiv ist.",
+                "ru": "Исправлена ​​ошибка, из-за которой обновление маршрутов (io.routes) или объявление TTS (io.playtts), поступившее после того, как инцидент уже завершился (io.standby), могло восстановить einsatz.json.current/.routen/einsatz.routenGesamt или einsatz.tts.last/.lastTimestamp для уже завершенного инцидента, в то время как все остальные поля einsatz.* корректно оставались очищенными. Оба обработчика теперь игнорируют такие события, пока ни один инцидент не активен.",
+                "pt": "Corrigido um bug onde uma atualização de rotas (io.routes) ou anúncio de TTS (io.playtts) chegando após um incidente já ter terminado (io.standby) poderia reviver einsatz.json.current/.routen/einsatz.routenGesamt ou einsatz.tts.last/.lastTimestamp para o incidente já concluído, enquanto todos os outros campos einsatz.* permaneciam corretamente limpos. Ambos os manipuladores agora ignoram tais eventos enquanto nenhum incidente estiver ativo.",
+                "nl": "Een bug opgelost waarbij een route-update (io.routes) of TTS-aankondiging (io.playtts) die binnenkwam nadat een incident al was geëindigd (io.standby) einsatz.json.current/.routen/einsatz.routenGesamt of einsatz.tts.last/.lastTimestamp voor het reeds voltooide incident kon doen herleven, terwijl elk ander einsatz.*-veld correct leeg bleef. Beide handlers negeren nu dergelijke gebeurtenissen terwijl er geen incident actief is.",
+                "fr": "Correction d'un bug où une mise à jour des itinéraires (io.routes) ou une annonce TTS (io.playtts) arrivant après la fin d'un incident (io.standby) pouvait relancer einsatz.json.current/.routen/einsatz.routenGesamt ou einsatz.tts.last/.lastTimestamp pour l'incident déjà terminé, tandis que tous les autres champs einsatz.* restaient correctement effacés. Les deux gestionnaires ignorent désormais ces événements tant qu’aucun incident n’est actif.",
+                "it": "Risolto un bug per il quale un aggiornamento dei percorsi (io.routes) o un annuncio TTS (io.playtts) arrivato dopo che un incidente era già terminato (io.standby) poteva riattivare einsatz.json.current/.routen/einsatz.routenGesamt o einsatz.tts.last/.lastTimestamp per l'incidente già terminato, mentre ogni altro campo einsatz.* rimaneva correttamente cancellato. Entrambi i gestori ora ignorano tali eventi mentre non è attivo alcun incidente.",
+                "es": "Se corrigió un error por el cual una actualización de rutas (io.routes) o un anuncio TTS (io.playtts) que llegaba después de que un incidente ya había finalizado (io.standby) podía reactivar einsatz.json.current/.routen/einsatz.routenGesamt o einsatz.tts.last/.lastTimestamp para el incidente ya finalizado, mientras que todos los demás campos einsatz.* permanecían correctamente despejados. Ambos controladores ahora ignoran dichos eventos mientras no haya ningún incidente activo.",
+                "pl": "Naprawiono błąd, który powodował, że aktualizacja tras (io.routes) lub ogłoszenie TTS (io.playtts) pojawiające się po zakończeniu incydentu (io.standby) mogły przywrócić einsatz.json.current/.routen/einsatz.routenGesamt lub einsatz.tts.last/.lastTimestamp dla już zakończonego zdarzenia, podczas gdy wszystkie pozostałe pola einsatz.* pozostały poprawnie wyczyszczone. Obydwa programy obsługi ignorują teraz takie zdarzenia, dopóki żadne zdarzenie nie jest aktywne.",
+                "uk": "Виправлено помилку, через яку оновлення маршрутів (io.routes) або повідомлення TTS (io.playtts), що надходить після завершення інциденту (io.standby), могло відновити einsatz.json.current/.routen/einsatz.routenGesamt або einsatz.tts.last/.lastTimestamp для вже завершеного інциденту, тоді як усі інші einsatz.* поле правильно залишилося очищеним. Обидва обробники тепер ігнорують такі події, поки немає активних інцидентів.",
+                "zh-cn": "修复了以下错误：在事件已经结束 (io.standby) 后到达的路线更新 (io.routes) 或 TTS 公告 (io.playtts) 可能会恢复已完成事件的 einsatz.json.current/.routen/einsatz.routenGesamt 或 einsatz.tts.last/.lastTimestamp，而所有其他 einsatz.* 字段正确保持清除状态。现在，当没有事件处于活动状态时，两个处理程序都会忽略此类事件。"
+            },
+            "0.7.36": {
+                "en": "Object structure change: einsatz.rueckmeldungAnzahl is now einsatz.rueckmeldungen (rollen.*/funktionen.* sub-channels unchanged), einsatz.rueckmeldungGesamt is now einsatz.rueckmeldungenGesamt, and einsatz.zeitstempel is now einsatz.alarmierungszeit. Old objects are automatically removed on upgrade (including now-orphaned channel/folder objects, not just states); scripts/VIS bindings referencing the old paths need to be updated.",
+                "de": "Objektstruktur geändert: einsatz.rueckmeldungAnzahl heißt jetzt einsatz.rueckmeldungen (Unter-Kanäle rollen.*/funktionen.* unverändert), einsatz.rueckmeldungGesamt heißt jetzt einsatz.rueckmeldungenGesamt, und einsatz.zeitstempel heißt jetzt einsatz.alarmierungszeit. Alte Objekte werden beim Update automatisch entfernt (auch jetzt verwaiste Kanal-/Ordner-Objekte, nicht nur States); Skripte/VIS-Bindings, die die alten Pfade nutzen, müssen angepasst werden.",
+                "es": "Cambio en la estructura de objetos: einsatz.rueckmeldungAnzahl ahora es einsatz.rueckmeldungen (los subcanales rollen.*/funktionen.* no cambian), einsatz.rueckmeldungGesamt ahora es einsatz.rueckmeldungenGesamt, y einsatz.zeitstempel ahora es einsatz.alarmierungszeit. Los objetos antiguos se eliminan automáticamente al actualizar (incluidos los objetos de canal/carpeta ahora huérfanos, no solo los estados); los scripts/vinculaciones de VIS que hagan referencia a las rutas antiguas deben actualizarse.",
+                "fr": "Changement de la structure des objets : einsatz.rueckmeldungAnzahl s'appelle désormais einsatz.rueckmeldungen (les sous-canaux rollen.*/funktionen.* restent inchangés), einsatz.rueckmeldungGesamt s'appelle désormais einsatz.rueckmeldungenGesamt, et einsatz.zeitstempel s'appelle désormais einsatz.alarmierungszeit. Les anciens objets sont automatiquement supprimés lors de la mise à jour (y compris les objets de canal/dossier désormais orphelins, pas seulement les états) ; les scripts/liaisons VIS référençant les anciens chemins doivent être mis à jour.",
+                "it": "Modifica della struttura degli oggetti: einsatz.rueckmeldungAnzahl ora si chiama einsatz.rueckmeldungen (i sottocanali rollen.*/funktionen.* restano invariati), einsatz.rueckmeldungGesamt ora si chiama einsatz.rueckmeldungenGesamt, e einsatz.zeitstempel ora si chiama einsatz.alarmierungszeit. I vecchi oggetti vengono rimossi automaticamente durante l'aggiornamento (inclusi gli oggetti canale/cartella ora orfani, non solo gli stati); script/binding VIS che fanno riferimento ai vecchi percorsi devono essere aggiornati.",
+                "nl": "Wijziging in de objectstructuur: einsatz.rueckmeldungAnzahl heet nu einsatz.rueckmeldungen (subkanalen rollen.*/funktionen.* ongewijzigd), einsatz.rueckmeldungGesamt heet nu einsatz.rueckmeldungenGesamt, en einsatz.zeitstempel heet nu einsatz.alarmierungszeit. Oude objecten worden bij een update automatisch verwijderd (ook nu wees geworden kanaal-/mapobjecten, niet alleen states); scripts/VIS-bindingen die naar de oude paden verwijzen, moeten worden aangepast.",
+                "pl": "Zmiana struktury obiektów: einsatz.rueckmeldungAnzahl nazywa się teraz einsatz.rueckmeldungen (podkanały rollen.*/funktionen.* bez zmian), einsatz.rueckmeldungGesamt nazywa się teraz einsatz.rueckmeldungenGesamt, a einsatz.zeitstempel nazywa się teraz einsatz.alarmierungszeit. Stare obiekty są automatycznie usuwane podczas aktualizacji (w tym osierocone teraz obiekty kanałów/folderów, nie tylko stany); skrypty/powiązania VIS odwołujące się do starych ścieżek należy zaktualizować.",
+                "pt": "Alteração na estrutura de objetos: einsatz.rueckmeldungAnzahl agora chama-se einsatz.rueckmeldungen (subcanais rollen.*/funktionen.* inalterados), einsatz.rueckmeldungGesamt agora chama-se einsatz.rueckmeldungenGesamt, e einsatz.zeitstempel agora chama-se einsatz.alarmierungszeit. Os objetos antigos são removidos automaticamente na atualização (incluindo objetos de canal/pasta agora órfãos, não apenas estados); scripts/vinculações do VIS que referenciam os caminhos antigos devem ser atualizados.",
+                "ru": "Изменение структуры объектов: einsatz.rueckmeldungAnzahl теперь называется einsatz.rueckmeldungen (подканалы rollen.*/funktionen.* без изменений), einsatz.rueckmeldungGesamt теперь называется einsatz.rueckmeldungenGesamt, а einsatz.zeitstempel теперь называется einsatz.alarmierungszeit. Старые объекты автоматически удаляются при обновлении (включая ставшие теперь бесхозными объекты каналов/папок, а не только состояния); скрипты/привязки VIS, ссылающиеся на старые пути, необходимо обновить.",
+                "uk": "Зміна структури об'єктів: einsatz.rueckmeldungAnzahl тепер називається einsatz.rueckmeldungen (підканали rollen.*/funktionen.* без змін), einsatz.rueckmeldungGesamt тепер називається einsatz.rueckmeldungenGesamt, а einsatz.zeitstempel тепер називається einsatz.alarmierungszeit. Старі об'єкти автоматично видаляються під час оновлення (включно з тепер осиротілими об'єктами каналів/папок, а не лише станами); скрипти/прив'язки VIS, що посилаються на старі шляхи, потрібно оновити.",
+                "zh-cn": "对象结构变更：einsatz.rueckmeldungAnzahl 现更名为 einsatz.rueckmeldungen（子通道 rollen.*/funktionen.* 保持不变），einsatz.rueckmeldungGesamt 现更名为 einsatz.rueckmeldungenGesamt，einsatz.zeitstempel 现更名为 einsatz.alarmierungszeit。旧对象会在更新时自动移除（包括现已成为孤立对象的通道/文件夹对象，不仅仅是状态）；引用旧路径的脚本/VIS 绑定需要更新。"
+            },
+            "0.7.35": {
+                "en": "Object structure change: the eight feedback counters under einsatz.rueckmeldungAnzahl are now grouped into two sub-channels - rollen (ek/gf/zf/vf, by role) and funktionen (agt/fzf/ma/med, by qualification) - instead of sitting flat next to each other. The old flat states are automatically removed on upgrade; scripts/VIS bindings referencing the old paths need to be updated to the new einsatz.rueckmeldungAnzahl.rollen.*/funktionen.* paths.",
+                "de": "Objektstruktur geändert: Die acht Rückmeldungs-Zähler unter einsatz.rueckmeldungAnzahl sind jetzt in zwei Unter-Kanälen gruppiert - rollen (ek/gf/zf/vf, nach Rolle) und funktionen (agt/fzf/ma/med, nach Zusatzfunktion) - statt flach nebeneinander zu liegen. Die alten flachen States werden beim Update automatisch entfernt; Skripte/VIS-Bindings, die die alten Pfade nutzen, müssen auf die neuen Pfade einsatz.rueckmeldungAnzahl.rollen.*/funktionen.* angepasst werden.",
+                "es": "Cambio en la estructura de objetos: los ocho contadores de confirmaciones bajo einsatz.rueckmeldungAnzahl ahora están agrupados en dos subcanales - rollen (ek/gf/zf/vf, por rol) y funktionen (agt/fzf/ma/med, por cualificación) - en lugar de estar planos uno junto al otro. Los antiguos estados planos se eliminan automáticamente al actualizar; los scripts/vinculaciones de VIS que hagan referencia a las rutas antiguas deben actualizarse a las nuevas rutas einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "fr": "Changement de la structure des objets : les huit compteurs de confirmations sous einsatz.rueckmeldungAnzahl sont désormais regroupés en deux sous-canaux - rollen (ek/gf/zf/vf, par rôle) et funktionen (agt/fzf/ma/med, par qualification) - au lieu d'être placés à plat les uns à côté des autres. Les anciens états à plat sont automatiquement supprimés lors de la mise à jour ; les scripts/liaisons VIS référençant les anciens chemins doivent être mis à jour vers les nouveaux chemins einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "it": "Modifica della struttura degli oggetti: gli otto contatori di conferme sotto einsatz.rueckmeldungAnzahl sono ora raggruppati in due sottocanali - rollen (ek/gf/zf/vf, per ruolo) e funktionen (agt/fzf/ma/med, per qualifica) - invece di trovarsi allo stesso livello uno accanto all'altro. I vecchi stati piatti vengono rimossi automaticamente durante l'aggiornamento; script/binding VIS che fanno riferimento ai vecchi percorsi devono essere aggiornati ai nuovi percorsi einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "nl": "Wijziging in de objectstructuur: de acht terugmeldingstellers onder einsatz.rueckmeldungAnzahl zijn nu gegroepeerd in twee subkanalen - rollen (ek/gf/zf/vf, per rol) en funktionen (agt/fzf/ma/med, per kwalificatie) - in plaats van plat naast elkaar te staan. De oude platte states worden bij een update automatisch verwijderd; scripts/VIS-bindingen die naar de oude paden verwijzen, moeten worden aangepast naar de nieuwe paden einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "pl": "Zmiana struktury obiektów: osiem liczników potwierdzeń pod einsatz.rueckmeldungAnzahl jest teraz zgrupowanych w dwóch podkanałach - rollen (ek/gf/zf/vf, według roli) i funktionen (agt/fzf/ma/med, według kwalifikacji) - zamiast leżeć płasko obok siebie. Stare płaskie stany są automatycznie usuwane podczas aktualizacji; skrypty/powiązania VIS odwołujące się do starych ścieżek należy zaktualizować do nowych ścieżek einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "pt": "Alteração na estrutura de objetos: os oito contadores de confirmações em einsatz.rueckmeldungAnzahl agora estão agrupados em dois subcanais - rollen (ek/gf/zf/vf, por função) e funktionen (agt/fzf/ma/med, por qualificação) - em vez de estarem lado a lado de forma plana. Os estados antigos planos são removidos automaticamente na atualização; scripts/vinculações do VIS que referenciam os caminhos antigos devem ser atualizados para os novos caminhos einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "ru": "Изменение структуры объектов: восемь счётчиков подтверждений в einsatz.rueckmeldungAnzahl теперь сгруппированы в два подканала - rollen (ek/gf/zf/vf, по роли) и funktionen (agt/fzf/ma/med, по квалификации) - вместо того чтобы находиться плоско рядом друг с другом. Старые плоские состояния автоматически удаляются при обновлении; скрипты/привязки VIS, ссылающиеся на старые пути, необходимо обновить на новые пути einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "uk": "Зміна структури об'єктів: вісім лічильників підтверджень у einsatz.rueckmeldungAnzahl тепер згруповано у два підканали - rollen (ek/gf/zf/vf, за роллю) і funktionen (agt/fzf/ma/med, за кваліфікацією) - замість того, щоб лежати пласко поруч одне з одним. Старі пласкі стани автоматично видаляються під час оновлення; скрипти/прив'язки VIS, що посилаються на старі шляхи, потрібно оновити на нові шляхи einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*.",
+                "zh-cn": "对象结构变更：einsatz.rueckmeldungAnzahl 下的八个反馈计数器现已分组到两个子通道 - rollen（按角色分类：ek/gf/zf/vf）和 funktionen（按资质分类：agt/fzf/ma/med）- 而不再是平铺排列。旧的扁平状态会在更新时自动移除；引用旧路径的脚本/VIS 绑定需要更新为新路径 einsatz.rueckmeldungAnzahl.rollen.*/funktionen.*。"
+            },
+            "0.7.34": {
+                "en": "Incident map image tab: fixed help texts for Zoom level, Marker & outline color, Image width/height that referenced \"both display modes below\" and no longer made sense after the previous release moved those fields above the display-mode checkbox; the Zoom level text was also considerably shortened.",
+                "de": "Reiter Einsatzkarte: Hilfetexte für Zoomstufe, Marker- & Umrissfarbe sowie Bildbreite/-höhe korrigiert, die sich auf \"beide Darstellungsarten unten\" bezogen und seit der Feldumsortierung im letzten Release keinen Sinn mehr ergaben; der Zoomstufe-Text wurde zudem deutlich gekürzt.",
+                "es": "Pestaña Imagen de mapa del incidente: se corrigieron los textos de ayuda de Nivel de zoom, Color del marcador y del contorno, y Ancho/alto de imagen, que hacían referencia a \"ambos modos de visualización siguientes\" y ya no tenían sentido tras el reordenamiento de campos de la versión anterior; el texto de Nivel de zoom también se acortó considerablemente.",
+                "fr": "Onglet Image de carte de l'incident : correction des textes d'aide de Niveau de zoom, Couleur du marqueur et du contour, ainsi que Largeur/hauteur d'image, qui faisaient référence aux \"deux modes d'affichage ci-dessous\" et n'avaient plus de sens depuis la réorganisation des champs de la version précédente ; le texte de Niveau de zoom a également été considérablement raccourci.",
+                "it": "Scheda Immagine della mappa dell'incidente: corretti i testi di aiuto di Livello di zoom, Colore del marcatore e del contorno e Larghezza/altezza dell'immagine, che facevano riferimento a \"entrambe le modalità di visualizzazione sottostanti\" e non avevano più senso dopo il riordino dei campi della versione precedente; il testo di Livello di zoom è stato anche notevolmente accorciato.",
+                "nl": "Tabblad Incidentkaartafbeelding: hulpteksten voor Zoomniveau, Marker- en contourkleur en Afbeeldingsbreedte/-hoogte gecorrigeerd, die verwezen naar \"beide onderstaande weergavemodi\" en na de herordening van velden in de vorige release geen zin meer hadden; de tekst voor Zoomniveau is bovendien aanzienlijk ingekort.",
+                "pl": "Karta Obraz mapy zdarzenia: poprawiono teksty pomocy dla Poziomu powiększenia, Koloru znacznika i konturu oraz Szerokości/wysokości obrazu, które odnosiły się do \"obu poniższych trybów wyświetlania\" i przestały mieć sens po zmianie kolejności pól w poprzedniej wersji; tekst Poziomu powiększenia został również znacznie skrócony.",
+                "pt": "Aba Imagem de mapa da ocorrência: corrigidos os textos de ajuda de Nível de zoom, Cor do marcador e do contorno, e Largura/altura da imagem, que faziam referência a \"ambos os modos de exibição abaixo\" e deixaram de fazer sentido após a reordenação de campos da versão anterior; o texto de Nível de zoom também foi consideravelmente encurtado.",
+                "ru": "Вкладка Изображение карты вызова: исправлены тексты справки для Уровня масштабирования, Цвета маркера и контура, а также Ширины/высоты изображения, которые ссылались на \"оба режима отображения ниже\" и утратили смысл после изменения порядка полей в предыдущей версии; текст Уровня масштабирования также значительно сокращён.",
+                "uk": "Вкладка Зображення карти виклику: виправлено тексти довідки для Рівня масштабування, Кольору маркера і контуру та Ширини/висоти зображення, які посилалися на \"обидва режими відображення нижче\" і втратили сенс після зміни порядку полів у попередній версії; текст Рівня масштабування також значно скорочено.",
+                "zh-cn": "事件地图图片标签页：修正了缩放级别、标记与轮廓颜色以及图片宽度/高度的帮助文本，这些文本原先引用\"下方两种显示模式\"，在上一版本调整字段顺序后已不再合理；缩放级别的说明文字也大幅缩短。"
+            },
+            "0.7.33": {
+                "en": "Admin UI cleanup for two panels. Rescue service tab: the keyword-decoding checkbox and its label fields are now hidden while \"Process rescue-service incidents\" is unchecked (irrelevant otherwise). Incident map image tab: Zoom level, the renamed Marker & outline color (used by both the polygon outline and the marker dot, not just the outline) and Image width/height now sit above \"Show incident-area polygon\", since all three apply regardless of that setting; OSM timeout moved directly under the enable checkbox; only Outline thickness (genuinely polygon-only) is now hidden while \"Show incident-area polygon\" is off.",
+                "de": "Admin-Oberfläche für zwei Panels aufgeräumt. Reiter Rettungsdienst: Die Stichwort-Dekodierungs-Checkbox und ihre Bezeichnungsfelder werden jetzt ausgeblendet, solange \"Rettungsdienst-Einsätze verarbeiten\" deaktiviert ist (sonst irrelevant). Reiter Einsatzkarte: Zoomstufe, die umbenannte Marker- & Umrissfarbe (wird sowohl vom Polygon-Umriss als auch von der Punkt-Markierung genutzt, nicht nur vom Umriss) und Bildbreite/-höhe stehen jetzt oberhalb von \"Einsatzgebiet-Polygon anzeigen\", da alle drei unabhängig davon gelten; OSM-Timeout direkt unter die Aktivierungs-Checkbox verschoben; nur die Umriss-Strichstärke (betrifft wirklich nur das Polygon) wird jetzt ausgeblendet, solange \"Einsatzgebiet-Polygon anzeigen\" aus ist.",
+                "es": "Limpieza de la interfaz de administración en dos paneles. Pestaña Servicio de rescate: la casilla de decodificación de palabras clave y sus campos de etiqueta ahora se ocultan mientras \"Procesar incidentes del servicio de rescate\" esté desmarcada (irrelevante en caso contrario). Pestaña Imagen de mapa del incidente: Nivel de zoom, el renombrado Color del marcador y del contorno (usado tanto por el contorno del polígono como por el punto marcador, no solo por el contorno) y el ancho/alto de la imagen ahora se sitúan encima de \"Mostrar polígono del área del incidente\", ya que los tres aplican independientemente de esa opción; Tiempo de espera de OSM movido directamente debajo de la casilla de activación; solo el grosor del contorno (que solo afecta realmente al polígono) ahora se oculta mientras \"Mostrar polígono del área del incidente\" esté desactivada.",
+                "fr": "Nettoyage de l'interface d'administration pour deux panneaux. Onglet Service de secours : la case de décodage des mots-clés et ses champs d'étiquette sont désormais masqués tant que \"Traiter les incidents du service de secours\" est décochée (sans objet sinon). Onglet Image de carte de l'incident : Niveau de zoom, la Couleur du marqueur et du contour renommée (utilisée à la fois par le contour du polygone et par le point marqueur, pas seulement par le contour) et la largeur/hauteur de l'image se trouvent désormais au-dessus de \"Afficher le polygone de la zone d'intervention\", car ces trois réglages s'appliquent indépendamment de ce paramètre ; Délai d'attente OSM déplacé directement sous la case d'activation ; seule l'épaisseur du contour (qui ne concerne réellement que le polygone) est désormais masquée tant que \"Afficher le polygone de la zone d'intervention\" est désactivée.",
+                "it": "Pulizia dell'interfaccia di amministrazione per due pannelli. Scheda Servizio di soccorso: la casella di decodifica delle parole chiave e i relativi campi etichetta sono ora nascosti finché \"Elaborare gli incidenti del servizio di soccorso\" è deselezionata (altrimenti irrilevante). Scheda Immagine della mappa dell'incidente: Livello di zoom, il rinominato Colore del marcatore e del contorno (usato sia dal contorno del poligono sia dal punto marcatore, non solo dal contorno) e larghezza/altezza dell'immagine ora si trovano sopra \"Mostra il poligono dell'area dell'incidente\", poiché tutti e tre si applicano indipendentemente da questa impostazione; Timeout OSM spostato direttamente sotto la casella di attivazione; solo lo spessore del contorno (che riguarda davvero solo il poligono) è ora nascosto finché \"Mostra il poligono dell'area dell'incidente\" è disattivata.",
+                "nl": "Admin-interface opgeschoond voor twee panelen. Tabblad Reddingsdienst: het selectievakje voor trefwoord-decodering en de bijbehorende labelvelden worden nu verborgen zolang \"Reddingsdienst-incidenten verwerken\" is uitgeschakeld (anders niet relevant). Tabblad Incidentkaartafbeelding: Zoomniveau, de hernoemde Marker- en contourkleur (gebruikt zowel door de polygoon-contour als door de puntmarkering, niet alleen door de contour) en afbeeldingsbreedte/-hoogte staan nu boven \"Incidentgebied-polygoon tonen\", omdat alle drie onafhankelijk van die instelling gelden; OSM-time-out direct onder het activeringsvakje verplaatst; alleen de contourdikte (die echt alleen de polygoon betreft) wordt nu verborgen zolang \"Incidentgebied-polygoon tonen\" is uitgeschakeld.",
+                "pl": "Uporządkowano interfejs administratora dla dwóch paneli. Karta Pogotowie ratunkowe: pole wyboru dekodowania słów kluczowych i jego pola etykiet są teraz ukrywane, dopóki \"Przetwarzaj zdarzenia pogotowia ratunkowego\" jest odznaczone (w przeciwnym razie nieistotne). Karta Obraz mapy zdarzenia: Poziom powiększenia, przemianowany Kolor znacznika i konturu (używany zarówno przez kontur poligonu, jak i przez znacznik punktowy, nie tylko przez kontur) oraz szerokość/wysokość obrazu znajdują się teraz powyżej \"Pokaż poligon obszaru zdarzenia\", ponieważ wszystkie trzy obowiązują niezależnie od tej opcji; Limit czasu OSM przeniesiony bezpośrednio pod pole wyboru aktywacji; tylko grubość konturu (dotycząca naprawdę wyłącznie poligonu) jest teraz ukrywana, dopóki \"Pokaż poligon obszaru zdarzenia\" jest wyłączone.",
+                "pt": "Limpeza da interface de administração em dois painéis. Aba Serviço de resgate: a caixa de decodificação de palavras-chave e os seus campos de rótulo agora ficam ocultos enquanto \"Processar ocorrências do serviço de resgate\" estiver desmarcada (irrelevante caso contrário). Aba Imagem de mapa da ocorrência: Nível de zoom, a renomeada Cor do marcador e do contorno (usada tanto pelo contorno do polígono quanto pelo ponto marcador, não apenas pelo contorno) e a largura/altura da imagem agora ficam acima de \"Mostrar polígono da área da ocorrência\", já que os três se aplicam independentemente dessa opção; Tempo limite OSM movido para diretamente abaixo da caixa de ativação; apenas a espessura do contorno (que realmente só afeta o polígono) agora fica oculta enquanto \"Mostrar polígono da área da ocorrência\" estiver desativada.",
+                "ru": "Упорядочен интерфейс администрирования для двух панелей. Вкладка Скорая помощь: флажок декодирования ключевых слов и его текстовые поля теперь скрыты, пока \"Обрабатывать вызовы скорой помощи\" снят (иначе неактуально). Вкладка Изображение карты вызова: Уровень масштабирования, переименованный Цвет маркера и контура (используется как контуром полигона, так и точечным маркером, а не только контуром) и ширина/высота изображения теперь расположены над \"Показывать полигон зоны вызова\", так как все три применяются независимо от этой настройки; Тайм-аут OSM перемещён сразу под флажок активации; только толщина контура (действительно относится лишь к полигону) теперь скрыта, пока \"Показывать полигон зоны вызова\" отключено.",
+                "uk": "Впорядковано інтерфейс адміністрування для двох панелей. Вкладка Швидка допомога: прапорець декодування ключових слів та його текстові поля тепер приховані, поки \"Обробляти виклики швидкої допомоги\" знято (інакше неактуально). Вкладка Зображення карти виклику: Рівень масштабування, перейменований Колір маркера і контуру (використовується як контуром полігона, так і точковим маркером, а не лише контуром) та ширина/висота зображення тепер розташовані над \"Показувати полігон зони виклику\", оскільки всі три застосовуються незалежно від цього налаштування; Тайм-аут OSM переміщено одразу під прапорець активації; лише товщина контуру (справді стосується лише полігона) тепер прихована, поки \"Показувати полігон зони виклику\" вимкнено.",
+                "zh-cn": "整理了两个面板的管理界面。急救服务标签页：只要\"处理急救服务事件\"未勾选，关键字解码复选框及其标签字段现在都会隐藏（否则无关紧要）。事件地图图片标签页：缩放级别、重命名后的标记点与轮廓颜色（用于多边形轮廓和标记点两者，而不仅仅是轮廓）以及图片宽度/高度现在都位于\"显示事件区域多边形\"上方，因为这三项都与该设置无关；OSM 超时已移动到启用复选框正下方；只有轮廓粗细（确实只影响多边形）在\"显示事件区域多边形\"关闭时才会隐藏。"
+            },
+            "0.7.32": {
+                "en": "Fixed a startup-only error: if the adapter was stopped while it was still creating its ioBroker objects (e.g. a fast restart right after an update), a \"Connection is closed\" failure could surface as an unhandled promise rejection error in the log instead of being caught - harmless, but noisy. Object initialization now stops cleanly and logs a single warning instead.",
+                "de": "Einen reinen Start-Fehler behoben: Wurde der Adapter gestoppt, während er noch seine ioBroker-Objekte anlegte (z.B. ein schneller Neustart direkt nach einem Update), konnte ein Fehler \"Connection is closed\" als unhandled promise rejection im Log auftauchen, statt abgefangen zu werden - harmlos, aber unschön. Die Objekt-Initialisierung bricht jetzt sauber ab und loggt stattdessen eine einzelne Warnung.",
+                "es": "Se corrigió un error exclusivo del inicio: si el adaptador se detenía mientras aún estaba creando sus objetos de ioBroker (p. ej. un reinicio rápido justo después de una actualización), un fallo \"Connection is closed\" podía aparecer como un error de unhandled promise rejection en el registro en lugar de ser capturado - inofensivo, pero ruidoso. La inicialización de objetos ahora se detiene limpiamente y registra una única advertencia.",
+                "fr": "Correction d'une erreur limitée au démarrage : si l'adaptateur était arrêté pendant qu'il créait encore ses objets ioBroker (par ex. un redémarrage rapide juste après une mise à jour), une défaillance \"Connection is closed\" pouvait apparaître comme une erreur unhandled promise rejection dans le journal au lieu d'être interceptée - inoffensif, mais bruyant. L'initialisation des objets s'arrête désormais proprement et consigne un seul avertissement à la place.",
+                "it": "Risolto un errore limitato all'avvio: se l'adattatore veniva fermato mentre stava ancora creando i suoi oggetti ioBroker (ad es. un riavvio rapido subito dopo un aggiornamento), un errore \"Connection is closed\" poteva comparire come unhandled promise rejection nel log invece di essere intercettato - innocuo, ma fastidioso. L'inizializzazione degli oggetti ora si interrompe in modo pulito e registra un singolo avviso.",
+                "nl": "Een fout die alleen bij het opstarten optrad, is verholpen: als de adapter werd gestopt terwijl deze nog bezig was met het aanmaken van zijn ioBroker-objecten (bijv. een snelle herstart direct na een update), kon een fout \"Connection is closed\" als unhandled promise rejection in het log verschijnen in plaats van te worden afgevangen - onschadelijk, maar storend. De objectinitialisatie stopt nu netjes en logt in plaats daarvan één enkele waarschuwing.",
+                "pl": "Naprawiono błąd występujący wyłącznie przy starcie: jeśli adapter został zatrzymany w trakcie tworzenia swoich obiektów ioBroker (np. szybki restart tuż po aktualizacji), błąd \"Connection is closed\" mógł pojawić się w dzienniku jako unhandled promise rejection zamiast zostać przechwycony - nieszkodliwe, ale uciążliwe. Inicjalizacja obiektów teraz zatrzymuje się czysto i zamiast tego rejestruje pojedyncze ostrzeżenie.",
+                "pt": "Corrigido um erro exclusivo do arranque: se o adaptador fosse parado enquanto ainda estava a criar os seus objetos ioBroker (por exemplo, um reinício rápido logo após uma atualização), uma falha \"Connection is closed\" podia aparecer como um erro unhandled promise rejection no registo em vez de ser capturada - inofensivo, mas incômodo. A inicialização de objetos agora para de forma limpa e regista um único aviso.",
+                "ru": "Исправлена ошибка, возникавшая только при запуске: если адаптер останавливался в тот момент, когда он ещё создавал свои объекты ioBroker (например, при быстром перезапуске сразу после обновления), сбой \"Connection is closed\" мог появиться в журнале как unhandled promise rejection вместо того, чтобы быть перехваченным - безобидно, но шумно. Теперь инициализация объектов корректно прерывается и вместо этого записывается одно предупреждение.",
+                "uk": "Виправлено помилку, яка виникала лише під час запуску: якщо адаптер зупинявся, поки він ще створював свої об'єкти ioBroker (наприклад, швидкий перезапуск одразу після оновлення), збій \"Connection is closed\" міг з'явитися в журналі як unhandled promise rejection замість того, щоб бути перехопленим - нешкідливо, але шумно. Тепер ініціалізація об'єктів коректно зупиняється і замість цього записується одне попередження.",
+                "zh-cn": "修复了一个仅在启动时出现的错误：如果适配器在仍在创建其 ioBroker 对象时被停止（例如更新后立即快速重启），\"Connection is closed\" 故障可能会作为 unhandled promise rejection 错误出现在日志中，而不是被正确捕获——虽然无害，但很扰人。现在对象初始化会干净地停止，并只记录一条警告。"
+            }
+        },
+        "titleLang": {
+            "en": "WAIP-Web",
+            "de": "WAIP-Web",
+            "ru": "WAIP-Web",
+            "pt": "WAIP-Web",
+            "nl": "WAIP-Web",
+            "fr": "WAIP-Web",
+            "it": "WAIP-Web",
+            "es": "WAIP-Web",
+            "pl": "WAIP-Web",
+            "uk": "WAIP-Web",
+            "zh-cn": "WAIP-Web"
+        },
+        "desc": {
+            "en": "Connects to a WAIP (Wachalarm-IP) dispatch monitor via Socket.IO and mirrors alarms, feedback, routes and TTS announcements into ioBroker states.",
+            "de": "Verbindet sich mit einem WAIP-Wachalarm-Monitor per Socket.IO und bildet Einsätze, Rückmeldungen, Routen und TTS-Ansagen als ioBroker-States ab.",
+            "ru": "Подключается к монитору диспетчеризации WAIP (Wachalarm-IP) через Socket.IO и отображает тревоги, обратную связь, маршруты и голосовые объявления TTS в виде состояний ioBroker.",
+            "pt": "Conecta-se a um monitor de despacho WAIP (Wachalarm-IP) via Socket.IO e reflete alarmes, feedback, rotas e anúncios TTS em estados do ioBroker.",
+            "nl": "Maakt verbinding met een WAIP (Wachalarm-IP) alarmmonitor via Socket.IO en zet alarmen, terugmeldingen, routes en TTS-meldingen om in ioBroker-states.",
+            "fr": "Se connecte à un moniteur d'alerte WAIP (Wachalarm-IP) via Socket.IO et retranscrit les alarmes, les retours, les itinéraires et les annonces TTS sous forme d'états ioBroker.",
+            "it": "Si collega a un monitor di allarme WAIP (Wachalarm-IP) tramite Socket.IO e riporta allarmi, riscontri, percorsi e annunci TTS come stati ioBroker.",
+            "es": "Se conecta a un monitor de alarma WAIP (Wachalarm-IP) mediante Socket.IO y refleja alarmas, confirmaciones, rutas y anuncios TTS como estados de ioBroker.",
+            "pl": "Łączy się z monitorem alarmowym WAIP (Wachalarm-IP) przez Socket.IO i odwzorowuje alarmy, potwierdzenia, trasy oraz komunikaty TTS jako stany ioBroker.",
+            "uk": "Підключається до монітора оповіщення WAIP (Wachalarm-IP) через Socket.IO та відображає тривоги, підтвердження, маршрути й TTS-повідомлення як стани ioBroker.",
+            "zh-cn": "通过 Socket.IO 连接到 WAIP(Wachalarm-IP)调度监视器,并将警报、反馈、路线和语音播报(TTS)映射为 ioBroker 状态。"
+        },
+        "authors": [
+            "rnc11 <rocco.noetzel@gmx.de>"
+        ],
+        "keywords": [
+            "waip",
+            "wachalarm",
+            "feuerwehr",
+            "alarmierung",
+            "leitstelle"
+        ],
+        "licenseInformation": {
+            "type": "free",
+            "license": "MIT"
+        },
+        "platform": "Javascript/Node.js",
+        "icon": "waip-web.png",
+        "enabled": true,
+        "extIcon": "https://raw.githubusercontent.com/rnc11/ioBroker.waip-web/main/admin/waip-web.png",
+        "readme": "https://github.com/rnc11/ioBroker.waip-web/blob/main/README.md",
+        "loglevel": "info",
+        "mode": "daemon",
+        "type": "alarm",
+        "tier": 2,
+        "compact": true,
+        "messagebox": true,
+        "connectionType": "cloud",
+        "dataSource": "push",
+        "adminUI": {
+            "config": "json"
+        },
+        "dependencies": [
+            {
+                "js-controller": ">=6.0.11"
+            }
+        ],
+        "globalDependencies": [
+            {
+                "admin": ">=7.8.23"
+            }
+        ]
     },
-    "titleLang": {
-      "en": "WAIP-Web",
-      "de": "WAIP-Web",
-      "ru": "WAIP-Web",
-      "pt": "WAIP-Web",
-      "nl": "WAIP-Web",
-      "fr": "WAIP-Web",
-      "it": "WAIP-Web",
-      "es": "WAIP-Web",
-      "pl": "WAIP-Web",
-      "uk": "WAIP-Web",
-      "zh-cn": "WAIP-Web"
+    "native": {
+        "url": "https://wachalarm.leitstelle-lausitz.de",
+        "monitorID": "",
+        "registrationTimeoutSec": 10,
+        "reconnectDelaySec": 5,
+        "rdAlarmierungEnabled": true,
+        "rdKeywordDecodingEnabled": true,
+        "stichwortMapping": [
+            {
+                "stichwort": "B:BMA",
+                "beschreibung": "Brandmeldeanlage ausgelöst",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Boot",
+                "beschreibung": "Freizeitboot-Brand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Explosion",
+                "beschreibung": "Brand nach Explosion",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Fläche",
+                "beschreibung": "Flur-/Wiesenbrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Gebäude groß",
+                "beschreibung": "Zimmer-, Keller-, Dach- oder landwirtschaftlicher Gebäudebrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Gebäude klein",
+                "beschreibung": "Garage, Schuppen, Bungalow, elektrische Anlage, Trafo",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Gefahrgut",
+                "beschreibung": "Gefahrgut-Brand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Großflugzeug",
+                "beschreibung": "Großflugzeugbrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Klein",
+                "beschreibung": "Papierkorb, Container, Kontrolle nach Brand, keine Ausbreitungsgefahr",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Kleinflugzeug",
+                "beschreibung": "Kleinflugzeugbrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Lkw",
+                "beschreibung": "Lkw, Bus, Traktor, Campinganhänger",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Pkw",
+                "beschreibung": "Pkw-/Motorrad-Brand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Schiene",
+                "beschreibung": "Schienenfahrzeugbrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Schiff",
+                "beschreibung": "Berufs-/Passagierschiff-Brand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Schornstein",
+                "beschreibung": "Schornsteinbrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Sonderobjekt",
+                "beschreibung": "Sonderobjekt mit eigenem Alarmplan",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Wald",
+                "beschreibung": "Wald-/Bahndammbrand",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "B:Wald groß/WSP",
+                "beschreibung": "Wald-/Getreidefeldbrand (groß)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Einsturz",
+                "beschreibung": "Gebäude-/Bauwerkseinsturz",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Flugzeugunfall groß",
+                "beschreibung": "Großflugzeugabsturz",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Flugzeugunfall klein",
+                "beschreibung": "Kleinflugzeugabsturz",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Gas",
+                "beschreibung": "Gasaustritt",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Gefahrgut groß",
+                "beschreibung": "Größerer Gefahrgut-Einsatz",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Gefahrgut klein",
+                "beschreibung": "Kleinerer Gefahrgut-Einsatz",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Hilfeleistung",
+                "beschreibung": "Ausleuchten, Transportunterstützung, Rettung allgemein",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Klein",
+                "beschreibung": "Kellerüberflutung, Beseitigung von Trümmern",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Kommunal",
+                "beschreibung": "Amtshilfe/Verwaltungseinsatz",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Natur",
+                "beschreibung": "Wetterbedingte Schäden",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Öl Land",
+                "beschreibung": "Ölspur auf Straße",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Öl auf Wasser",
+                "beschreibung": "Ölverschmutzung eines Gewässers",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Person auf Schiene",
+                "beschreibung": "Personenunfall auf Bahngleisen",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Person im Wasser/Eis",
+                "beschreibung": "Wasser-/Eisrettung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Person-TMR",
+                "beschreibung": "Person in Not, technische Menschenrettung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Rettung aus Höhen und Tiefen",
+                "beschreibung": "Höhen-/Tiefenrettung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Tier in Not",
+                "beschreibung": "Tierrettung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:Türnotöffnung",
+                "beschreibung": "Notöffnung wegen Person in Gefahr",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:VU Klemm",
+                "beschreibung": "Person im Fahrzeug eingeklemmt",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:VU Lkw/Bus",
+                "beschreibung": "Schwerfahrzeug-Unfall",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:VU mit P",
+                "beschreibung": "Verkehrsunfall mit Personenschaden",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:VU ohne P",
+                "beschreibung": "Verkehrsunfall ohne Personenschaden",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:VU Schiene",
+                "beschreibung": "Bahnunfall",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "H:VU Schiff",
+                "beschreibung": "Schiffsunfall",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "K1:KTW",
+                "beschreibung": "Krankentransport (sitzend/liegend, ggf. Sauerstoff)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "K2:KTW-Infektionsfahrt",
+                "beschreibung": "Krankentransport, Infektionsfahrt (z.B. MRSA)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "MAN-E",
+                "beschreibung": "Größere Zahl von Erkrankten (z.B. Lebensmittelvergiftung in einer Einrichtung)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "MANV-Groß",
+                "beschreibung": "Massenanfall von Verletzten, groß (mehr als 20 Verletzte/Erkrankte)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "MANV-Klein",
+                "beschreibung": "Massenanfall von Verletzten, klein (5-9 Verletzte/Erkrankte)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "MANV-Mittel",
+                "beschreibung": "Massenanfall von Verletzten, mittel (10-19 Verletzte/Erkrankte)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S1:Baby-NAW/Inkubator",
+                "beschreibung": "Baby-Notarztwagen, Fahrt mit Inkubator",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S10:COVID19",
+                "beschreibung": "Einsatz im Zusammenhang mit einer Corona-Erkrankung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S2:Notfallseelsorge",
+                "beschreibung": "Notfallseelsorge nach Einsatzgeschehen",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S3:Org-Fahrten",
+                "beschreibung": "Organisatorische Fahrt/Werkstattfahrt",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S4:Polizeiliche-Einsatzlage",
+                "beschreibung": "Einsatz wird durch die Polizei geführt (KLEE-Einsatz)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S5:Ausnahmelage",
+                "beschreibung": "Information über eine Ausnahmelage (z.B. Unwetter)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S6:Polizei-übergeben",
+                "beschreibung": "Einsatz an die Polizei übergeben",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S61:COVID19 - Information/Übergabe",
+                "beschreibung": "Information/Einsatzübergabe zu 116117, Kassenarzt, Hausarzt oder Gesundheitsamt",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S62:COVID19 - Unterstützung Leitstelle",
+                "beschreibung": "Unterstützung des Gesundheitsamtes bzw. anderer Ämter/Institutionen",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S63:COVID19 - Einsatz Leitstelle",
+                "beschreibung": "Einsatz Regel-Rettungsdienst",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S7:Einsatz-Ablehung",
+                "beschreibung": "Ablehnung eines Einsatzes von ITH/RTH/V-NEF (keine Höher-/Niederstufung)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S8:AnforderungRettungshundestaffel",
+                "beschreibung": "Anforderung von Rettungshunden",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "S9:Polizei-erhalten",
+                "beschreibung": "Einsatz von der Polizei übernommen",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "ÜMANV-Sofort",
+                "beschreibung": "Eigene Maßnahmen bei MANV eines anderen Trägers",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V1N",
+                "beschreibung": "Verlegung, Primärtransport bodengebunden mit Notarztbegleitung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V1R",
+                "beschreibung": "Verlegung, Primärtransport bodengebunden",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V2N",
+                "beschreibung": "Verlegung, Sekundärtransport bodengebunden mit Notarztbegleitung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V2R",
+                "beschreibung": "Verlegung, Sekundärtransport bodengebunden",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V3N",
+                "beschreibung": "Verlegung, Sekundärtransport mit Luftrettungsmittel",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V4N",
+                "beschreibung": "Verlegung, Primärtransport mit Luftrettungsmittel",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V5R",
+                "beschreibung": "Verlegung, im Vorfeld genehmigter Transport (z.B. ADAC-Rücktransport)",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V6N-COVID19",
+                "beschreibung": "Verlegung/Transport infektiöser Covid-19-Patienten mit Arztbegleitung",
+                "matchType": "startsWith"
+            },
+            {
+                "stichwort": "V6R-COVID19",
+                "beschreibung": "Verlegung/Transport infektiöser Covid-19-Patienten (RTW/KTW)",
+                "matchType": "startsWith"
+            }
+        ],
+        "rdLabelR": "Rettungswagen",
+        "rdLabelN": "Notfalleinsatzfahrzeug",
+        "rdLabelP": "Polytrauma",
+        "rdLabelF": "First Responder",
+        "rdLabelNT": "Notfalltransport mit Notfallkrankenwagen",
+        "mapImageEnabled": false,
+        "mapImageShowPolygon": true,
+        "mapImageWidth": 600,
+        "mapImageHeight": 400,
+        "mapImageZoom": 19,
+        "mapImageOutlineColor": "#dd2020",
+        "mapImageOutlineThickness": 4,
+        "mapImageTimeout": 10
     },
-    "desc": {
-      "en": "Connects to a WAIP (Wachalarm-IP) dispatch monitor via Socket.IO and mirrors alarms, feedback, routes and TTS announcements into ioBroker states.",
-      "de": "Verbindet sich mit einem WAIP-Wachalarm-Monitor per Socket.IO und bildet Einsätze, Rückmeldungen, Routen und TTS-Ansagen als ioBroker-States ab.",
-      "ru": "Подключается к монитору диспетчеризации WAIP (Wachalarm-IP) через Socket.IO и отображает тревоги, обратную связь, маршруты и голосовые объявления TTS в виде состояний ioBroker.",
-      "pt": "Conecta-se a um monitor de despacho WAIP (Wachalarm-IP) via Socket.IO e reflete alarmes, feedback, rotas e anúncios TTS em estados do ioBroker.",
-      "nl": "Maakt verbinding met een WAIP (Wachalarm-IP) alarmmonitor via Socket.IO en zet alarmen, terugmeldingen, routes en TTS-meldingen om in ioBroker-states.",
-      "fr": "Se connecte à un moniteur d'alerte WAIP (Wachalarm-IP) via Socket.IO et retranscrit les alarmes, les retours, les itinéraires et les annonces TTS sous forme d'états ioBroker.",
-      "it": "Si collega a un monitor di allarme WAIP (Wachalarm-IP) tramite Socket.IO e riporta allarmi, riscontri, percorsi e annunci TTS come stati ioBroker.",
-      "es": "Se conecta a un monitor de alarma WAIP (Wachalarm-IP) mediante Socket.IO y refleja alarmas, confirmaciones, rutas y anuncios TTS como estados de ioBroker.",
-      "pl": "Łączy się z monitorem alarmowym WAIP (Wachalarm-IP) przez Socket.IO i odwzorowuje alarmy, potwierdzenia, trasy oraz komunikaty TTS jako stany ioBroker.",
-      "uk": "Підключається до монітора оповіщення WAIP (Wachalarm-IP) через Socket.IO та відображає тривоги, підтвердження, маршрути й TTS-повідомлення як стани ioBroker.",
-      "zh-cn": "通过 Socket.IO 连接到 WAIP(Wachalarm-IP)调度监视器,并将警报、反馈、路线和语音播报(TTS)映射为 ioBroker 状态。"
-    },
-    "authors": [
-      "rnc11 <rocco.noetzel@gmx.de>"
-    ],
-    "keywords": [
-      "waip",
-      "wachalarm",
-      "feuerwehr",
-      "alarmierung",
-      "leitstelle"
-    ],
-    "licenseInformation": {
-      "type": "free",
-      "license": "MIT"
-    },
-    "platform": "Javascript/Node.js",
-    "icon": "waip-web.png",
-    "enabled": true,
-    "extIcon": "https://raw.githubusercontent.com/rnc11/ioBroker.waip-web/main/admin/waip-web.png",
-    "readme": "https://github.com/rnc11/ioBroker.waip-web/blob/main/README.md",
-    "loglevel": "info",
-    "mode": "daemon",
-    "type": "alarm",
-    "tier": 2,
-    "compact": true,
-    "messagebox": true,
-    "connectionType": "cloud",
-    "dataSource": "push",
-    "adminUI": {
-      "config": "json"
-    },
-    "dependencies": [
-      {
-        "js-controller": ">=6.0.11"
-      }
-    ],
-    "globalDependencies": [
-      {
-        "admin": ">=7.8.23"
-      }
+    "objects": [],
+    "instanceObjects": [
+        {
+            "_id": "info",
+            "type": "channel",
+            "common": {
+                "name": "Information"
+            },
+            "native": {}
+        },
+        {
+            "_id": "info.connection",
+            "type": "state",
+            "common": {
+                "role": "indicator.connected",
+                "name": "Verbunden mit WAIP-Server",
+                "type": "boolean",
+                "read": true,
+                "write": false,
+                "def": false
+            },
+            "native": {}
+        }
     ]
-  },
-  "native": {
-    "url": "https://wachalarm.leitstelle-lausitz.de",
-    "monitorID": "",
-    "registrationTimeoutSec": 10,
-    "reconnectDelaySec": 5,
-    "rdAlarmierungEnabled": true,
-    "rdKeywordDecodingEnabled": true,
-    "stichwortMapping": [
-      {
-        "stichwort": "B:BMA",
-        "beschreibung": "Brandmeldeanlage ausgelöst",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Boot",
-        "beschreibung": "Freizeitboot-Brand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Explosion",
-        "beschreibung": "Brand nach Explosion",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Fläche",
-        "beschreibung": "Flur-/Wiesenbrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Gebäude groß",
-        "beschreibung": "Zimmer-, Keller-, Dach- oder landwirtschaftlicher Gebäudebrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Gebäude klein",
-        "beschreibung": "Garage, Schuppen, Bungalow, elektrische Anlage, Trafo",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Gefahrgut",
-        "beschreibung": "Gefahrgut-Brand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Großflugzeug",
-        "beschreibung": "Großflugzeugbrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Klein",
-        "beschreibung": "Papierkorb, Container, Kontrolle nach Brand, keine Ausbreitungsgefahr",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Kleinflugzeug",
-        "beschreibung": "Kleinflugzeugbrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Lkw",
-        "beschreibung": "Lkw, Bus, Traktor, Campinganhänger",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Pkw",
-        "beschreibung": "Pkw-/Motorrad-Brand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Schiene",
-        "beschreibung": "Schienenfahrzeugbrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Schiff",
-        "beschreibung": "Berufs-/Passagierschiff-Brand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Schornstein",
-        "beschreibung": "Schornsteinbrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Sonderobjekt",
-        "beschreibung": "Sonderobjekt mit eigenem Alarmplan",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Wald",
-        "beschreibung": "Wald-/Bahndammbrand",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "B:Wald groß/WSP",
-        "beschreibung": "Wald-/Getreidefeldbrand (groß)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Einsturz",
-        "beschreibung": "Gebäude-/Bauwerkseinsturz",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Flugzeugunfall groß",
-        "beschreibung": "Großflugzeugabsturz",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Flugzeugunfall klein",
-        "beschreibung": "Kleinflugzeugabsturz",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Gas",
-        "beschreibung": "Gasaustritt",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Gefahrgut groß",
-        "beschreibung": "Größerer Gefahrgut-Einsatz",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Gefahrgut klein",
-        "beschreibung": "Kleinerer Gefahrgut-Einsatz",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Hilfeleistung",
-        "beschreibung": "Ausleuchten, Transportunterstützung, Rettung allgemein",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Klein",
-        "beschreibung": "Kellerüberflutung, Beseitigung von Trümmern",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Kommunal",
-        "beschreibung": "Amtshilfe/Verwaltungseinsatz",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Natur",
-        "beschreibung": "Wetterbedingte Schäden",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Öl Land",
-        "beschreibung": "Ölspur auf Straße",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Öl auf Wasser",
-        "beschreibung": "Ölverschmutzung eines Gewässers",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Person auf Schiene",
-        "beschreibung": "Personenunfall auf Bahngleisen",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Person im Wasser/Eis",
-        "beschreibung": "Wasser-/Eisrettung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Person-TMR",
-        "beschreibung": "Person in Not, technische Menschenrettung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Rettung aus Höhen und Tiefen",
-        "beschreibung": "Höhen-/Tiefenrettung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Tier in Not",
-        "beschreibung": "Tierrettung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:Türnotöffnung",
-        "beschreibung": "Notöffnung wegen Person in Gefahr",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:VU Klemm",
-        "beschreibung": "Person im Fahrzeug eingeklemmt",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:VU Lkw/Bus",
-        "beschreibung": "Schwerfahrzeug-Unfall",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:VU mit P",
-        "beschreibung": "Verkehrsunfall mit Personenschaden",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:VU ohne P",
-        "beschreibung": "Verkehrsunfall ohne Personenschaden",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:VU Schiene",
-        "beschreibung": "Bahnunfall",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "H:VU Schiff",
-        "beschreibung": "Schiffsunfall",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "K1:KTW",
-        "beschreibung": "Krankentransport (sitzend/liegend, ggf. Sauerstoff)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "K2:KTW-Infektionsfahrt",
-        "beschreibung": "Krankentransport, Infektionsfahrt (z.B. MRSA)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "MAN-E",
-        "beschreibung": "Größere Zahl von Erkrankten (z.B. Lebensmittelvergiftung in einer Einrichtung)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "MANV-Groß",
-        "beschreibung": "Massenanfall von Verletzten, groß (mehr als 20 Verletzte/Erkrankte)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "MANV-Klein",
-        "beschreibung": "Massenanfall von Verletzten, klein (5-9 Verletzte/Erkrankte)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "MANV-Mittel",
-        "beschreibung": "Massenanfall von Verletzten, mittel (10-19 Verletzte/Erkrankte)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S1:Baby-NAW/Inkubator",
-        "beschreibung": "Baby-Notarztwagen, Fahrt mit Inkubator",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S10:COVID19",
-        "beschreibung": "Einsatz im Zusammenhang mit einer Corona-Erkrankung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S2:Notfallseelsorge",
-        "beschreibung": "Notfallseelsorge nach Einsatzgeschehen",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S3:Org-Fahrten",
-        "beschreibung": "Organisatorische Fahrt/Werkstattfahrt",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S4:Polizeiliche-Einsatzlage",
-        "beschreibung": "Einsatz wird durch die Polizei geführt (KLEE-Einsatz)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S5:Ausnahmelage",
-        "beschreibung": "Information über eine Ausnahmelage (z.B. Unwetter)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S6:Polizei-übergeben",
-        "beschreibung": "Einsatz an die Polizei übergeben",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S61:COVID19 - Information/Übergabe",
-        "beschreibung": "Information/Einsatzübergabe zu 116117, Kassenarzt, Hausarzt oder Gesundheitsamt",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S62:COVID19 - Unterstützung Leitstelle",
-        "beschreibung": "Unterstützung des Gesundheitsamtes bzw. anderer Ämter/Institutionen",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S63:COVID19 - Einsatz Leitstelle",
-        "beschreibung": "Einsatz Regel-Rettungsdienst",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S7:Einsatz-Ablehung",
-        "beschreibung": "Ablehnung eines Einsatzes von ITH/RTH/V-NEF (keine Höher-/Niederstufung)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S8:AnforderungRettungshundestaffel",
-        "beschreibung": "Anforderung von Rettungshunden",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "S9:Polizei-erhalten",
-        "beschreibung": "Einsatz von der Polizei übernommen",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "ÜMANV-Sofort",
-        "beschreibung": "Eigene Maßnahmen bei MANV eines anderen Trägers",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V1N",
-        "beschreibung": "Verlegung, Primärtransport bodengebunden mit Notarztbegleitung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V1R",
-        "beschreibung": "Verlegung, Primärtransport bodengebunden",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V2N",
-        "beschreibung": "Verlegung, Sekundärtransport bodengebunden mit Notarztbegleitung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V2R",
-        "beschreibung": "Verlegung, Sekundärtransport bodengebunden",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V3N",
-        "beschreibung": "Verlegung, Sekundärtransport mit Luftrettungsmittel",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V4N",
-        "beschreibung": "Verlegung, Primärtransport mit Luftrettungsmittel",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V5R",
-        "beschreibung": "Verlegung, im Vorfeld genehmigter Transport (z.B. ADAC-Rücktransport)",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V6N-COVID19",
-        "beschreibung": "Verlegung/Transport infektiöser Covid-19-Patienten mit Arztbegleitung",
-        "matchType": "startsWith"
-      },
-      {
-        "stichwort": "V6R-COVID19",
-        "beschreibung": "Verlegung/Transport infektiöser Covid-19-Patienten (RTW/KTW)",
-        "matchType": "startsWith"
-      }
-    ],
-    "rdLabelR": "Rettungswagen",
-    "rdLabelN": "Notfalleinsatzfahrzeug",
-    "rdLabelP": "Polytrauma",
-    "rdLabelF": "First Responder",
-    "rdLabelNT": "Notfalltransport mit Notfallkrankenwagen",
-    "mapImageEnabled": false,
-    "mapImageShowPolygon": true,
-    "mapImageWidth": 600,
-    "mapImageHeight": 400,
-    "mapImageZoom": 19,
-    "mapImageOutlineColor": "#dd2020",
-    "mapImageOutlineThickness": 4,
-    "mapImageTimeout": 10
-  },
-  "objects": [],
-  "instanceObjects": [
-    {
-      "_id": "info",
-      "type": "channel",
-      "common": {
-        "name": "Information"
-      },
-      "native": {}
-    },
-    {
-      "_id": "info.connection",
-      "type": "state",
-      "common": {
-        "role": "indicator.connected",
-        "name": "Verbunden mit WAIP-Server",
-        "type": "boolean",
-        "read": true,
-        "write": false,
-        "def": false
-      },
-      "native": {}
-    }
-  ]
 }

@@ -792,3 +792,21 @@ here for a complete history of what was worked on.)*
 - Initial version: ported the original "WAIP Instrumented v3.9" ioBroker
   JavaScript-adapter script into a standalone adapter. The URL/monitor
   ID now come from the admin configuration instead of a runtime state.
+## 0.7.33 (2026-08-24)
+
+- Admin UI cleanup for two panels:
+  - [Rescue service](#rescue-service): the keyword-decoding checkbox
+    and its label fields are now hidden while **Process rescue-service
+    incidents** is unchecked (irrelevant otherwise, since such
+    incidents are ignored entirely anyway).
+  - [Incident map image](#incident-map-image): **Zoom level**, the
+    renamed **Marker & outline color** (used by both display modes,
+    not just the outline) and **Image width/height** now sit above
+    **Show incident-area polygon**, since all three apply regardless
+    of that setting; **OSM timeout** moved directly under the enable
+    checkbox; only **Outline thickness** (genuinely polygon-only, the
+    marker dot's size isn't configurable) is now hidden while **Show
+    incident-area polygon** is off.
+
+Older entries have moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md) - this
+section shows only the 5 most recent versions.
