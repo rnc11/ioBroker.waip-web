@@ -514,6 +514,11 @@ example.
 
 ## Changelog
 
+<!--
+    Placeholder for the next version (at the beginning of the line):
+    ### **WORK IN PROGRESS**
+-->
+
 ### 0.7.37 (2026-08-26)
 
 - Fixed a bug where a routes update (`io.routes`) or TTS announcement

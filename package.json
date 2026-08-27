@@ -56,6 +56,10 @@
     "test:integration": "mocha test/integration.js --exit",
     "test": "npm run test:package",
     "lint": "eslint -c eslint.config.mjs .",
+    "check:i18n": "node scripts/check-i18n.js",
+    "check:repo": "node scripts/repocheck.js",
+    "check": "npm run lint && npm run test:package && npm run check:i18n",
+    "preflight": "npm run check && npm run check:repo",
     "translate": "translate-adapter",
     "release": "release-script"
   }
