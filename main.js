@@ -234,6 +234,17 @@ const DEFAULT_DASHBOARD_REFRESH_SEC = 60;
 // safety margin, not a normal-case wait time.
 const DASHBOARD_CONNECT_TIMEOUT_MS = 5000;
 const DASHBOARD_COLLECT_WINDOW_MS = 2000;
+// DE: Flache Felder aus io.Einsatz, die 1:1 nach dashboard.einsatzN.<feld> geschrieben
+// werden (siehe refreshDashboard()). Analog zu ALLOWED_EINSATZ_FIELDS, aber OHNE
+// ablaufzeit (existiert im /dbrd-Payload nicht, live verifiziert - siehe Plandokument
+// Abschnitt 1) - kartenbildPfad/latitude/longitude/beschreibung/alarmierungszeit werden
+// wie bei einsatz.* als Sonderfälle behandelt, nicht über diese Liste.
+// EN: Flat fields from io.Einsatz written 1:1 to dashboard.einsatzN.<field> (see
+// refreshDashboard()). Analogous to ALLOWED_EINSATZ_FIELDS, but WITHOUT ablaufzeit
+// (doesn't exist in the /dbrd payload, live-verified - see the plan document section 1)
+// - kartenbildPfad/latitude/longitude/beschreibung/alarmierungszeit are handled as
+// special cases just like for einsatz.*, not through this list.
+const DASHBOARD_ALLOWED_FIELDS = ['id', 'uuid', 'einsatzart', 'stichwort', 'ort', 'ortsteil', 'sondersignal'];
 
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
@@ -1482,6 +1493,16 @@ class WaipWeb extends utils.Adapter {
         // loaded from the DB.
         this._monitorAuditQueue = Promise.resolve();
         this._monitorAuditCache = null;
+        // DE: Serialisierungskette für refreshDashboard() (Plandokument Abschnitt 4.3,
+        // identisches Muster wie this._monitorAuditQueue oben) - verhindert, dass ein
+        // zeitgesteuerter und ein alarm-/manuell-getriggerter Refresh überlappend laufen
+        // und sich beim sequenziellen Abarbeiten der Slots gegenseitig ins Gehege kommen.
+        // EN: Serialization chain for refreshDashboard() (plan document section 4.3,
+        // identical pattern to this._monitorAuditQueue above) - prevents a timed and an
+        // alarm-/manually-triggered refresh from running concurrently and interfering
+        // with each other while sequentially working through the slots.
+        this._dashboardRefreshQueue = Promise.resolve();
+        this._dashboardRefreshFirstCycleDone = false;
         this._wrongMonitorWindowStart = 0; // -> checkWrongMonitorRate()
         this._wrongMonitorWindowCount = 0;
         this.lastServerVersion = null;
@@ -2238,9 +2259,13 @@ class WaipWeb extends utils.Adapter {
        Rückgabe bei "Einsatz nicht mehr verfügbar" (io.error ODER io.deleted - siehe
        Plandokument Abschnitt 1: beide Events bedeuten dasselbe, ein zwischen
        /dbrd/-Listing und Verbindungsaufbau bereits abgeschlossener Einsatz liefert real
-       io.error, nicht io.deleted wie im offiziellen Client vorgesehen) sowie bei Timeout:
-       null - kein Fehler-Log auf warn/error-Ebene, das ist im Normalbetrieb erwarteter
-       Vorgang (siehe refreshDashboard(), das für einen null-Rückgabewert nur debug loggt).
+       io.error, nicht io.deleted wie im offiziellen Client vorgesehen): null - kein
+       Fehler-Log auf warn/error-Ebene, das ist im Normalbetrieb erwarteter Vorgang.
+       Rückgabe bei Verbindungs-Timeout/connect_error: der String 'timeout' - bewusst von
+       null unterschieden, damit refreshDashboard() dafür das eigene
+       logRecurringFailure('dashboardSlotTimeout', ...) aus Plandokument Abschnitt 4.7
+       auslösen kann, statt es mit dem regulären "Einsatz nicht mehr verfügbar"-Fall zu
+       verwechseln.
 
        EN: Collects a single incident's detail data via a short-lived, standalone Socket.IO
        connection to the /dbrd namespace (plan document section 4.2 - live-verified: the
@@ -2254,9 +2279,13 @@ class WaipWeb extends utils.Adapter {
        Return on "incident no longer available" (io.error OR io.deleted - see the plan
        document section 1: both events mean the same thing, an incident already finished
        between the /dbrd/ listing and the connection setup returns io.error in reality, not
-       io.deleted as the official client expects) as well as on timeout: null - no warn/
-       error-level log, that's an expected occurrence in normal operation (see
-       refreshDashboard(), which only logs at debug for a null return value). */
+       io.deleted as the official client expects): null - no warn/error-level log, that's
+       an expected occurrence in normal operation.
+       Return on connect timeout/connect_error: the string 'timeout' - deliberately
+       distinguished from null, so refreshDashboard() can trigger its own
+       logRecurringFailure('dashboardSlotTimeout', ...) from the plan document section 4.7
+       for it, instead of confusing it with the regular "incident no longer available"
+       case. */
     async fetchDbrdDetail(uuid) {
         return new Promise(resolve => {
             const namespaceUrl = `${this.url}/dbrd`;
@@ -2302,7 +2331,7 @@ class WaipWeb extends utils.Adapter {
 
             connectTimeoutHandle = this.setTimeout(() => {
                 this.safeLog('debug', `fetchDbrdDetail: connect timeout (uuid ${uuid})`);
-                finish(null);
+                finish('timeout');
             }, DASHBOARD_CONNECT_TIMEOUT_MS);
 
             socket.on('connect', () => {
@@ -2348,7 +2377,7 @@ class WaipWeb extends utils.Adapter {
             });
             socket.on('connect_error', err => {
                 this.safeLog('debug', `fetchDbrdDetail: connect_error (uuid ${uuid})`, err);
-                finish(null);
+                finish('timeout');
             });
         });
     }
@@ -3243,6 +3272,237 @@ class WaipWeb extends utils.Adapter {
             // been off - not an error condition, identical to "no match".
             this.safeLog('debug', `resolveDashboardMapImage (uuid ${uuid})`, e);
             return null;
+        }
+    }
+
+    /* DE: Öffentlicher Einstiegspunkt für einen Dashboard-Refresh-Zyklus - serialisiert
+       gegen sich selbst über this._dashboardRefreshQueue (Plandokument Abschnitt 4.3,
+       identisches Muster wie appendMonitorAudit()/this._monitorAuditQueue), damit ein
+       zeitgesteuerter (startDashboardRefreshInterval(), Phase 7), ein alarm-getriggerter
+       (Hook in handleAlarm(), Phase 7) und ein manueller (dashboard.refreshNow-Button,
+       Phase 7) Refresh niemals überlappend laufen - der zweite Aufruf wartet einfach,
+       bis der erste fertig ist, statt zwei Zyklen parallel sequenziell durch dieselben
+       Slots laufen zu lassen. _refreshDashboardNow() fängt alle eigenen Fehler ab (siehe
+       dort), daher bleibt diese Queue immer resolved und kann nie dauerhaft blockieren.
+       No-op, falls dashboardEnabled aus ist (Aufrufer prüfen das i.d.R. bereits selbst,
+       siehe Phase 7 - diese Prüfung hier ist eine zusätzliche Absicherung).
+       EN: Public entry point for a dashboard refresh cycle - serialized against itself via
+       this._dashboardRefreshQueue (plan document section 4.3, identical pattern to
+       appendMonitorAudit()/this._monitorAuditQueue), so a timed
+       (startDashboardRefreshInterval(), phase 7), an alarm-triggered (hook in
+       handleAlarm(), phase 7), and a manual (dashboard.refreshNow button, phase 7) refresh
+       never run concurrently - the second call simply waits for the first to finish
+       instead of two cycles running through the same slots in parallel.
+       _refreshDashboardNow() catches all its own errors (see there), so this queue always
+       stays resolved and can never permanently block. No-op if dashboardEnabled is off
+       (callers usually already check this themselves, see phase 7 - this check here is an
+       additional safeguard). */
+    refreshDashboard() {
+        if (!this.dashboardEnabled) {
+            this.safeLog('debug', 'refreshDashboard: dashboardEnabled is off, skipping');
+            return this._dashboardRefreshQueue;
+        }
+        this._dashboardRefreshQueue = this._dashboardRefreshQueue.then(() => this._refreshDashboardNow());
+        return this._dashboardRefreshQueue;
+    }
+
+    /* DE: Führt einen einzelnen Dashboard-Refresh-Zyklus aus (Plandokument Abschnitt 4.1,
+       voller Ablauf). Wird ausschließlich über refreshDashboard() aufgerufen, nie direkt -
+       das stellt die Serialisierung sicher.
+       EN: Runs a single dashboard refresh cycle (plan document section 4.1, full flow).
+       Called exclusively through refreshDashboard(), never directly - that's what
+       guarantees the serialization. */
+    async _refreshDashboardNow() {
+        let list;
+        try {
+            list = await this.fetchDbrdList();
+        } catch (e) {
+            this.logRecurringFailure('dashboardListing', 'warn', 'refreshDashboard: fetchDbrdList', e);
+            return;
+        }
+        this.logRecovered('dashboardListing', 'Dashboard listing fetch recovered');
+
+        const filtered = list.filter(entry => {
+            const matches = dbrdEntryMatchesMonitor(entry, this.monitorID);
+            if (!matches) {
+                this.safeLog(
+                    'debug',
+                    `Dashboard: incident ${String(entry && entry.uuid).slice(0, 8)} excluded, does not match monitor ${this.monitorID} (l=${entry && entry.l} a=${entry && entry.a} b=${entry && entry.b} c=${entry && entry.c})`,
+                );
+            }
+            return matches;
+        });
+
+        const n = Math.min(this.dashboardSlotCount, filtered.length);
+        let slotsFilled = 0;
+        let anySlotTimedOut = false;
+
+        // DE: SEQUENZIELL (Plandokument Frage 1) - eine Kurzverbindung nach der anderen,
+        // nicht parallel, um die Serverlast minimal zu halten.
+        // EN: SEQUENTIAL (plan document question 1) - one short-lived connection after
+        // another, not in parallel, to keep server load minimal.
+        for (let i = 1; i <= this.dashboardSlotCount; i++) {
+            if (i > n) {
+                await this.clearDashboardSlot(i);
+                continue;
+            }
+            const entry = filtered[i - 1];
+            const detail = await this.fetchDbrdDetail(entry.uuid);
+            if (detail === 'timeout') {
+                anySlotTimedOut = true;
+                await this.clearDashboardSlot(i);
+                continue;
+            }
+            if (!detail) {
+                // DE: io.error/io.deleted - Einsatz zwischen Listing und Verbindungsaufbau
+                // bereits abgeschlossen (Race, siehe Plandokument Abschnitt 1). Erwarteter
+                // Vorgang, kein Fehler - fetchDbrdDetail() hat bereits auf debug geloggt.
+                // EN: io.error/io.deleted - incident already finished between the listing
+                // and the connection setup (race, see the plan document section 1).
+                // Expected occurrence, not an error - fetchDbrdDetail() already logged at
+                // debug.
+                await this.clearDashboardSlot(i);
+                continue;
+            }
+            await this.writeDashboardSlot(i, entry, detail);
+            slotsFilled++;
+        }
+
+        if (anySlotTimedOut) {
+            this.logRecurringFailure(
+                'dashboardSlotTimeout',
+                'warn',
+                'refreshDashboard',
+                `at least one dashboard slot connection timed out (limit ${DASHBOARD_CONNECT_TIMEOUT_MS}ms)`,
+            );
+        } else {
+            this.logRecovered('dashboardSlotTimeout', 'Dashboard slot connections recovering');
+        }
+
+        if (!this._dashboardRefreshFirstCycleDone) {
+            this._dashboardRefreshFirstCycleDone = true;
+            this.log.info(
+                `Dashboard refresh complete: ${slotsFilled} of ${this.dashboardSlotCount} slots filled (monitor ${this.monitorID})`,
+            );
+            this.appendMonitorAudit({
+                ts: new Date().toISOString(),
+                event: 'dashboard_refresh',
+                slotsFilled,
+                slotsTotal: this.dashboardSlotCount,
+            }).catch(() => {});
+        }
+    }
+
+    /* DE: Befüllt Dashboard-Slot i mit den Daten eines fetchDbrdDetail()-Ergebnisses.
+       Schreibt IMMER alle Felder neu (Plandokument Frage 11 - kein Vorher-Nachher-Vergleich,
+       ioBroker dedupliziert unveränderte Werte bereits selbst auf State-Ebene), auch wenn
+       derselbe Einsatz bereits im vorigen Zyklus auf diesem Slot lag - so kommen neue
+       Rückmeldungen/Routen garantiert durch, ohne eigene Change-Detection-Logik.
+       EN: Fills dashboard slot i with the data from a fetchDbrdDetail() result. ALWAYS
+       rewrites every field (plan document question 11 - no before/after comparison,
+       ioBroker already deduplicates unchanged values itself at the state level), even if
+       the same incident already occupied this slot in the previous cycle - this way new
+       feedback/routes are guaranteed to come through, without any custom change-detection
+       logic. */
+    async writeDashboardSlot(i, listingEntry, detail) {
+        const p = `dashboard.einsatz${i}`;
+        const einsatz = normalizeData(detail.einsatz || {});
+        const routes = Array.isArray(detail.routes) ? detail.routes : [];
+        const rueckmeldungen = Array.isArray(detail.rueckmeldungen) ? detail.rueckmeldungen : [];
+
+        const tasks = [this.setField(`${p}.alarmAktiv`, true)];
+        for (const k of DASHBOARD_ALLOWED_FIELDS) {
+            const val = Object.prototype.hasOwnProperty.call(einsatz, k) ? einsatz[k] : (listingEntry[k] ?? null);
+            tasks.push(this.setField(`${p}.${k}`, val));
+        }
+        tasks.push(
+            this.setField(
+                `${p}.beschreibung`,
+                this.lookupStichwortBeschreibung(einsatz.stichwort || listingEntry.stichwort),
+            ),
+        );
+        tasks.push(this.setField(`${p}.alarmierungszeit`, einsatz.zeitstempel ?? null));
+        const lat = einsatz.position && typeof einsatz.position.lat === 'number' ? einsatz.position.lat : null;
+        const lon = einsatz.position && typeof einsatz.position.lon === 'number' ? einsatz.position.lon : null;
+        tasks.push(this.setField(`${p}.latitude`, lat));
+        tasks.push(this.setField(`${p}.longitude`, lon));
+        tasks.push(this.setField(`${p}.routenGesamt`, routes.length));
+        tasks.push(this.updateRueckmeldungCounts(rueckmeldungen, p));
+        tasks.push(
+            this.writeJsonArrayState(
+                `${p}.json.routen`,
+                routes.map(r => this.flattenRoutenEntry(r)),
+            ),
+        );
+        tasks.push(this.writeJsonArrayState(`${p}.json.rueckmeldungen`, rueckmeldungen));
+        tasks.push(this.writeJsonArrayState(`${p}.json.emAlarmiert`, einsatz.einsatzmittel));
+        tasks.push(this.writeJsonArrayState(`${p}.json.wachen`, einsatz.wachen));
+        tasks.push(
+            this.setStateAsync(
+                `${p}.json.current`,
+                JSON.stringify([this.buildFlatDashboardJson(einsatz, listingEntry)]),
+                true,
+            ),
+        );
+
+        const mapImagePath = await this.resolveDashboardMapImage(listingEntry.uuid);
+        if (!mapImagePath) {
+            this.safeLog(
+                'debug',
+                `Dashboard slot ${i}: no matching incident-map image found for uuid ${String(listingEntry.uuid).slice(0, 8)}`,
+            );
+        }
+        tasks.push(this.setField(`${p}.kartenbildPfad`, mapImagePath));
+
+        const results = await Promise.allSettled(tasks);
+        for (const r of results) {
+            if (r.status === 'rejected') {
+                this.safeWarn(`writeDashboardSlot ${i}`, r.reason);
+            }
+        }
+    }
+
+    /* DE: Baut das flache JSON-Objekt für dashboard.einsatzN.json.current - Dashboard-
+       Pendant zu buildFlatEinsatzJson(), aber ohne registeredMonitor/registeredMonitorName
+       (die beziehen sich beim Dashboard nicht sinnvoll auf einen einzelnen Slot) und ohne
+       den lat/lon-Präfix aus this.ALLOWED_EINSATZ_FIELDS (das Dashboard-Schema nutzt
+       DASHBOARD_ALLOWED_FIELDS, siehe dort).
+       EN: Builds the flat JSON object for dashboard.einsatzN.json.current - dashboard
+       counterpart to buildFlatEinsatzJson(), but without registeredMonitor/
+       registeredMonitorName (they don't meaningfully apply to a single dashboard slot)
+       and without the lat/lon prefix from this.ALLOWED_EINSATZ_FIELDS (the dashboard
+       schema uses DASHBOARD_ALLOWED_FIELDS, see there). */
+    buildFlatDashboardJson(einsatz, listingEntry) {
+        const flat = {};
+        for (const k of DASHBOARD_ALLOWED_FIELDS) {
+            flat[k] = Object.prototype.hasOwnProperty.call(einsatz, k) ? einsatz[k] : (listingEntry[k] ?? null);
+        }
+        flat.lat = einsatz.position && typeof einsatz.position.lat === 'number' ? einsatz.position.lat : null;
+        flat.lon = einsatz.position && typeof einsatz.position.lon === 'number' ? einsatz.position.lon : null;
+        flat.beschreibung = this.lookupStichwortBeschreibung(einsatz.stichwort || listingEntry.stichwort);
+        flat.alarmierungszeit = einsatz.zeitstempel ?? null;
+        return flat;
+    }
+
+    /* DE: Setzt Dashboard-Slot i auf die Leerwerte zurück (Plandokument Frage 7 - für
+       Slots, die durch den Monitor-Filter nicht belegt werden konnten, identisch zum
+       bestehenden resetAllStates()-Verhalten für unbelegte Felder). Nutzt
+       computeEmptyStateValue() für die dashboard.*-STATE_DEFS dieses Slots, statt die
+       Leerwerte hier ein zweites Mal von Hand zu pflegen.
+       EN: Resets dashboard slot i to its empty values (plan document question 7 - for
+       slots the monitor filter couldn't fill, identical to the existing
+       resetAllStates() behavior for unoccupied fields). Uses computeEmptyStateValue()
+       for this slot's dashboard.* STATE_DEFS instead of hand-maintaining the empty
+       values a second time here. */
+    async clearDashboardSlot(i) {
+        const prefix = `dashboard.einsatz${i}.`;
+        const defs = this.dashboardStateDefs.filter(d => d.id.startsWith(prefix));
+        const tasks = defs.map(d => this.setField(d.id, this.computeEmptyStateValue(d)));
+        const results = await Promise.allSettled(tasks);
+        for (const r of results) {
+            if (r.status === 'rejected') {
+                this.safeWarn(`clearDashboardSlot ${i}`, r.reason);
+            }
         }
     }
 

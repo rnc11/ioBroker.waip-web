@@ -1181,7 +1181,7 @@ describe('fetchDbrdDetail', () => {
         expect(socket.disconnected).to.be.true;
     });
 
-    it('resolves to null on a connect timeout', async () => {
+    it('resolves to "timeout" on a connect timeout (distinguished from io.error/io.deleted for logRecurringFailure)', async () => {
         const { inst, timers } = makeInstance();
         const promise = inst.fetchDbrdDetail('some-uuid');
 
@@ -1190,7 +1190,7 @@ describe('fetchDbrdDetail', () => {
         timers[0].fn();
 
         const result = await promise;
-        expect(result).to.be.null;
+        expect(result).to.equal('timeout');
     });
 
     it('resolves to null on io.error (incident already gone, race with /dbrd/ listing)', async () => {
@@ -1212,12 +1212,12 @@ describe('fetchDbrdDetail', () => {
         expect(result).to.be.null;
     });
 
-    it('resolves to null on connect_error', async () => {
+    it('resolves to "timeout" on connect_error', async () => {
         const { inst, socket } = makeInstance();
         const promise = inst.fetchDbrdDetail('some-uuid');
         socket.trigger('connect_error', new Error('ECONNREFUSED'));
         const result = await promise;
-        expect(result).to.be.null;
+        expect(result).to.equal('timeout');
     });
 
     it('ignores a second terminal event after the first one already settled the promise', async () => {
@@ -1392,5 +1392,219 @@ describe('resolveDashboardMapImage', () => {
         await touch('einsatz_1000_40411df6.txt');
         const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
         expect(result).to.be.null;
+    });
+});
+
+describe('refreshDashboard / _refreshDashboardNow (orchestration, plan document section 4.1/4.3/4.7)', () => {
+    const proto = t.WaipWeb.prototype;
+
+    // DE: 3 Slots statt der Default-10 halten die Testfälle übersichtlich - die Logik
+    // skaliert nicht mit der Slot-Anzahl.
+    // EN: 3 slots instead of the default 10 keep the test cases manageable - the logic
+    // doesn't scale with slot count.
+    const SLOT_COUNT = 3;
+
+    function makeInstance(overrides = {}) {
+        const written = {};
+        const dashboardStateDefs = t.buildDashboardStateDefs(SLOT_COUNT);
+        const inst = Object.create(proto);
+        Object.assign(
+            inst,
+            {
+                dashboardEnabled: true,
+                dashboardSlotCount: SLOT_COUNT,
+                dashboardStateDefs,
+                dashboardJsonArrayStateIds: t.deriveDashboardJsonArrayStateIds(dashboardStateDefs),
+                dashboardNullableNumberStateIds: t.deriveDashboardNullableNumberStateIds(dashboardStateDefs),
+                monitorID: '0',
+                mapImageDir: '/does/not/exist/on/this/machine',
+                stichwortMapping: [],
+                rdKeywordDecodingEnabled: false,
+                log: { info: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
+                _recurringFailureKeys: new Set(),
+                _warnCache: new Map(),
+                _monitorAuditQueue: Promise.resolve(),
+                _monitorAuditCache: null,
+                _dashboardRefreshQueue: Promise.resolve(),
+                _dashboardRefreshFirstCycleDone: false,
+                getStateAsync: async () => null,
+                setStateAsync: async (id, val) => {
+                    written[id] = val;
+                },
+                fetchDbrdList: async () => [],
+                fetchDbrdDetail: async () => null,
+            },
+            overrides,
+        );
+        return { inst, written };
+    }
+
+    function sampleListingEntry(uuid, overrides = {}) {
+        return { uuid, einsatzart: 'Hilfeleistungseinsatz', stichwort: 'H:VU-mit-P', ort: 'Burg', ortsteil: null, l: '4', a: '71', b: '7105', c: '710512,710506,710503', ...overrides };
+    }
+
+    function sampleDetail(overrides = {}) {
+        return {
+            einsatz: { id: 1607178, uuid: 'fbacf1ff-uuid', einsatzart: 'Hilfeleistungseinsatz', stichwort: 'H:VU-mit-P', ort: 'Burg', ortsteil: null, sondersignal: 1, einsatzmittel: [], wachen: [] },
+            routes: [],
+            rueckmeldungen: [],
+            ...overrides,
+        };
+    }
+
+    it('fills matching slots and clears the remaining ones (fewer incidents than slots)', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid =>
+                uuid === entry1.uuid ? sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } }) : null,
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(true);
+        expect(written['dashboard.einsatz1.uuid']).to.equal(entry1.uuid);
+        // DE: unbelegte Slots 2/3 tragen die Leerwerte statt der Slot-1-Daten.
+        // EN: unoccupied slots 2/3 carry the empty values instead of slot 1's data.
+        expect(written['dashboard.einsatz2.alarmAktiv']).to.equal(false);
+        expect(written['dashboard.einsatz2.uuid']).to.be.null;
+        expect(written['dashboard.einsatz3.alarmAktiv']).to.equal(false);
+    });
+
+    it('maps filtered incidents onto slots 1..N positionally, respecting server order', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const entry2 = sampleListingEntry('22222222-2222-2222-2222-222222222222', { ort: 'Elsterwerda' });
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1, entry2],
+            fetchDbrdDetail: async uuid =>
+                sampleDetail({
+                    einsatz: {
+                        ...sampleDetail().einsatz,
+                        uuid,
+                        ort: uuid === entry1.uuid ? entry1.ort : entry2.ort,
+                    },
+                }),
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.uuid']).to.equal(entry1.uuid);
+        expect(written['dashboard.einsatz1.ort']).to.equal('Burg');
+        expect(written['dashboard.einsatz2.uuid']).to.equal(entry2.uuid);
+        expect(written['dashboard.einsatz2.ort']).to.equal('Elsterwerda');
+        expect(written['dashboard.einsatz3.alarmAktiv']).to.equal(false);
+    });
+
+    it('excludes incidents that do not match the configured monitorID before connecting', async () => {
+        const matching = sampleListingEntry('11111111-1111-1111-1111-111111111111', { l: '4', a: '71', b: '7105', c: '710503' });
+        const nonMatching = sampleListingEntry('99999999-9999-9999-9999-999999999999', { l: '9', a: '99', b: '9999', c: '999999' });
+        let detailCalls = 0;
+        const { inst, written } = makeInstance({
+            monitorID: '71',
+            fetchDbrdList: async () => [nonMatching, matching],
+            fetchDbrdDetail: async uuid => {
+                detailCalls++;
+                return sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } });
+            },
+        });
+        await inst.refreshDashboard();
+        // DE: nur EIN fetchDbrdDetail-Aufruf - der nicht-passende Eintrag wurde bereits vor
+        // dem Verbindungsaufbau ausgefiltert (Plandokument Frage 9).
+        // EN: only ONE fetchDbrdDetail call - the non-matching entry was already filtered
+        // out before the connection attempt (plan document question 9).
+        expect(detailCalls).to.equal(1);
+        expect(written['dashboard.einsatz1.uuid']).to.equal(matching.uuid);
+    });
+
+    it('clamps to dashboardSlotCount when more matching incidents exist than slots', async () => {
+        const entries = [
+            sampleListingEntry('11111111-1111-1111-1111-111111111111'),
+            sampleListingEntry('22222222-2222-2222-2222-222222222222'),
+            sampleListingEntry('33333333-3333-3333-3333-333333333333'),
+            sampleListingEntry('44444444-4444-4444-4444-444444444444'),
+        ];
+        let detailCalls = 0;
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => entries,
+            fetchDbrdDetail: async uuid => {
+                detailCalls++;
+                return sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } });
+            },
+        });
+        await inst.refreshDashboard();
+        expect(detailCalls).to.equal(SLOT_COUNT);
+        expect(written['dashboard.einsatz3.uuid']).to.equal(entries[2].uuid);
+    });
+
+    it('treats a slot returning null (io.error/io.deleted race) as empty, without aborting the cycle', async () => {
+        const gone = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const ok = sampleListingEntry('22222222-2222-2222-2222-222222222222');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [gone, ok],
+            fetchDbrdDetail: async uuid =>
+                uuid === gone.uuid ? null : sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } }),
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(false);
+        expect(written['dashboard.einsatz2.uuid']).to.equal(ok.uuid);
+    });
+
+    it('treats a slot timeout as empty and logs a recurring warning', async () => {
+        const timedOut = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const warnings = [];
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [timedOut],
+            fetchDbrdDetail: async () => 'timeout',
+            log: { info: () => {}, debug: () => {}, warn: msg => warnings.push(msg), error: () => {} },
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(false);
+        expect(warnings.some(w => /timed out/.test(w))).to.be.true;
+    });
+
+    it('logs the first successful cycle to the monitor audit log exactly once', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid => sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } }),
+        });
+        await inst.refreshDashboard();
+        await inst.refreshDashboard();
+        const audit = JSON.parse(written['debug.monitorAudit']);
+        const refreshEntries = audit.filter(e => e.event === 'dashboard_refresh');
+        expect(refreshEntries).to.have.lengthOf(1);
+        expect(refreshEntries[0].slotsFilled).to.equal(1);
+        expect(refreshEntries[0].slotsTotal).to.equal(SLOT_COUNT);
+    });
+
+    it('a listing fetch failure is caught, logged, and does not throw', async () => {
+        const { inst } = makeInstance({
+            fetchDbrdList: async () => {
+                throw new Error('ECONNREFUSED');
+            },
+        });
+        await inst.refreshDashboard();
+        // DE: kein Wurf bis hierher = Erfolg. Der Zyklus bricht früh ab, ohne Slots zu berühren.
+        // EN: no throw up to this point = success. The cycle aborts early, without touching slots.
+    });
+
+    it('is a no-op when dashboardEnabled is off', async () => {
+        const { inst, written } = makeInstance({ dashboardEnabled: false, fetchDbrdList: async () => [sampleListingEntry('x')] });
+        await inst.refreshDashboard();
+        expect(Object.keys(written)).to.be.empty;
+    });
+
+    it('serializes two concurrent refreshDashboard() calls instead of running them in parallel', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        let concurrent = 0;
+        let maxConcurrent = 0;
+        const { inst } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid => {
+                concurrent++;
+                maxConcurrent = Math.max(maxConcurrent, concurrent);
+                await new Promise(r => setTimeout(r, 5));
+                concurrent--;
+                return sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } });
+            },
+        });
+        await Promise.all([inst.refreshDashboard(), inst.refreshDashboard()]);
+        expect(maxConcurrent).to.equal(1);
     });
 });
