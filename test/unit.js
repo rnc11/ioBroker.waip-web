@@ -1608,3 +1608,68 @@ describe('refreshDashboard / _refreshDashboardNow (orchestration, plan document 
         expect(maxConcurrent).to.equal(1);
     });
 });
+
+describe('onStateChange (dashboard.refreshNow button, plan document section 3.5)', () => {
+    const proto = t.WaipWeb.prototype;
+
+    function makeInstance() {
+        const written = {};
+        let refreshCalls = 0;
+        const inst = Object.create(proto);
+        inst.namespace = 'waip-web.0';
+        inst.safeWarn = () => {};
+        inst.refreshDashboard = async () => {
+            refreshCalls++;
+        };
+        inst.setStateAsync = async (id, val, ack) => {
+            written[id] = { val, ack };
+        };
+        return { inst, written, getRefreshCalls: () => refreshCalls };
+    }
+
+    it('triggers refreshDashboard() on a real user write (ack:false) and resets the button afterwards', async () => {
+        const { inst, written, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', { val: true, ack: false });
+        // DE: onStateChange() ist bewusst synchron (spiegelt den echten ioBroker-Callback) -
+        // die Promise-Kette läuft im Hintergrund weiter, daher hier auf den Abschluss warten.
+        // EN: onStateChange() is deliberately synchronous (mirrors the real ioBroker
+        // callback) - the promise chain keeps running in the background, so wait for it
+        // to finish here.
+        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(1);
+        expect(written['dashboard.refreshNow']).to.deep.equal({ val: false, ack: true });
+    });
+
+    it('does NOT trigger a refresh on the ack:true write it just performed itself (no infinite loop)', async () => {
+        const { inst, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', { val: false, ack: true });
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(0);
+    });
+
+    it('ignores state changes for other IDs', async () => {
+        const { inst, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.einsatz1.alarmAktiv', { val: true, ack: false });
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(0);
+    });
+
+    it('ignores a null state (object deletion notification)', async () => {
+        const { inst, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', null);
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(0);
+    });
+
+    it('still resets the button state even if refreshDashboard() rejects', async () => {
+        const { inst, written } = makeInstance();
+        inst.refreshDashboard = async () => {
+            throw new Error('boom');
+        };
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', { val: true, ack: false });
+        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 0));
+        expect(written['dashboard.refreshNow']).to.deep.equal({ val: false, ack: true });
+    });
+});

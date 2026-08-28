@@ -1467,6 +1467,13 @@ class WaipWeb extends utils.Adapter {
         this.on('ready', this.onReady.bind(this));
         this.on('unload', this.onUnload.bind(this));
         this.on('message', this.onMessage.bind(this));
+        // DE: Erstmaliger stateChange-Listener in diesem Adapter (siehe onStateChange()) -
+        // bisher wurde nirgends subscribeStates() genutzt. Nur für den Dashboard-Refresh-
+        // Button (dashboard.refreshNow, Plandokument Abschnitt 3.5) benötigt.
+        // EN: First stateChange listener in this adapter (see onStateChange()) - until now
+        // subscribeStates() was never used anywhere. Only needed for the dashboard refresh
+        // button (dashboard.refreshNow, plan document section 3.5).
+        this.on('stateChange', this.onStateChange.bind(this));
 
         this.socket = null;
         this.currentMonitor = '';
@@ -1476,6 +1483,7 @@ class WaipWeb extends utils.Adapter {
         this.registrationTimer = null;
         this.reconnectTimer = null;
         this.restzeitInterval = null;
+        this.dashboardRefreshInterval = null; // -> startDashboardRefreshInterval()/onUnload()
         this.sessionKeepaliveTimer = null;
         this.nextSessionKeepaliveDelayMs = null;
         this.sessionCookie = null;
@@ -1668,6 +1676,30 @@ class WaipWeb extends utils.Adapter {
         // them above).
         this.dashboardChannelDefs = this.dashboardEnabled ? buildDashboardChannelDefs(this.dashboardSlotCount) : [];
         this.dashboardStateDefs = this.dashboardEnabled ? buildDashboardStateDefs(this.dashboardSlotCount) : [];
+        // DE: dashboard.refreshNow (Plandokument Abschnitt 3.5 - manueller Refresh-Trigger,
+        // Frage 12) ist bewusst NICHT Teil von buildDashboardStateDefs() (dessen Test
+        // "gives every slot a state count consistent across slots" prüft eine feste Anzahl
+        // Felder PRO SLOT - refreshNow gehört zum Wurzel-Kanal, nicht zu einem Slot,
+        // genau wie 'dashboard' selbst kein Slot-Channel in buildDashboardChannelDefs() ist).
+        // Wird hier separat angehängt, sodass initObjects()/resetAllStates() ihn trotzdem
+        // konsistent mitbehandeln.
+        // EN: dashboard.refreshNow (plan document section 3.5 - manual refresh trigger,
+        // question 12) is deliberately NOT part of buildDashboardStateDefs() (its test
+        // "gives every slot a state count consistent across slots" checks a fixed field
+        // count PER SLOT - refreshNow belongs to the root channel, not a slot, just like
+        // 'dashboard' itself isn't a slot channel in buildDashboardChannelDefs()). Appended
+        // separately here so initObjects()/resetAllStates() still handle it consistently.
+        if (this.dashboardEnabled) {
+            this.dashboardStateDefs.push({
+                id: 'dashboard.refreshNow',
+                type: 'boolean',
+                role: 'button',
+                name: 'Manuellen Dashboard-Refresh auslösen',
+                read: false,
+                write: true,
+                def: false,
+            });
+        }
         // DE: Dashboard-Pendants zu JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS (siehe
         // computeEmptyStateValue()) - abgeleitet aus dashboardStateDefs statt einer zweiten
         // Konstantenliste, damit sie mit buildDashboardStateDefs() nie auseinanderlaufen
@@ -1709,6 +1741,33 @@ class WaipWeb extends utils.Adapter {
         await this.refreshSessionCookie();
         this.startSessionKeepalive();
         this.startRestzeitInterval();
+        if (this.dashboardEnabled) {
+            this.log.info(`Dashboard feature enabled - refreshing every ${this.dashboardRefreshSec}s`);
+            this.appendMonitorAudit({ ts: new Date().toISOString(), event: 'dashboard_enabled' }).catch(() => {});
+            // DE: Sofortiger erster Durchlauf (Plandokument Frage 10) - VOR dem Start des
+            // wiederkehrenden Timers, damit das Dashboard nach einem Adapter-Neustart nicht
+            // bis zu dashboardRefreshSec (max. 300s) lang leer bleibt. Bewusst AWAITED, aber
+            // Fehler werden bereits in _refreshDashboardNow() abgefangen - schlägt hier
+            // trotzdem etwas unerwartet fehl, darf das den restlichen Adapter-Start nicht
+            // verhindern.
+            // EN: Immediate first run (plan document question 10) - BEFORE starting the
+            // recurring timer, so the dashboard doesn't stay empty for up to
+            // dashboardRefreshSec (max. 300s) after an adapter restart. Deliberately
+            // AWAITED, but errors are already caught inside _refreshDashboardNow() -
+            // should something still unexpectedly fail here, it must not prevent the rest
+            // of adapter startup.
+            try {
+                await this.refreshDashboard();
+            } catch (e) {
+                this.safeWarn('initial refreshDashboard', e);
+            }
+            this.startDashboardRefreshInterval();
+            // DE: Nur abonnieren, wenn das Feature aktiv ist - kein Sinn, den Button bei
+            // deaktiviertem Dashboard zu abonnieren (siehe Plandokument Abschnitt 3.5).
+            // EN: Only subscribe when the feature is active - no point subscribing to the
+            // button while the dashboard is disabled (see the plan document section 3.5).
+            this.subscribeStates('dashboard.refreshNow');
+        }
         // DE: Nicht awaiten - der Alarm-Empfang soll nicht auf diesen (rein informativen)
         // Namens-Lookup warten müssen.
         // EN: Not awaited - alarm reception shouldn't have to wait for this (purely
@@ -1732,6 +1791,10 @@ class WaipWeb extends utils.Adapter {
             if (this.restzeitInterval) {
                 this.clearInterval(this.restzeitInterval);
                 this.restzeitInterval = null;
+            }
+            if (this.dashboardRefreshInterval) {
+                this.clearInterval(this.dashboardRefreshInterval);
+                this.dashboardRefreshInterval = null;
             }
             if (this.sessionKeepaliveTimer) {
                 this.clearTimeout(this.sessionKeepaliveTimer);
@@ -1971,8 +2034,16 @@ class WaipWeb extends utils.Adapter {
                         name: def.name,
                         type: def.type,
                         role: def.role,
-                        read: true,
-                        write: false,
+                        // DE: Fällt auf das bisherige Verhalten (read:true/write:false) zurück,
+                        // falls def.read/def.write nicht gesetzt sind - nur dashboard.refreshNow
+                        // (Button-State, Plandokument Abschnitt 3.5) definiert sie bislang
+                        // explizit anders (read:false/write:true).
+                        // EN: Falls back to the previous behavior (read:true/write:false) if
+                        // def.read/def.write aren't set - only dashboard.refreshNow (button
+                        // state, plan document section 3.5) explicitly defines them
+                        // differently so far (read:false/write:true).
+                        read: def.read !== undefined ? def.read : true,
+                        write: def.write !== undefined ? def.write : false,
                         unit: def.unit,
                         def: def.def !== undefined ? def.def : null,
                     },
@@ -4046,6 +4117,25 @@ class WaipWeb extends utils.Adapter {
             await this.persistEinsatzSnapshot();
             await this.writeJsonArrayState('einsatz.json.emAlarmiert', this.currentEinsatzSnapshot.emAlarmiert);
             await this.writeJsonArrayState('einsatz.json.emWeitere', this.currentEinsatzSnapshot.emWeitere);
+            // DE: Ereignisgetriggerter Dashboard-Refresh (Plandokument Abschnitt 4.1) - NICHT
+            // awaited, damit ein (evtl. mehrere Sekunden dauernder, siehe fetchDbrdDetail())
+            // Dashboard-Zyklus die Alarmverarbeitung selbst nicht verzögert. Die
+            // Serialisierung aus refreshDashboard() (this._dashboardRefreshQueue) schützt
+            // zuverlässig davor, dass dieser Aufruf mit einem bereits laufenden
+            // zeitgesteuerten oder manuellen Zyklus überlappt - er reiht sich einfach hinten
+            // an. Nur falls dashboardEnabled, sonst ist refreshDashboard() ohnehin ein No-op
+            // (siehe dort), aber die Prüfung hier vermeidet unnötige Log-Zeilen dafür.
+            // EN: Event-triggered dashboard refresh (plan document section 4.1) - NOT
+            // awaited, so a (possibly multi-second, see fetchDbrdDetail()) dashboard cycle
+            // doesn't delay alarm processing itself. The serialization in
+            // refreshDashboard() (this._dashboardRefreshQueue) reliably prevents this call
+            // from overlapping with an already-running timed or manual cycle - it simply
+            // queues up behind it. Only if dashboardEnabled, since refreshDashboard() is a
+            // no-op anyway otherwise (see there), but the check here avoids an unnecessary
+            // log line for that case.
+            if (this.dashboardEnabled) {
+                this.refreshDashboard().catch(e => this.safeWarn('dashboard.handleAlarm hook', e));
+            }
         } catch (e) {
             // DE: Ein Alarm-Event konnte nicht verarbeitet werden -> echter Datenverlust.
             // EN: An alarm event couldn't be processed -> actual data loss.
@@ -4738,6 +4828,54 @@ class WaipWeb extends utils.Adapter {
             await this.updateRestzeit(rest);
             await this.checkMissedStandby(rest);
         }, 1000);
+    }
+
+    /* DE: Intervall: zeitgesteuerter Dashboard-Refresh (Plandokument Abschnitt 4.1), analog
+       zu startRestzeitInterval() oben. Intervall ist this.dashboardRefreshSec (30-300s,
+       siehe onReady()) statt eines festen Werts. Nur aus onReady() aufgerufen, wenn
+       dashboardEnabled ist (siehe dort) - onUnload() räumt den Timer wieder auf. Fehler
+       innerhalb eines Zyklus werden bereits von _refreshDashboardNow() abgefangen, daher
+       hier kein zusätzliches try/catch nötig.
+       EN: Interval: timed dashboard refresh (plan document section 4.1), analogous to
+       startRestzeitInterval() above. Interval is this.dashboardRefreshSec (30-300s, see
+       onReady()) instead of a fixed value. Only called from onReady() when dashboardEnabled
+       is on (see there) - onUnload() cleans the timer back up. Errors within a cycle are
+       already caught by _refreshDashboardNow(), so no additional try/catch is needed here. */
+    startDashboardRefreshInterval() {
+        this.dashboardRefreshInterval = this.setInterval(() => {
+            this.refreshDashboard().catch(e => this.safeWarn('dashboard.timedRefresh', e));
+        }, this.dashboardRefreshSec * 1000);
+    }
+
+    /* DE: Erstmaliger stateChange-Handler in diesem Adapter (siehe constructor -
+       this.on('stateChange', ...)) - bislang gab es keinen einzigen Button-State und keine
+       subscribeStates()-Nutzung. Ausschließlich für dashboard.refreshNow zuständig
+       (Plandokument Abschnitt 3.5, Frage 12).
+       ⚠️ Reihenfolge ist entscheidend: state.ack wird GEPRÜFT, bevor refreshDashboard()
+       aufgerufen wird (nur ein echter Nutzer-Write mit ack:false zählt als Auslöser), und
+       der abschließende setStateAsync(..., false, true) setzt ack EXPLIZIT auf true - sonst
+       würde dieser eigene Rücksetz-Write erneut denselben Handler mit ack:false auslösen und
+       eine Endlosschleife von Refresh-Zyklen verursachen.
+       EN: First stateChange handler in this adapter (see the constructor -
+       this.on('stateChange', ...)) - until now there was no single button state and no
+       subscribeStates() usage. Exclusively handles dashboard.refreshNow (plan document
+       section 3.5, question 12).
+       ⚠️ Order matters: state.ack is CHECKED before calling refreshDashboard() (only a
+       genuine user write with ack:false counts as a trigger), and the final
+       setStateAsync(..., false, true) EXPLICITLY sets ack to true - otherwise this own
+       reset write would trigger the same handler again with ack:false, causing an
+       infinite loop of refresh cycles. */
+    onStateChange(id, state) {
+        if (id !== `${this.namespace}.dashboard.refreshNow` || !state || state.ack) {
+            return;
+        }
+        this.refreshDashboard()
+            .catch(e => this.safeWarn('dashboard.refreshNow', e))
+            .finally(() => {
+                this.setStateAsync('dashboard.refreshNow', false, true).catch(e =>
+                    this.safeWarn('dashboard.refreshNow.reset', e),
+                );
+            });
     }
 
     /* DE: Watchdog gegen ein verpasstes io.standby: steht einsatz.restzeit seit
