@@ -1322,3 +1322,75 @@ describe('updateRueckmeldungCounts (parametrized, plan document section 4.8)', (
         expect(written['dashboard.einsatz2.rueckmeldungen.rollen.ek']).to.equal(0);
     });
 });
+
+describe('resolveDashboardMapImage', () => {
+    const proto = t.WaipWeb.prototype;
+    const fsPromises = require('node:fs/promises');
+    const os = require('node:os');
+    const path = require('node:path');
+
+    let tmpDir;
+
+    beforeEach(async () => {
+        tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'waip-web-mapimg-'));
+    });
+
+    afterEach(async () => {
+        await fsPromises.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    function makeInstance() {
+        const inst = Object.create(proto);
+        inst.mapImageDir = tmpDir;
+        inst.safeLog = () => {};
+        return inst;
+    }
+
+    async function touch(filename) {
+        await fsPromises.writeFile(path.join(tmpDir, filename), '');
+    }
+
+    it('finds the map image matching the uuid fragment (same truncation as generateEinsatzMapImage)', async () => {
+        const inst = makeInstance();
+        await touch('einsatz_1000_40411df6.png');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.equal(path.join(tmpDir, 'einsatz_1000_40411df6.png'));
+    });
+
+    it('returns null when no file matches the fragment (no map image was ever generated for this incident)', async () => {
+        const inst = makeInstance();
+        await touch('einsatz_1000_aaaaaaaa.png');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.be.null;
+    });
+
+    it('returns the newest match on a fragment collision (highest timestamp prefix wins)', async () => {
+        const inst = makeInstance();
+        await touch('einsatz_1000_40411df6.png');
+        await touch('einsatz_9999_40411df6.png');
+        await touch('einsatz_5000_40411df6.png');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.equal(path.join(tmpDir, 'einsatz_9999_40411df6.png'));
+    });
+
+    it('returns null for an empty/missing uuid without touching the filesystem', async () => {
+        const inst = makeInstance();
+        expect(await inst.resolveDashboardMapImage('')).to.be.null;
+        expect(await inst.resolveDashboardMapImage(null)).to.be.null;
+    });
+
+    it('returns null (not a thrown error) when mapImageDir does not exist', async () => {
+        const inst = makeInstance();
+        inst.mapImageDir = path.join(tmpDir, 'does-not-exist');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.be.null;
+    });
+
+    it('ignores files not matching the einsatz_*.png naming convention', async () => {
+        const inst = makeInstance();
+        await touch('other_1000_40411df6.png');
+        await touch('einsatz_1000_40411df6.txt');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.be.null;
+    });
+});

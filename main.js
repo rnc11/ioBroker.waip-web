@@ -3199,6 +3199,53 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
+    /* DE: Leitet für einen Dashboard-Slot einen bereits vorhandenen Kartenbild-Pfad aus dem
+       bestehenden generateEinsatzMapImage()-Fundus ab, statt ein eigenes Kartenbild zu
+       erzeugen (Plandokument Abschnitt 4.5 / Frage 4) - reiner Dateisystem-Lookup, kein
+       Netzwerk-I/O, daher unproblematisch bei this.dashboardSlotCount Aufrufen pro
+       Refresh. Nutzt dieselbe UUID-Fragment-Kürzung wie generateEinsatzMapImage()
+       (uuidFragment), damit ein Dashboard-Einsatz genau dann ein Bild findet, wenn
+       handleAlarm() für diesen Einsatz (als aktuell konfigurierter Monitor) bereits eines
+       erzeugt hat. Bei mehreren Treffern (Fragment-Kollision, siehe generateEinsatzMapImage()-
+       Kommentar) gewinnt der lexikographisch letzte Dateiname = der mit dem höchsten
+       Zeitstempel-Präfix = der neueste (identische Sortierlogik wie pruneMapImages()).
+       Kein Treffer -> null, kein Fehler (siehe Plandokument: "das ist normales, erwartetes
+       Verhalten, kein Bug" bei einer engen monitorID).
+       EN: Derives an already-existing map-image path for a dashboard slot from the
+       existing generateEinsatzMapImage() history instead of generating its own image (plan
+       document section 4.5 / question 4) - a pure filesystem lookup, no network I/O,
+       hence unproblematic at this.dashboardSlotCount calls per refresh. Uses the same
+       UUID-fragment truncation as generateEinsatzMapImage() (uuidFragment), so a dashboard
+       incident finds an image exactly when handleAlarm() has already generated one for
+       that incident (as the currently configured monitor). On multiple matches (fragment
+       collision, see the generateEinsatzMapImage() comment), the lexicographically last
+       filename wins = the one with the highest timestamp prefix = the newest (identical
+       sort logic to pruneMapImages()). No match -> null, no error (see the plan document:
+       "this is normal, expected behavior, not a bug" with a narrow monitorID). */
+    async resolveDashboardMapImage(uuid) {
+        const uuidFragment = String(uuid || '')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .slice(0, 8);
+        if (!uuidFragment) {
+            return null;
+        }
+        try {
+            const entries = await fsPromises.readdir(this.mapImageDir);
+            const matches = entries.filter(f => f.startsWith('einsatz_') && f.includes(`_${uuidFragment}.png`)).sort();
+            if (!matches.length) {
+                return null;
+            }
+            return path.join(this.mapImageDir, matches[matches.length - 1]);
+        } catch (e) {
+            // DE: z.B. mapImageDir existiert (noch) nicht, weil mapImageEnabled bisher immer
+            // aus war - kein Fehlerzustand, identisch zu "kein Treffer".
+            // EN: e.g. mapImageDir doesn't exist (yet) because mapImageEnabled has always
+            // been off - not an error condition, identical to "no match".
+            this.safeLog('debug', `resolveDashboardMapImage (uuid ${uuid})`, e);
+            return null;
+        }
+    }
+
     /* DE: Extrahiert aus einem Einsatz-Snapshot nur die flachen Einsatzstamm-Felder
        (ALLOWED_EINSATZ_FIELDS + lat/lon aus position), ergänzt um den zum Aufrufzeitpunkt
        registrierten Monitor - ohne routen/rueckmeldungen/emAlarmiert/emWeitere. Gemeinsam
