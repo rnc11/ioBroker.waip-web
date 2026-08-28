@@ -571,6 +571,188 @@ const STATE_DEFS = [
 // EN: Fast lookup for setField() of a state's declared type (see there).
 const STATE_DEF_BY_ID = new Map(STATE_DEFS.map(def => [def.id, def]));
 
+/* DE: Erzeugt die CHANNEL_DEFS-Ergänzung für den Dashboard-Kanal (dashboard.einsatz1 ..
+   dashboard.einsatzN). Reine Funktion, weil slotCount eine Laufzeit-Config ist
+   (this.dashboardSlotCount, 1..20) statt einer festen Modul-Konstante - CHANNEL_DEFS/
+   STATE_DEFS können für dieses Feature also nicht mehr wie sonst in diesem Adapter
+   üblich beim Modul-Laden statisch gebaut werden, sondern erst in onReady() nach dem
+   Auslesen der Config (siehe Plandokument Abschnitt 3.2). Für slotCount <= 0 liefert die
+   Funktion nur den Wurzel-Kanal zurück (keine Slots) statt zu werfen - der Aufrufer klemmt
+   den Wert vorher ohnehin auf [DASHBOARD_MIN_SLOT_COUNT, DASHBOARD_MAX_SLOT_COUNT].
+   EN: Builds the CHANNEL_DEFS addition for the dashboard channel (dashboard.einsatz1 ..
+   dashboard.einsatzN). A pure function because slotCount is a runtime config value
+   (this.dashboardSlotCount, 1..20) rather than a fixed module constant - CHANNEL_DEFS/
+   STATE_DEFS for this feature therefore can't be built statically at module load like
+   everything else in this adapter, only in onReady() after reading the config (see the
+   plan document section 3.2). For slotCount <= 0 the function returns just the root
+   channel (no slots) instead of throwing - the caller clamps the value beforehand anyway
+   to [DASHBOARD_MIN_SLOT_COUNT, DASHBOARD_MAX_SLOT_COUNT]. */
+function buildDashboardChannelDefs(slotCount) {
+    const defs = [
+        {
+            id: 'dashboard',
+            type: 'channel',
+            name: 'Dashboard: letzte N Einsätze (N konfigurierbar, siehe dashboardSlotCount)',
+        },
+    ];
+    const n = Number.isFinite(slotCount) ? Math.max(0, Math.trunc(slotCount)) : 0;
+    for (let i = 1; i <= n; i++) {
+        defs.push(
+            { id: `dashboard.einsatz${i}`, type: 'channel', name: `Dashboard-Slot ${i}: ${i}-aktuellster Einsatz` },
+            { id: `dashboard.einsatz${i}.rueckmeldungen`, type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
+            { id: `dashboard.einsatz${i}.rueckmeldungen.rollen`, type: 'folder', name: 'Rückmeldungen nach Rolle' },
+            {
+                id: `dashboard.einsatz${i}.rueckmeldungen.funktionen`,
+                type: 'folder',
+                name: 'Rückmeldungen nach Funktion',
+            },
+            {
+                id: `dashboard.einsatz${i}.json`,
+                type: 'folder',
+                name: 'Einsatzdaten als flache JSON-Arrays für Tabellen-Widgets',
+            },
+        );
+    }
+    return defs;
+}
+
+/* DE: Erzeugt die STATE_DEFS-Ergänzung für den Dashboard-Kanal, pro Slot 1..slotCount.
+   Spiegel der flachen einsatz.*-States (siehe Plandokument Abschnitt 3.3), bewusst OHNE
+   restzeit/ablaufzeit (existieren im /dbrd-Payload nicht, live verifiziert) und OHNE
+   tts.* (kein io.playtts-Äquivalent im /dbrd-Namespace). dashboard.einsatzN.json.wachen
+   ist ein bewusst neuer State ohne einsatz.*-Pendant (wachen[] existiert nur im
+   /dbrd-Payload) - dashboard.einsatzN.json.* hat außerdem KEIN history10/emWeitere.
+   EN: Builds the STATE_DEFS addition for the dashboard channel, per slot 1..slotCount.
+   Mirrors the flat einsatz.* states (see the plan document section 3.3), deliberately
+   WITHOUT restzeit/ablaufzeit (don't exist in the /dbrd payload, live-verified) and
+   WITHOUT tts.* (no io.playtts equivalent in the /dbrd namespace).
+   dashboard.einsatzN.json.wachen is a deliberate new state with no einsatz.* counterpart
+   (wachen[] only exists in the /dbrd payload) - dashboard.einsatzN.json.* also has NO
+   history10/emWeitere. */
+function buildDashboardStateDefs(slotCount) {
+    const defs = [];
+    const n = Number.isFinite(slotCount) ? Math.max(0, Math.trunc(slotCount)) : 0;
+    for (let i = 1; i <= n; i++) {
+        const p = `dashboard.einsatz${i}`;
+        defs.push(
+            {
+                id: `${p}.alarmAktiv`,
+                type: 'boolean',
+                role: 'indicator.alarm',
+                name: `Slot ${i}: Alarm aktiv`,
+                def: false,
+            },
+            { id: `${p}.id`, type: 'number', role: 'value', name: `Slot ${i}: Einsatz ID` },
+            { id: `${p}.uuid`, type: 'string', role: 'text', name: `Slot ${i}: Einsatz UUID` },
+            { id: `${p}.einsatzart`, type: 'string', role: 'text', name: `Slot ${i}: Einsatzart` },
+            { id: `${p}.stichwort`, type: 'string', role: 'text', name: `Slot ${i}: Alarmstichwort` },
+            { id: `${p}.beschreibung`, type: 'string', role: 'text', name: `Slot ${i}: Beschreibung zum Stichwort` },
+            { id: `${p}.ort`, type: 'string', role: 'text', name: `Slot ${i}: Ort` },
+            { id: `${p}.ortsteil`, type: 'string', role: 'text', name: `Slot ${i}: Ortsteil` },
+            { id: `${p}.alarmierungszeit`, type: 'string', role: 'date', name: `Slot ${i}: Alarmierungszeit` },
+            { id: `${p}.sondersignal`, type: 'number', role: 'value', name: `Slot ${i}: Sondersignal`, def: 0 },
+            { id: `${p}.latitude`, type: 'number', role: 'value.gps.latitude', name: `Slot ${i}: Breitengrad` },
+            { id: `${p}.longitude`, type: 'number', role: 'value.gps.longitude', name: `Slot ${i}: Längengrad` },
+            {
+                id: `${p}.kartenbildPfad`,
+                type: 'string',
+                role: 'text',
+                name: `Slot ${i}: Pfad zum abgeleiteten Kartenbild (aus dem bestehenden Kartenbild-Fundus, nicht neu generiert) - leer, falls keins gefunden wurde`,
+            },
+            { id: `${p}.routenGesamt`, type: 'number', role: 'value', name: `Slot ${i}: Anzahl Routen`, def: 0 },
+            {
+                id: `${p}.rueckmeldungenGesamt`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen gesamt`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.ek`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Einsatzkräfte`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.gf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Gruppenführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.zf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Zugführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.vf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Verbandsführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.agt`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Atemschutzgeräteträger`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.fzf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Fahrzeugführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.ma`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Maschinisten`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.med`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Medizinisch/Sanitäter`,
+                def: 0,
+            },
+            {
+                id: `${p}.json.current`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: Einsatzstamm, flaches JSON-Array (leer, falls Slot unbelegt)`,
+            },
+            { id: `${p}.json.routen`, type: 'string', role: 'json', name: `Slot ${i}: Routen, flaches JSON-Array` },
+            {
+                id: `${p}.json.rueckmeldungen`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: Rückmeldungen, flaches JSON-Array`,
+            },
+            {
+                id: `${p}.json.emAlarmiert`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: Einsatzmittel, flaches JSON-Array (ungefiltert)`,
+            },
+            {
+                id: `${p}.json.wachen`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: beteiligte Wachen, flaches JSON-Array (deduplizierte Liste, nur im /dbrd-Payload vorhanden)`,
+            },
+        );
+    }
+    return defs;
+}
+
 // DE: IDs, deren "string"-Wert tatsächlich ein JSON-*Array* enthält - liefert den korrekten
 // Leerwert "[]" für resetAllStates() (alle anderen "string"-States werden auf null
 // gesetzt). einsatz.json.current, debug.lastEvent und debug.normalizedPosition sind
@@ -628,6 +810,42 @@ function isValidMonitor(mon) {
         return false;
     }
     return String(mon).trim() !== '';
+}
+
+/* DE: Prüft ob ein Eintrag aus der /dbrd/-Übersichtsliste zur konfigurierten monitorID
+   gehört. entry.l/a/b/c sind Leitstelle/Kreis/Träger/kommagetrennte Wachen-Liste - live
+   gegen die /waip/-Übersichtsseite verifiziert, siehe Plandokument Abschnitt 1a. Ein
+   Eintrag ist relevant, wenn monitorID mit l ODER a ODER b ODER einem der c-Werte
+   übereinstimmt (String-Vergleich). monitorID '0'/leer bedeutet weiterhin "alle", wie
+   beim bestehenden /waip-Namespace (siehe isValidMonitor()).
+   Anders als payloadMonitorMatch() (die serverseitige Socket.IO-Room-Registrierung des
+   /waip-Namespace) filtert diese Funktion rein client-seitig, weil /dbrd/ ungefiltert
+   ALLE Einsätze der Leitstelle liefert - siehe Plandokument Frage 9.
+   EN: Checks whether an entry from the /dbrd/ overview list belongs to the configured
+   monitorID. entry.l/a/b/c are dispatch-center/district/carrier/comma-separated-stations
+   - live-verified against the /waip/ overview page, see the plan document section 1a. An
+   entry is relevant if monitorID matches l OR a OR b OR one of the c values (string
+   comparison). monitorID '0'/empty still means "all", as with the existing /waip
+   namespace (see isValidMonitor()).
+   Unlike payloadMonitorMatch() (the /waip namespace's server-side Socket.IO room
+   registration), this function filters purely client-side, because /dbrd/ returns ALL of
+   the dispatch center's incidents unfiltered - see the plan document question 9. */
+function dbrdEntryMatchesMonitor(entry, monitorID) {
+    if (!isValidMonitor(monitorID) || String(monitorID) === '0') {
+        return true;
+    }
+    const target = String(monitorID);
+    if (!entry || typeof entry !== 'object') {
+        return false;
+    }
+    if (String(entry.l) === target || String(entry.a) === target || String(entry.b) === target) {
+        return true;
+    }
+    const wachen = String(entry.c || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+    return wachen.includes(target);
 }
 
 /*
@@ -3827,6 +4045,9 @@ if (require.main !== module) {
        trap in hexColorToJimpInt). */
     module.exports.testables = {
         isValidMonitor,
+        dbrdEntryMatchesMonitor,
+        buildDashboardChannelDefs,
+        buildDashboardStateDefs,
         unwrapGeometryObject,
         extractPolygonRings,
         getCenterFromGeometry,

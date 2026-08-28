@@ -91,6 +91,170 @@ describe('isValidMonitor', () => {
     });
 });
 
+describe('dbrdEntryMatchesMonitor', () => {
+    // DE: Beispiel-Eintrag angelehnt an die live gegen /waip/ verifizierten Werte
+    // (Plandokument Abschnitt 1a): l=Leitstelle, a=Kreis, b=Träger, c=Wachen-Liste.
+    // EN: Example entry modeled on the values live-verified against /waip/ (plan document
+    // section 1a): l=dispatch center, a=district, b=carrier, c=station list.
+    const entry = { l: '4', a: '71', b: '7105', c: '710512,710506,710503' };
+
+    it('matches on l (Leitstelle)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '4')).to.be.true;
+    });
+
+    it('matches on a (Kreis)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '71')).to.be.true;
+    });
+
+    it('matches on b (Träger)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '7105')).to.be.true;
+    });
+
+    it('matches on a single value within the comma-separated c list (Wache)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '710506')).to.be.true;
+    });
+
+    it('rejects a monitor id that matches none of l/a/b/c', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '999')).to.be.false;
+    });
+
+    it('treats monitorID "0" as "all" (global), like the /waip namespace', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '0')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor({ l: '1', a: '2', b: '3', c: '4' }, '0')).to.be.true;
+    });
+
+    it('treats an empty/missing monitorID as "all", consistent with isValidMonitor()', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(entry, null)).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(entry, undefined)).to.be.true;
+    });
+
+    it('tolerates whitespace and empty segments in the c list', () => {
+        const messy = { l: '1', a: '2', b: '3', c: ' 710506 ,, 710503 ,' };
+        expect(t.dbrdEntryMatchesMonitor(messy, '710506')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(messy, '710503')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(messy, '')).to.be.true; // still "all"
+    });
+
+    it('rejects a non-global monitorID against a non-object entry instead of throwing', () => {
+        expect(t.dbrdEntryMatchesMonitor(null, '4')).to.be.false;
+        expect(t.dbrdEntryMatchesMonitor(undefined, '4')).to.be.false;
+        expect(t.dbrdEntryMatchesMonitor('a string', '4')).to.be.false;
+    });
+});
+
+describe('buildDashboardChannelDefs/buildDashboardStateDefs', () => {
+    // DE: dashboardSlotCount ist eine Laufzeit-Config (1..20, siehe Plandokument Frage 13) -
+    // die Defs werden pro Slotanzahl frisch gebaut, nicht mehr wie sonst in diesem Adapter
+    // üblich beim Modul-Laden statisch angelegt.
+    // EN: dashboardSlotCount is a runtime config value (1..20, see the plan document
+    // question 13) - the defs are built fresh per slot count, not statically at module
+    // load like everything else in this adapter.
+    // DE: 15 flache Felder + 8 Rückmeldungs-Zähler (4 Rollen + 4 Funktionen) + 5 json.*-States
+    // = 28 States pro Slot. Explizit ausgezählt statt geschätzt, damit ein versehentlich
+    // entferntes/hinzugefügtes Feld hier auffällt.
+    // EN: 15 flat fields + 8 feedback counters (4 roles + 4 functions) + 5 json.* states =
+    // 28 states per slot. Explicitly counted rather than guessed, so an accidentally
+    // removed/added field shows up here.
+    const FIELDS_PER_SLOT = 28;
+
+    it('builds exactly one root channel plus 5 channel/folder objects per slot', () => {
+        const defs = t.buildDashboardChannelDefs(3);
+        expect(defs.filter(d => d.id === 'dashboard')).to.have.lengthOf(1);
+        for (let i = 1; i <= 3; i++) {
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.rueckmeldungen`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.rueckmeldungen.rollen`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.rueckmeldungen.funktionen`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.json`)).to.be.true;
+        }
+        // 1 root + 3 slots * 5 objects each
+        expect(defs).to.have.lengthOf(1 + 3 * 5);
+        expect(defs.some(d => d.id === 'dashboard.einsatz4')).to.be.false;
+    });
+
+    it('builds no slot channels for slotCount 0 (only the root channel)', () => {
+        const defs = t.buildDashboardChannelDefs(0);
+        expect(defs).to.have.lengthOf(1);
+        expect(defs[0].id).to.equal('dashboard');
+    });
+
+    it('tolerates non-finite slotCount by treating it as 0', () => {
+        expect(t.buildDashboardChannelDefs(NaN)).to.have.lengthOf(1);
+        expect(t.buildDashboardChannelDefs(undefined)).to.have.lengthOf(1);
+        expect(t.buildDashboardChannelDefs(null)).to.have.lengthOf(1);
+    });
+
+    it('builds state defs for exactly the requested number of slots, no more', () => {
+        const defs = t.buildDashboardStateDefs(2);
+        const slot1 = defs.filter(d => d.id.startsWith('dashboard.einsatz1.'));
+        const slot2 = defs.filter(d => d.id.startsWith('dashboard.einsatz2.'));
+        const slot3 = defs.filter(d => d.id.startsWith('dashboard.einsatz3.'));
+        expect(slot1.length).to.be.above(0);
+        expect(slot2.length).to.equal(slot1.length);
+        expect(slot3).to.have.lengthOf(0);
+    });
+
+    it('gives every slot a state count consistent across slots', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        expect(defs).to.have.lengthOf(FIELDS_PER_SLOT);
+    });
+
+    it('has no restzeit/ablaufzeit/tts states (do not exist in the /dbrd payload)', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = defs.map(d => d.id);
+        expect(ids.some(id => id.endsWith('.restzeit'))).to.be.false;
+        expect(ids.some(id => id.endsWith('.ablaufzeit'))).to.be.false;
+        expect(ids.some(id => id.includes('.tts.'))).to.be.false;
+    });
+
+    it('has a json.wachen state with no einsatz.* counterpart (deliberate asymmetry)', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        expect(defs.some(d => d.id === 'dashboard.einsatz1.json.wachen')).to.be.true;
+        expect(t.STATE_DEFS.some(d => d.id === 'einsatz.json.wachen')).to.be.false;
+    });
+
+    it('has no json.history10/emWeitere states (not part of the dashboard schema)', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = defs.map(d => d.id);
+        expect(ids.some(id => id.includes('history10'))).to.be.false;
+        expect(ids.some(id => id.includes('emWeitere'))).to.be.false;
+    });
+
+    it('declares every generated state with a type and a role', () => {
+        const defs = t.buildDashboardStateDefs(2);
+        const bad = defs.filter(d => !d.type || !d.role).map(d => d.id);
+        expect(bad, bad.join(', ')).to.be.empty;
+    });
+
+    it('has a channel/folder parent for every generated state path segment', () => {
+        // DE: dieselbe Struktur-Garantie wie der bestehende 'state definitions -
+        // internal consistency'-Test, aber für die dynamisch erzeugten Dashboard-Defs.
+        // EN: the same structural guarantee as the existing 'state definitions -
+        // internal consistency' test, but for the dynamically generated dashboard defs.
+        const channelDefs = t.buildDashboardChannelDefs(2);
+        const stateDefs = t.buildDashboardStateDefs(2);
+        const channelIds = new Set(channelDefs.map(d => d.id));
+        const missing = [];
+        for (const def of stateDefs) {
+            const parts = def.id.split('.');
+            for (let i = 1; i < parts.length; i++) {
+                const parent = parts.slice(0, i).join('.');
+                if (!channelIds.has(parent)) {
+                    missing.push(`${def.id} -> missing parent ${parent}`);
+                }
+            }
+        }
+        expect(missing, missing.join('; ')).to.be.empty;
+    });
+
+    it('produces no duplicate state ids across slots', () => {
+        const defs = t.buildDashboardStateDefs(5);
+        const ids = defs.map(d => d.id);
+        expect(ids).to.have.lengthOf(new Set(ids).size);
+    });
+});
+
 describe('normalizeStichwortForMatch', () => {
     it('treats spaces and hyphens as equivalent (dispatch-center spelling variants)', () => {
         // DE: Kern der Stichwort-Tabelle: eine Zeile muss alle Schreibvarianten abdecken.
