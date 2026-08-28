@@ -31,10 +31,11 @@ open.
   - [Rescue service](#rescue-service)
   - [Keyword descriptions](#keyword-descriptions)
   - [Incident map image](#incident-map-image)
+  - [Dashboard](#dashboard)
 - [States (under `waip-web.0.*`)](#states-under-waip-web0)
   - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
     [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
-    [debug](#debug)
+    [dashboard](#dashboard-states) · [debug](#debug)
 - [Logging](#logging)
 - [Changelog](#changelog)
 - [License](#license)
@@ -188,6 +189,10 @@ adapter provides – typical use in a fire station/EMS environment:
   color/thickness (switchable to a plain marker dot instead), automatically
   zoomed out as needed to keep the whole area visible, file path
   exposed as a state - see [Incident map image](#incident-map-image)
+- Optional dashboard: mirrors the last N incidents matching this
+  instance's monitor as `dashboard.einsatz1` … `einsatzN`, polled
+  periodically via short-lived connections (no permanent dashboard
+  connection) - see [Dashboard](#dashboard)
 
 ## Configuration
 
@@ -376,6 +381,62 @@ js-controller 4.0 / Admin 5 for any adapter's instance data directory
 > level to cover huge areas or otherwise turn this into bulk tile
 > fetching.
 
+### Dashboard
+
+**Enable dashboard** (admin checkbox, off by default): mirrors the
+last N incidents matching this instance's configured monitor as
+`dashboard.einsatz1` … `dashboard.einsatzN`, in addition to the single
+current incident already available under [einsatz](#einsatz). This is
+useful with a monitor ID scoped to "all dispatch monitors" (`0`) or to
+a wider district/carrier, where several incidents can be active at
+once and `einsatz.*` alone only ever shows the most recent one.
+
+Unlike the always-on `/waip` connection this adapter otherwise keeps,
+the dashboard is refreshed periodically: the adapter fetches the
+public `/dbrd/` incident overview page, filters it down to incidents
+matching this instance's monitor (same `l`/`a`/`b`/`c`
+Leitstelle/Kreis/Träger/Wache correlation as the Monitor ID dropdown
+itself - see [Connection](#connection)), and for each of up to N
+matching incidents opens one **short-lived** Socket.IO connection in
+turn (never in parallel) to collect its current state, then closes it
+again. A full refresh therefore realistically takes a few seconds per
+occupied slot, not milliseconds - the minimum **Refresh interval**
+below reflects that.
+
+| Field | Description | Default |
+| --- | --- | --- |
+| Number of incidents to show | How many of the most recent matching incidents to show, `dashboard.einsatz1` … `einsatzN` (1-20) | `10` |
+| Refresh interval (s) | How often the dashboard is refreshed (30-300) | `60` |
+
+A refresh also runs once immediately after every adapter (re)start (so
+the dashboard doesn't stay empty for up to the configured interval),
+and once whenever a new alarm is received for this instance's own
+monitor (`einsatz.*`) - in addition to the regular timer. A manual
+refresh can be triggered any time via the `dashboard.refreshNow`
+button state, e.g. from a VIS button or a script.
+
+Map images shown as `dashboard.einsatzN.kartenbildPfad` are **not**
+generated separately for dashboard slots - they are looked up in the
+same file history [Incident map image](#incident-map-image) already
+produces for this instance's own monitor. A slot only has a map image
+when this adapter has *already* generated one for that exact incident
+via its own `einsatz.*` alarm handling - most complete when **Monitor
+ID** is `0` (all dispatch monitors) and **Generate a map image for
+each incident** is enabled, since then every incident that can appear
+on the dashboard has also passed through `einsatz.*` at least once.
+With a narrower Monitor ID, dashboard slots for incidents outside that
+monitor's own alarm history will have no map image - this is expected,
+not a bug.
+
+Disabling the feature removes the entire `dashboard.*` object tree
+(channels and states, not just their values); reducing **Number of
+incidents to show** removes only the now-unused slots at the end
+(e.g. going from 10 to 5 removes `dashboard.einsatz6` … `einsatz10`).
+Both changes only take effect on the **next adapter restart** after
+saving (ioBroker restarts the instance on any configuration change
+anyway - the removal doesn't happen instantly while the admin dialog
+is open).
+
 ## States (under `waip-web.0.*`)
 
 Feedback and routes are 1:n lists per incident. They are stored as
@@ -487,6 +548,54 @@ matters in the moment, so only the most recent one is kept.
 | `last` | string (URL) | Full absolute URL of the most recent voice announcement's mp3 file. The server sends only a bare (often relative) path meant to be used as `audio.src` in a browser that shares its origin; the adapter resolves that against the configured WAIP server URL so the link also works outside the WAIP-Web page (e.g. in a VIS audio widget) |
 | `lastTimestamp` | string (date) | Time of the last announcement |
 
+<a id="dashboard-states"></a>
+
+### dashboard
+
+Only present when [Dashboard](#dashboard) is enabled - see there for
+the object-tree lifecycle on enable/disable/resize. `dashboard.einsatzN`
+(`N` = 1 … the configured slot count) mirrors the same shape as
+`einsatz`/`einsatz.json` above, for the Nth most recent incident
+matching this instance's monitor - **not** limited to the single
+current incident. All fields of an occupied slot are always rewritten
+on every refresh (not just on change), so ongoing feedback for an
+incident that stays on the same slot across refreshes keeps updating;
+an unoccupied slot (fewer matching incidents than configured slots)
+has all fields at their empty value, exactly like `einsatz.*` when no
+incident is active.
+
+Deliberately **without** `restzeit`/`ablaufzeit` (WAIP-Web's `/dbrd/`
+incident-detail data has no equivalent field, unlike the live `/waip`
+alarm stream) and without `einsatz.tts`'s equivalent (no TTS event
+exists in the `/dbrd` namespace). `dashboard.einsatzN.json.wachen` has
+no `einsatz.json.*` counterpart the other way around - it comes from a
+field (`wachen[]`, the incident's participating stations) that only
+the `/dbrd` payload includes.
+
+| State | Type | Description |
+| --- | --- | --- |
+| `refreshNow` | boolean (button) | Write `true` to trigger an immediate dashboard refresh, e.g. from a VIS button or a script. Resets itself to `false` once the refresh completes |
+| `einsatzN.alarmAktiv` | boolean | `true` while the slot is occupied by a matching incident |
+| `einsatzN.id` | number | Internal incident ID |
+| `einsatzN.uuid` | string | Unique incident UUID |
+| `einsatzN.einsatzart` | string | Same meaning as [einsatz.einsatzart](#einsatz) |
+| `einsatzN.stichwort` | string | Alarm keyword |
+| `einsatzN.beschreibung` | string | Description for `stichwort`, resolved the same way as [einsatz.beschreibung](#einsatz) |
+| `einsatzN.ort` | string | Location/town |
+| `einsatzN.ortsteil` | string | District (if different from `ort`) |
+| `einsatzN.alarmierungszeit` | string (date) | Alarm time |
+| `einsatzN.sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
+| `einsatzN.latitude` / `einsatzN.longitude` | number | Incident location, same normalization as [einsatz](#einsatz) |
+| `einsatzN.kartenbildPfad` | string | Path to a matching, previously generated incident map image - see [Dashboard](#dashboard) above. Empty if none was found |
+| `einsatzN.routenGesamt` | number | Number of routes for this slot's incident |
+| `einsatzN.rueckmeldungenGesamt` | number | Total feedback count for this slot's incident |
+| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Same eight feedback counters as [einsatz.rueckmeldungen](#einsatz), per slot |
+| `einsatzN.json.current` | string (JSON array) | This slot's flat incident data, same shape as `einsatz.json.current` (without `registeredMonitor`/`registeredMonitorName`) |
+| `einsatzN.json.routen` | string (JSON array) | Routes of this slot's incident, same shape as `einsatz.json.routen` |
+| `einsatzN.json.rueckmeldungen` | string (JSON array) | Feedback entries of this slot's incident |
+| `einsatzN.json.emAlarmiert` | string (JSON array) | Alerted resources of this slot's incident |
+| `einsatzN.json.wachen` | string (JSON array) | Participating stations of this slot's incident (`em_station_id`/`em_station_name`) - only available via `/dbrd`, no `einsatz.json.*` counterpart |
+
 ### debug
 
 | State | Type | Description |
@@ -521,6 +630,15 @@ example.
     Collect changes for the upcoming release underneath it.
 -->
 ### **WORK IN PROGRESS**
+
+- New optional [Dashboard](#dashboard) feature: mirrors the last N
+  incidents matching this instance's monitor as `dashboard.einsatz1`
+  … `einsatzN` (off by default). Uses short-lived Socket.IO connections
+  to WAIP-Web's `/dbrd` namespace polled on a configurable interval,
+  not a permanent connection - see [Dashboard](#dashboard) and
+  [dashboard states](#dashboard-states) for the full behavior,
+  including the manual refresh button and the object-deletion behavior
+  when disabling the feature or reducing the slot count.
 
 ### 0.7.38 (2026-08-27)
 
