@@ -629,11 +629,9 @@ example.
     Re-add it afterwards (or use `npm run release -- --addPlaceholder`).
     Collect changes for the upcoming release underneath it.
 -->
+### **WORK IN PROGRESS**
+
 ### 0.12.0 (2026-08-28)
-
-- (no changes yet)
-
-### 0.11.0 (2026-08-28)
 
 - New optional [Dashboard](#dashboard) feature: mirrors the last N
   incidents matching this instance's monitor as `dashboard.einsatz1`
