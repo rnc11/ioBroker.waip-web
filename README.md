@@ -629,7 +629,11 @@ example.
     Re-add it afterwards (or use `npm run release -- --addPlaceholder`).
     Collect changes for the upcoming release underneath it.
 -->
-### **WORK IN PROGRESS**
+### 0.12.0 (2026-08-28)
+
+- (no changes yet)
+
+### 0.11.0 (2026-08-28)
 
 - New optional [Dashboard](#dashboard) feature: mirrors the last N
   incidents matching this instance's monitor as `dashboard.einsatz1`
@@ -682,25 +686,6 @@ example.
   channel/folder objects, not just states) are removed automatically
   on upgrade; scripts/VIS bindings referencing the old paths need to
   be updated - see [einsatz](#einsatz).
-
-### 0.7.35 (2026-08-24)
-
-- Object structure change: the eight feedback counters under
-  `einsatz.rueckmeldungAnzahl` are now grouped into two sub-channels -
-  **rollen** (`ek`/`gf`/`zf`/`vf`, by role) and **funktionen**
-  (`agt`/`fzf`/`ma`/`med`, by qualification) - instead of sitting flat
-  next to each other. The old flat states are removed automatically on
-  upgrade; scripts/VIS bindings referencing the old paths need to be
-  updated to the new `einsatz.rueckmeldungAnzahl.rollen.*`/
-  `.funktionen.*` paths - see [einsatz](#einsatz).
-
-### 0.7.34 (2026-08-24)
-
-- [Incident map image](#incident-map-image): fixed the help texts for
-  **Zoom level**, **Marker & outline color** and **Image width/height**
-  - they referenced "both display modes below", which no longer made
-  sense after 0.7.33 moved those fields above the display-mode
-  checkbox. **Zoom level**'s text was also considerably shortened.
 
 Older entries have been moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md).
 

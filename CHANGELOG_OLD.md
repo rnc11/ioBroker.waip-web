@@ -792,6 +792,25 @@ here for a complete history of what was worked on.)*
 - Initial version: ported the original "WAIP Instrumented v3.9" ioBroker
   JavaScript-adapter script into a standalone adapter. The URL/monitor
   ID now come from the admin configuration instead of a runtime state.
+## 0.7.35 (2026-08-24)
+
+- Object structure change: the eight feedback counters under
+  `einsatz.rueckmeldungAnzahl` are now grouped into two sub-channels -
+  **rollen** (`ek`/`gf`/`zf`/`vf`, by role) and **funktionen**
+  (`agt`/`fzf`/`ma`/`med`, by qualification) - instead of sitting flat
+  next to each other. The old flat states are removed automatically on
+  upgrade; scripts/VIS bindings referencing the old paths need to be
+  updated to the new `einsatz.rueckmeldungAnzahl.rollen.*`/
+  `.funktionen.*` paths - see [einsatz](#einsatz).
+
+## 0.7.34 (2026-08-24)
+
+- [Incident map image](#incident-map-image): fixed the help texts for
+  **Zoom level**, **Marker & outline color** and **Image width/height**
+  - they referenced "both display modes below", which no longer made
+  sense after 0.7.33 moved those fields above the display-mode
+  checkbox. **Zoom level**'s text was also considerably shortened.
+
 ## 0.7.33 (2026-08-24)
 
 - Admin UI cleanup for two panels:
