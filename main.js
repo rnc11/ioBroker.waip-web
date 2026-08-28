@@ -194,6 +194,18 @@ const DEFAULT_MAP_IMAGE_TIMEOUT_SECONDS = 10;
 const MAP_IMAGE_TIMEOUT_SECONDS_MIN = 1;
 const MAP_IMAGE_TIMEOUT_SECONDS_MAX = 60;
 
+// DE: Konfigurierbarer Slot-Bereich für das Dashboard-Feature (siehe onReady()/
+// syncDashboardObjects()/buildDashboardChannelDefs()/buildDashboardStateDefs()) -
+// dashboardSlotCount ist bewusst kein fester Wert, sondern 1..20 (siehe Plandokument
+// Frage 13).
+// EN: Configurable slot range for the dashboard feature (see onReady()/
+// syncDashboardObjects()/buildDashboardChannelDefs()/buildDashboardStateDefs()) -
+// dashboardSlotCount is deliberately not a fixed value, but 1..20 (see the plan
+// document question 13).
+const DASHBOARD_MIN_SLOT_COUNT = 1;
+const DASHBOARD_MAX_SLOT_COUNT = 20;
+const DEFAULT_DASHBOARD_SLOT_COUNT = 10;
+
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
    Monitore typischerweise in diese vier Überschriften. Nicht jede Instanz nutzt
@@ -751,6 +763,30 @@ function buildDashboardStateDefs(slotCount) {
         );
     }
     return defs;
+}
+
+/* DE: Leitet die Dashboard-Pendants zu JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS aus
+   einer buildDashboardStateDefs()-Ausgabe ab, statt sie als zweite, von Hand gepflegte
+   Konstantenliste zu führen - dadurch können sie nie aus dem Tritt geraten, wenn sich die
+   generierten Felder ändern. Reine Funktion, testbar wie jeder andere Helfer hier.
+   EN: Derives the dashboard counterparts to JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS
+   from a buildDashboardStateDefs() output, instead of keeping them as a second,
+   hand-maintained constant list - this way they can never drift out of sync when the
+   generated fields change. A pure function, testable like every other helper here. */
+function deriveDashboardJsonArrayStateIds(dashboardStateDefs) {
+    return new Set(dashboardStateDefs.filter(d => d.type === 'string' && d.role === 'json').map(d => d.id));
+}
+
+function deriveDashboardNullableNumberStateIds(dashboardStateDefs) {
+    return new Set(
+        dashboardStateDefs
+            .filter(
+                d =>
+                    d.type === 'number' &&
+                    (d.id.endsWith('.id') || d.id.endsWith('.latitude') || d.id.endsWith('.longitude')),
+            )
+            .map(d => d.id),
+    );
 }
 
 // DE: IDs, deren "string"-Wert tatsächlich ein JSON-*Array* enthält - liefert den korrekten
@@ -1524,6 +1560,44 @@ class WaipWeb extends utils.Adapter {
             DEFAULT_MAP_IMAGE_TIMEOUT_SECONDS,
         );
         this.mapImageDir = path.join(utils.getAbsoluteInstanceDataDir(this), 'maps');
+        // DE: Konfiguration für das Dashboard-Feature (siehe syncDashboardObjects()/
+        // buildDashboardChannelDefs()/buildDashboardStateDefs()). dashboardEnabled fällt
+        // bewusst NICHT auf true zurück (anders als z.B. rdAlarmierungEnabled) - der
+        // io-package.json-Default ist false, das Feature ist also opt-in.
+        // EN: Configuration for the dashboard feature (see syncDashboardObjects()/
+        // buildDashboardChannelDefs()/buildDashboardStateDefs()). dashboardEnabled
+        // deliberately does NOT fall back to true (unlike e.g. rdAlarmierungEnabled) - the
+        // io-package.json default is false, so the feature is opt-in.
+        this.dashboardEnabled = !!this.config.dashboardEnabled;
+        this.dashboardSlotCount = clampNumber(
+            this.config.dashboardSlotCount,
+            DASHBOARD_MIN_SLOT_COUNT,
+            DASHBOARD_MAX_SLOT_COUNT,
+            DEFAULT_DASHBOARD_SLOT_COUNT,
+        );
+        // DE: dashboard.*-CHANNEL_DEFS/STATE_DEFS werden - anders als die restlichen,
+        // modul-global statischen Defs dieses Adapters - erst hier zur Laufzeit gebaut, weil
+        // dashboardSlotCount ein Konfigurationswert ist (siehe buildDashboardChannelDefs()/
+        // buildDashboardStateDefs()). Leere Arrays, falls das Feature deaktiviert ist -
+        // initObjects()/resetAllStates() legen dann konsequent keine dashboard.*-Objekte an
+        // (syncDashboardObjects() hat sie zuvor bereits entfernt, siehe oben).
+        // EN: dashboard.* CHANNEL_DEFS/STATE_DEFS - unlike the rest of this adapter's
+        // module-global static defs - are built here at runtime because dashboardSlotCount
+        // is a configuration value (see buildDashboardChannelDefs()/buildDashboardStateDefs()).
+        // Empty arrays if the feature is disabled - initObjects()/resetAllStates() then
+        // consistently create no dashboard.* objects (syncDashboardObjects() already removed
+        // them above).
+        this.dashboardChannelDefs = this.dashboardEnabled ? buildDashboardChannelDefs(this.dashboardSlotCount) : [];
+        this.dashboardStateDefs = this.dashboardEnabled ? buildDashboardStateDefs(this.dashboardSlotCount) : [];
+        // DE: Dashboard-Pendants zu JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS (siehe
+        // computeEmptyStateValue()) - abgeleitet aus dashboardStateDefs statt einer zweiten
+        // Konstantenliste, damit sie mit buildDashboardStateDefs() nie auseinanderlaufen
+        // können.
+        // EN: Dashboard counterparts to JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS (see
+        // computeEmptyStateValue()) - derived from dashboardStateDefs instead of a second
+        // constant list, so they can never drift out of sync with buildDashboardStateDefs().
+        this.dashboardJsonArrayStateIds = deriveDashboardJsonArrayStateIds(this.dashboardStateDefs);
+        this.dashboardNullableNumberStateIds = deriveDashboardNullableNumberStateIds(this.dashboardStateDefs);
         // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): normalizeStichwortForMatch()
         // sorgt für case-insensitiven Vergleich UND behandelt Leerzeichen/Bindestriche als identisch
         // (siehe deren Kommentar), alphabetisch nach Muster sortiert. Die Reihenfolge hat für
@@ -1548,6 +1622,7 @@ class WaipWeb extends utils.Adapter {
 
         await this.cleanupObsoleteObjects();
         await this.migrateObjectTypes();
+        await this.syncDashboardObjects();
         await this.initObjects();
         await this.resetAllStates();
         // DE: Session-Cookie holen, bevor die erste Socket.IO-Verbindung aufgebaut wird
@@ -1671,6 +1746,106 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
+    /* DE: Löscht rootId und alle seine Kind-Objekte (States/Channels/Folder). Traversiert
+       manuell statt sich auf delObjectAsync(rootId, { recursive: true }) zu verlassen: der
+       @iobroker/testing-Mock (siehe test/unit.js künftiges Pendant) versteht die
+       recursive-Option nicht und würde nur rootId selbst löschen, die Kinder blieben als
+       Leichen zurück - siehe Skill iobroker-adapter-development, Abschnitt Testing. Löscht
+       Kinder VOR dem Elternobjekt (längste IDs zuerst), damit ein echter js-controller auch
+       ohne recursive-Unterstützung nicht an einem nicht-leeren Channel/Folder scheitert.
+       EN: Deletes rootId and all its child objects (states/channels/folders). Traverses
+       manually instead of relying on delObjectAsync(rootId, { recursive: true }): the
+       @iobroker/testing mock doesn't understand the recursive option and would only delete
+       rootId itself, leaving the children behind - see the iobroker-adapter-development
+       skill, Testing section. Deletes children BEFORE the parent (longest IDs first) so a
+       real js-controller without recursive support doesn't choke on a non-empty
+       channel/folder either. */
+    async deleteObjectTreeAsync(rootId) {
+        const fullRoot = `${this.namespace}.${rootId}`;
+        let rows = [];
+        try {
+            const list = await this.getObjectListAsync({ startkey: `${fullRoot}.`, endkey: `${fullRoot}.\u9999` });
+            rows = (list && list.rows) || [];
+        } catch (e) {
+            this.safeWarn(`deleteObjectTreeAsync listing ${rootId}`, e);
+        }
+        const childIds = rows.map(row => row.id).sort((a, b) => b.length - a.length);
+        for (const id of childIds) {
+            try {
+                await this.delObjectAsync(id);
+            } catch (e) {
+                this.safeWarn(`deleteObjectTreeAsync child ${id}`, e);
+            }
+        }
+        try {
+            await this.delObjectAsync(rootId);
+        } catch (e) {
+            this.safeWarn(`deleteObjectTreeAsync root ${rootId}`, e);
+        }
+    }
+
+    /* DE: Synchronisiert den dashboard-Objektbaum mit der aktuellen Konfiguration - läuft
+       in onReady() VOR initObjects(), damit dieses nicht sofort wieder anlegt, was hier
+       gerade entfernt wurde (siehe Plandokument Abschnitt 3.2a). Zwei Fälle:
+       1. Feature deaktiviert (this.dashboardEnabled === false): der GESAMTE dashboard-Kanal
+          wird gelöscht, nicht nur seine States geleert - explizite Nutzeranforderung
+          (2026-08-29). Existiert er nicht (schon deaktiviert/nie aktiviert), passiert nichts.
+       2. Feature aktiv: Slots N > this.dashboardSlotCount sind durch eine Verkleinerung der
+          Konfiguration überzählig geworden und werden einzeln entfernt (State UND Channel,
+          nicht nur geleert). Existiert der dashboard-Kanal noch gar nicht (Erstinstallation
+          oder Reaktivierung nach einer vorherigen Komplett-Löschung), gibt es nichts zu
+          bereinigen - initObjects() legt anschließend alles frisch an, kein Sonderfall nötig.
+       EN: Syncs the dashboard object tree with the current configuration - runs in
+       onReady() BEFORE initObjects(), so that call doesn't immediately recreate what was
+       just removed here (see the plan document section 3.2a). Two cases:
+       1. Feature disabled (this.dashboardEnabled === false): the ENTIRE dashboard channel
+          is deleted, not just its states emptied - explicit user requirement (2026-08-29).
+          If it doesn't exist (already disabled/never enabled), nothing happens.
+       2. Feature active: slots N > this.dashboardSlotCount became excess through a
+          configuration shrink and are removed individually (state AND channel, not just
+          emptied). If the dashboard channel doesn't exist yet at all (fresh install or
+          reactivation after a previous full removal), there's nothing to clean up -
+          initObjects() creates everything fresh afterwards, no special case needed. */
+    async syncDashboardObjects() {
+        const rootExists = !!(await this.getObjectAsync('dashboard'));
+        if (!this.dashboardEnabled) {
+            if (rootExists) {
+                await this.deleteObjectTreeAsync('dashboard');
+                this.log.info('Dashboard feature disabled - removed the dashboard channel and all its objects');
+                this.appendMonitorAudit({ ts: new Date().toISOString(), event: 'dashboard_removed' }).catch(() => {});
+            }
+            return;
+        }
+        if (!rootExists) {
+            return;
+        }
+        let rows = [];
+        try {
+            const list = await this.getObjectListAsync({
+                startkey: `${this.namespace}.dashboard.`,
+                endkey: `${this.namespace}.dashboard.\u9999`,
+            });
+            rows = (list && list.rows) || [];
+        } catch (e) {
+            this.safeWarn('syncDashboardObjects listing', e);
+            return;
+        }
+        const slotRe = /^dashboard\.einsatz(\d+)(?:\.|$)/;
+        const excessSlots = new Set();
+        const prefix = `${this.namespace}.`;
+        for (const row of rows) {
+            const shortId = row.id.startsWith(prefix) ? row.id.slice(prefix.length) : row.id;
+            const m = shortId.match(slotRe);
+            if (m && Number(m[1]) > this.dashboardSlotCount) {
+                excessSlots.add(Number(m[1]));
+            }
+        }
+        for (const n of excessSlots) {
+            await this.deleteObjectTreeAsync(`dashboard.einsatz${n}`);
+            this.log.info(`Dashboard slot count reduced - removed now-unused slot dashboard.einsatz${n}`);
+        }
+    }
+
     /* DE: Legt Channel-/State-Objekte an, die noch nicht existieren (setObjectNotExistsAsync
        lässt bereits vorhandene unangetastet). Bricht die Schleifen ab, sobald this._stopping
        gesetzt ist (siehe onUnload()) - wird der Adapter mitten in dieser Initialisierung
@@ -1687,7 +1862,9 @@ class WaipWeb extends utils.Adapter {
        call would fail individually and - since onReady() itself isn't caught anywhere -
        surface as an unhandled promise rejection in the log instead of a single warning. */
     async initObjects() {
-        for (const def of CHANNEL_DEFS) {
+        const channelDefs = [...CHANNEL_DEFS, ...this.dashboardChannelDefs];
+        const stateDefs = [...STATE_DEFS, ...this.dashboardStateDefs];
+        for (const def of channelDefs) {
             if (this._stopping) {
                 return;
             }
@@ -1704,7 +1881,7 @@ class WaipWeb extends utils.Adapter {
                 }
             }
         }
-        for (const def of STATE_DEFS) {
+        for (const def of stateDefs) {
             if (this._stopping) {
                 return;
             }
@@ -1752,7 +1929,7 @@ class WaipWeb extends utils.Adapter {
        forever after installation instead of "[]". */
     async resetAllStates() {
         const tasks = [];
-        for (const def of STATE_DEFS) {
+        for (const def of [...STATE_DEFS, ...this.dashboardStateDefs]) {
             const emptyValue = this.computeEmptyStateValue(def);
             if (RESET_EXCLUDED_STATE_IDS.has(def.id)) {
                 tasks.push(this.initStateIfMissing(def.id, emptyValue));
@@ -1775,9 +1952,11 @@ class WaipWeb extends utils.Adapter {
             return false;
         }
         if (def.type === 'number') {
-            return NULLABLE_NUMBER_STATE_IDS.has(def.id) ? null : 0;
+            return NULLABLE_NUMBER_STATE_IDS.has(def.id) || this.dashboardNullableNumberStateIds?.has(def.id)
+                ? null
+                : 0;
         }
-        if (JSON_ARRAY_STATE_IDS.has(def.id)) {
+        if (JSON_ARRAY_STATE_IDS.has(def.id) || this.dashboardJsonArrayStateIds?.has(def.id)) {
             return '[]';
         }
         return null;
@@ -4048,6 +4227,8 @@ if (require.main !== module) {
         dbrdEntryMatchesMonitor,
         buildDashboardChannelDefs,
         buildDashboardStateDefs,
+        deriveDashboardJsonArrayStateIds,
+        deriveDashboardNullableNumberStateIds,
         unwrapGeometryObject,
         extractPolygonRings,
         getCenterFromGeometry,

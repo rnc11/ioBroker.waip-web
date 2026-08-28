@@ -841,3 +841,135 @@ describe('WaipWeb.prototype - pure instance helpers', () => {
         });
     });
 });
+
+describe('deriveDashboardJsonArrayStateIds/deriveDashboardNullableNumberStateIds', () => {
+    it('derives json-array ids only from string/json-role defs', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = t.deriveDashboardJsonArrayStateIds(defs);
+        expect(ids.has('dashboard.einsatz1.json.current')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.json.wachen')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.stichwort')).to.be.false;
+    });
+
+    it('derives nullable-number ids only for id/latitude/longitude', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = t.deriveDashboardNullableNumberStateIds(defs);
+        expect(ids.has('dashboard.einsatz1.id')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.latitude')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.longitude')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.sondersignal')).to.be.false; // ordinary number, stays 0
+        expect(ids.has('dashboard.einsatz1.routenGesamt')).to.be.false;
+    });
+
+    it('never drifts out of sync when buildDashboardStateDefs changes slot count', () => {
+        const defs2 = t.buildDashboardStateDefs(2);
+        const jsonIds = t.deriveDashboardJsonArrayStateIds(defs2);
+        const numIds = t.deriveDashboardNullableNumberStateIds(defs2);
+        // 5 json.* states per slot * 2 slots
+        expect(jsonIds.size).to.equal(10);
+        // id/latitude/longitude per slot * 2 slots
+        expect(numIds.size).to.equal(6);
+    });
+});
+
+describe('WaipWeb - syncDashboardObjects / deleteObjectTreeAsync (mocked ioBroker core)', () => {
+    /* DE: Nutzt @iobroker/testing's createMocks() für eine In-Memory-Objekt-DB - siehe Skill
+       iobroker-adapter-development, Abschnitt Testing. delObjectAsync fehlt im Mock (bekannte
+       Lücke, siehe dort) und wird hier nachgerüstet.
+       EN: Uses @iobroker/testing's createMocks() for an in-memory object DB - see the
+       iobroker-adapter-development skill, Testing section. delObjectAsync is missing from
+       the mock (known gap, see there) and is patched on here. */
+    const { utils } = require('@iobroker/testing');
+
+    function makeInstance({ dashboardEnabled, dashboardSlotCount, existingIds = [] }) {
+        const { database, adapter } = utils.unit.createMocks({ name: 'waip-web', instance: 0 });
+        adapter.delObjectAsync = id =>
+            new Promise((res, rej) => adapter.delObject(id, e => (e ? rej(e) : res())));
+        for (const id of existingIds) {
+            database.publishObject({ _id: `${adapter.namespace}.${id}`, type: id.includes('.') ? 'channel' : 'channel', common: { name: id }, native: {} });
+        }
+        const inst = Object.create(t.WaipWeb.prototype);
+        Object.assign(inst, adapter);
+        inst.getObjectAsync = adapter.getObjectAsync;
+        inst.getObjectListAsync = adapter.getObjectListAsync;
+        inst.delObjectAsync = adapter.delObjectAsync;
+        inst.namespace = adapter.namespace;
+        inst.log = adapter.log;
+        inst.dashboardEnabled = dashboardEnabled;
+        inst.dashboardSlotCount = dashboardSlotCount;
+        inst.appendMonitorAudit = () => Promise.resolve();
+        return { inst, database, adapter };
+    }
+
+    function objectIds(database, adapter) {
+        return Object.keys(database.getObjects(`${adapter.namespace}.*`));
+    }
+
+    it('Fall A: deaktiviert + bestehender dashboard-Kanal -> wird komplett entfernt', async () => {
+        const { inst, database, adapter } = makeInstance({
+            dashboardEnabled: false,
+            dashboardSlotCount: 10,
+            existingIds: [
+                'dashboard',
+                'dashboard.einsatz1',
+                'dashboard.einsatz1.stichwort',
+                'dashboard.einsatz2',
+                'dashboard.einsatz2.stichwort',
+            ],
+        });
+        await inst.syncDashboardObjects();
+        const remaining = objectIds(database, adapter).filter(id => id.includes('.dashboard'));
+        expect(remaining).to.be.empty;
+    });
+
+    it('Fall A2: deaktiviert + kein dashboard-Kanal -> no-op, kein Fehler', async () => {
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: false, dashboardSlotCount: 10 });
+        await inst.syncDashboardObjects();
+        expect(objectIds(database, adapter).filter(id => id.includes('.dashboard'))).to.be.empty;
+    });
+
+    it('Fall B: aktiv, Slot-Anzahl 10 -> 5 -> Slots 6-10 entfernt, 1-5 bleiben', async () => {
+        const existingIds = ['dashboard'];
+        for (let i = 1; i <= 10; i++) {
+            existingIds.push(`dashboard.einsatz${i}`, `dashboard.einsatz${i}.stichwort`);
+        }
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: true, dashboardSlotCount: 5, existingIds });
+        await inst.syncDashboardObjects();
+        const remaining = objectIds(database, adapter).filter(id => id.includes('.dashboard.einsatz'));
+        for (let i = 1; i <= 5; i++) {
+            expect(remaining.some(id => id.endsWith(`.dashboard.einsatz${i}`))).to.be.true;
+        }
+        for (let i = 6; i <= 10; i++) {
+            expect(remaining.some(id => id.includes(`.dashboard.einsatz${i}`))).to.be.false;
+        }
+    });
+
+    it('Fall C: aktiv, Slot-Anzahl 5 -> 10 -> keine Löschung (initObjects legt 6-10 neu an)', async () => {
+        const existingIds = ['dashboard'];
+        for (let i = 1; i <= 5; i++) {
+            existingIds.push(`dashboard.einsatz${i}`, `dashboard.einsatz${i}.stichwort`);
+        }
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: true, dashboardSlotCount: 10, existingIds });
+        await inst.syncDashboardObjects();
+        const remaining = objectIds(database, adapter).filter(id => id.includes('.dashboard.einsatz'));
+        for (let i = 1; i <= 5; i++) {
+            expect(remaining.some(id => id.endsWith(`.dashboard.einsatz${i}`))).to.be.true;
+        }
+    });
+
+    it('Fall D: Reaktivierung nach vollständiger Löschung -> kein dashboard-Kanal, kein Fehler', async () => {
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: true, dashboardSlotCount: 10 });
+        await inst.syncDashboardObjects();
+        expect(objectIds(database, adapter).filter(id => id.includes('.dashboard'))).to.be.empty;
+    });
+
+    it('deleteObjectTreeAsync removes children before the parent, root last', async () => {
+        const { inst, database, adapter } = makeInstance({
+            dashboardEnabled: false,
+            dashboardSlotCount: 10,
+            existingIds: ['dashboard', 'dashboard.einsatz1', 'dashboard.einsatz1.json', 'dashboard.einsatz1.json.current'],
+        });
+        await inst.deleteObjectTreeAsync('dashboard');
+        expect(objectIds(database, adapter).filter(id => id.includes('.dashboard'))).to.be.empty;
+    });
+});
