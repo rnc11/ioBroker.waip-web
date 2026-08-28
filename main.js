@@ -220,6 +220,20 @@ const DEFAULT_DASHBOARD_SLOT_COUNT = 10;
 const DASHBOARD_MIN_REFRESH_SEC = 30;
 const DASHBOARD_MAX_REFRESH_SEC = 300;
 const DEFAULT_DASHBOARD_REFRESH_SEC = 60;
+// DE: Timeout für den Verbindungsaufbau je Dashboard-Slot-Kurzverbindung (siehe
+// fetchDbrdDetail()) sowie das anschließende Sammelfenster, in dem nach dem
+// io.Einsatz-Event noch auf io.routes/io.new_rmld gewartet wird. Der bestätigte
+// vollständige Replay (siehe Plandokument Abschnitt 1 - alle Events kamen im Live-Test
+// innerhalb von 25ms) liefert alle Daten weit innerhalb dieses Fensters; es ist ein
+// großzügiger Sicherheitsspielraum, kein Normalfall-Wartezeitraum.
+// EN: Timeout for the connection setup of each dashboard-slot short-lived connection
+// (see fetchDbrdDetail()), and the subsequent collection window during which the
+// adapter still waits for io.routes/io.new_rmld after the io.Einsatz event. The
+// confirmed full replay (see the plan document section 1 - all events arrived within
+// 25ms in the live test) delivers all data well within this window; it's a generous
+// safety margin, not a normal-case wait time.
+const DASHBOARD_CONNECT_TIMEOUT_MS = 5000;
+const DASHBOARD_COLLECT_WINDOW_MS = 2000;
 
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
@@ -1487,6 +1501,15 @@ class WaipWeb extends utils.Adapter {
 
         this.HISTORY_SIZE = HISTORY_SIZE;
         this.ALLOWED_EINSATZ_FIELDS = ALLOWED_EINSATZ_FIELDS;
+        // DE: Als überschreibbare Instanz-Property statt des Moduls direkt zu importieren -
+        // erlaubt Unit-Tests von fetchDbrdDetail(), eine Fake-Factory einzusetzen, ohne
+        // einen echten Socket.IO-Server zu brauchen (analog zu this.httpGet für
+        // fetchDbrdList()). Produktiv immer der echte socket.io-client-Import.
+        // EN: An overridable instance property instead of importing the module directly -
+        // lets unit tests for fetchDbrdDetail() substitute a fake factory without needing
+        // a real Socket.IO server (analogous to this.httpGet for fetchDbrdList()). Always
+        // the real socket.io-client import in production.
+        this.ioClientFactory = io;
     }
 
     async onReady() {
@@ -2125,6 +2148,209 @@ class WaipWeb extends utils.Adapter {
         result.sort((a, b) => Number(a.value) - Number(b.value));
 
         return result;
+    }
+
+    /* DE: Holt die öffentliche Einsatzübersichtsseite (/dbrd/) der konfigurierten WAIP-Web-
+       Instanz und extrahiert das darin eingebettete `let data = [...]`-JSON-Array mit den
+       aktuell verfügbaren Einsätzen (siehe Plandokument Abschnitt 1) - live verifiziert:
+       kein REST/JSON-Endpoint, sondern serverseitig vorgerendertes HTML mit einem
+       eingebetteten <script>-Block. Rein lesend, erfordert kein Cookie/Login (identisch zu
+       fetchMonitorList()). Balanced-Bracket-Extraktion statt eines einfachen Regex-Matches,
+       weil das Array verschachtelte Objekte/Strings mit eigenen eckigen Klammern enthält
+       (z.B. GeoJSON-Koordinaten in `geometry`) - ein "erstes ]"-Regex würde dort vorzeitig
+       abschneiden.
+       EN: Fetches the configured WAIP-Web instance's public incident overview page
+       (/dbrd/) and extracts the embedded `let data = [...]` JSON array with the currently
+       available incidents (see the plan document section 1) - live-verified: not a
+       REST/JSON endpoint, but server-rendered HTML with an embedded <script> block.
+       Read-only, requires no cookie/login (identical to fetchMonitorList()). Uses
+       balanced-bracket extraction instead of a simple regex match, because the array
+       contains nested objects/strings with their own square brackets (e.g. GeoJSON
+       coordinates in `geometry`) - a "first ]" regex would cut it off prematurely. */
+    async fetchDbrdList() {
+        const clean = String(this.url || '').replace(/\/+$/, '');
+        if (!clean) {
+            throw new Error('no WAIP server URL configured');
+        }
+        const res = await this.httpGet(`${clean}/dbrd/`);
+        if (res.statusCode !== 200 || !res.body) {
+            throw new Error(`Could not fetch incident list (status ${res.statusCode})`);
+        }
+        const html = res.body;
+        const marker = /let\s+data\s*=\s*/.exec(html);
+        if (!marker) {
+            throw new Error('could not find the embedded incident list (data array) on /dbrd/');
+        }
+        const start = html.indexOf('[', marker.index + marker[0].length);
+        if (start === -1) {
+            throw new Error('could not find the start of the embedded incident list on /dbrd/');
+        }
+        let depth = 0;
+        let end = -1;
+        let inString = false;
+        let stringChar = '';
+        for (let i = start; i < html.length; i++) {
+            const ch = html[i];
+            if (inString) {
+                if (ch === '\\') {
+                    i++; // DE: escaptes Zeichen überspringen / EN: skip the escaped character
+                } else if (ch === stringChar) {
+                    inString = false;
+                }
+                continue;
+            }
+            if (ch === '"' || ch === "'") {
+                inString = true;
+                stringChar = ch;
+            } else if (ch === '[') {
+                depth++;
+            } else if (ch === ']') {
+                depth--;
+                if (depth === 0) {
+                    end = i;
+                    break;
+                }
+            }
+        }
+        if (end === -1) {
+            throw new Error('unbalanced brackets while extracting the embedded incident list on /dbrd/');
+        }
+        const raw = html.slice(start, end + 1);
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (e) {
+            throw new Error(`could not parse the embedded incident list as JSON: ${e.message}`);
+        }
+        return Array.isArray(parsed) ? parsed : [];
+    }
+
+    /* DE: Sammelt die Detaildaten eines einzelnen Einsatzes über eine kurzlebige,
+       eigenständige Socket.IO-Verbindung zum /dbrd-Namespace (Plandokument Abschnitt 4.2 -
+       live verifiziert: der Server sendet beim emit('dbrd', uuid) den kompletten
+       historischen Rückmeldungs-Verlauf per Replay nach, siehe Plandokument Abschnitt 1,
+       daher genügt eine Kurzverbindung statt einer Dauerverbindung). Öffnet bewusst NICHT
+       this.socket (den /waip-Namespace) mit, sondern eine komplett unabhängige
+       socket.io-client-Instanz, die am Ende dieser Funktion garantiert wieder geschlossen
+       wird (finally-Block, analog zu cleanupSocket()).
+
+       Rückgabe bei Erfolg: { einsatz, routes, rueckmeldungen }.
+       Rückgabe bei "Einsatz nicht mehr verfügbar" (io.error ODER io.deleted - siehe
+       Plandokument Abschnitt 1: beide Events bedeuten dasselbe, ein zwischen
+       /dbrd/-Listing und Verbindungsaufbau bereits abgeschlossener Einsatz liefert real
+       io.error, nicht io.deleted wie im offiziellen Client vorgesehen) sowie bei Timeout:
+       null - kein Fehler-Log auf warn/error-Ebene, das ist im Normalbetrieb erwarteter
+       Vorgang (siehe refreshDashboard(), das für einen null-Rückgabewert nur debug loggt).
+
+       EN: Collects a single incident's detail data via a short-lived, standalone Socket.IO
+       connection to the /dbrd namespace (plan document section 4.2 - live-verified: the
+       server replays the complete historical feedback trail on emit('dbrd', uuid), see the
+       plan document section 1, so a short-lived connection suffices instead of a
+       persistent one). Deliberately does NOT reuse this.socket (the /waip namespace), but
+       opens a fully independent socket.io-client instance that is guaranteed to be closed
+       again at the end of this function (finally block, analogous to cleanupSocket()).
+
+       Return on success: { einsatz, routes, rueckmeldungen }.
+       Return on "incident no longer available" (io.error OR io.deleted - see the plan
+       document section 1: both events mean the same thing, an incident already finished
+       between the /dbrd/ listing and the connection setup returns io.error in reality, not
+       io.deleted as the official client expects) as well as on timeout: null - no warn/
+       error-level log, that's an expected occurrence in normal operation (see
+       refreshDashboard(), which only logs at debug for a null return value). */
+    async fetchDbrdDetail(uuid) {
+        return new Promise(resolve => {
+            const namespaceUrl = `${this.url}/dbrd`;
+            const socket = this.ioClientFactory(namespaceUrl, {
+                path: '/socket.io',
+                forceNew: true,
+                transports: ['websocket', 'polling'],
+                reconnection: false,
+                timeout: DASHBOARD_CONNECT_TIMEOUT_MS,
+                extraHeaders: this.sessionCookie ? { Cookie: this.sessionCookie } : undefined,
+            });
+
+            let settled = false;
+            let connectTimeoutHandle = null;
+            let collectTimeoutHandle = null;
+            const einsatz = { einsatz: null, routes: [], rueckmeldungen: [] };
+
+            const cleanup = () => {
+                if (connectTimeoutHandle) {
+                    this.clearTimeout(connectTimeoutHandle);
+                    connectTimeoutHandle = null;
+                }
+                if (collectTimeoutHandle) {
+                    this.clearTimeout(collectTimeoutHandle);
+                    collectTimeoutHandle = null;
+                }
+                try {
+                    socket.removeAllListeners();
+                    socket.disconnect();
+                } catch (e) {
+                    this.safeLog('debug', `fetchDbrdDetail cleanup (uuid ${uuid})`, e);
+                }
+            };
+
+            const finish = result => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                resolve(result);
+            };
+
+            connectTimeoutHandle = this.setTimeout(() => {
+                this.safeLog('debug', `fetchDbrdDetail: connect timeout (uuid ${uuid})`);
+                finish(null);
+            }, DASHBOARD_CONNECT_TIMEOUT_MS);
+
+            socket.on('connect', () => {
+                socket.emit('dbrd', uuid);
+            });
+
+            socket.on('io.Einsatz', data => {
+                einsatz.einsatz = data;
+                // DE: Sammelfenster erst NACH dem ersten Einsatz-Event starten, nicht schon
+                // beim Verbindungsaufbau - so hat der Replay von io.routes/io.new_rmld den
+                // vollen DASHBOARD_COLLECT_WINDOW_MS zur Verfügung, unabhängig davon, wie
+                // lange der Verbindungsaufbau selbst gedauert hat.
+                // EN: Start the collection window only AFTER the first incident event, not
+                // already at connection setup - this way the replay of
+                // io.routes/io.new_rmld gets the full DASHBOARD_COLLECT_WINDOW_MS,
+                // regardless of how long the connection setup itself took.
+                if (!collectTimeoutHandle) {
+                    collectTimeoutHandle = this.setTimeout(() => finish(einsatz), DASHBOARD_COLLECT_WINDOW_MS);
+                }
+            });
+            socket.on('io.routes', data => {
+                einsatz.routes = Array.isArray(data) ? data : [];
+            });
+            socket.on('io.new_rmld', data => {
+                einsatz.rueckmeldungen.push(data);
+            });
+            // DE: io.error und io.deleted identisch behandeln - siehe Plandokument
+            // Abschnitt 1, Server-Quellcode-Fund: beide bedeuten "nicht mehr verfügbar".
+            // EN: Treat io.error and io.deleted identically - see the plan document
+            // section 1, server source-code finding: both mean "no longer available".
+            socket.on('io.error', data => {
+                this.safeLog(
+                    'debug',
+                    `fetchDbrdDetail: incident no longer available (io.error, uuid ${uuid}): ${
+                        typeof data === 'string' ? data : JSON.stringify(data)
+                    }`,
+                );
+                finish(null);
+            });
+            socket.on('io.deleted', () => {
+                this.safeLog('debug', `fetchDbrdDetail: incident no longer available (io.deleted, uuid ${uuid})`);
+                finish(null);
+            });
+            socket.on('connect_error', err => {
+                this.safeLog('debug', `fetchDbrdDetail: connect_error (uuid ${uuid})`, err);
+                finish(null);
+            });
+        });
     }
 
     /* DE: Löst this.monitorID einmalig zu einem Anzeigenamen ohne ID auf (z.B. "Leitstelle:
@@ -3248,11 +3474,24 @@ class WaipWeb extends utils.Adapter {
        MED (aus den rmld_capability_*-Flags) unter .funktionen.
        EN: Computes the per-role/skill counters from the feedback entries collected in the
        snapshot (mirroring the EK/GF/ZF/VF/AGT/FZF/MA/MED/total badges of the web UI) and
-       updates einsatz.rueckmeldungen.rollen.<k> and .funktionen.<k> as well as
-       einsatz.rueckmeldungenGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen, AGT/FZF/MA/
-       MED (from the rmld_capability_* flags) under .funktionen. */
-    async updateRueckmeldungCounts() {
-        const list = (this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen) || [];
+       updates <statePrefix>.rueckmeldungen.rollen.<k> and .funktionen.<k> as well as
+       <statePrefix>.rueckmeldungenGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen,
+       AGT/FZF/MA/MED (from the rmld_capability_* flags) under .funktionen.
+
+       DE: Parametrisiert (2026-08-29, Plandokument Abschnitt 4.8) statt fest auf
+       this.currentEinsatzSnapshot/einsatz.* zu lesen/schreiben, damit dieselbe Logik auch
+       für die parallelen Dashboard-Slots wiederverwendbar ist (siehe refreshDashboard(),
+       Phase 6) - der bestehende einsatz.*-Aufruf übergibt weiterhin
+       this.currentEinsatzSnapshot.rueckmeldungen/'einsatz' und verhält sich dadurch exakt
+       wie zuvor (reines Refactoring, keine Verhaltensänderung für einsatz.*).
+       EN: Parametrized (2026-08-29, plan document section 4.8) instead of reading/writing
+       this.currentEinsatzSnapshot/einsatz.* directly, so the same logic can be reused for
+       the parallel dashboard slots too (see refreshDashboard(), phase 6) - the existing
+       einsatz.* call site still passes this.currentEinsatzSnapshot.rueckmeldungen/'einsatz'
+       and therefore behaves exactly as before (pure refactoring, no behavior change for
+       einsatz.*). */
+    async updateRueckmeldungCounts(rueckmeldungen, statePrefix) {
+        const list = Array.isArray(rueckmeldungen) ? rueckmeldungen : [];
         const counts = { ek: 0, gf: 0, zf: 0, vf: 0, agt: 0, fzf: 0, ma: 0, med: 0 };
         for (const r of list) {
             if (r.rmld_role === 'team_member') {
@@ -3279,17 +3518,17 @@ class WaipWeb extends utils.Adapter {
         }
         const tasks = [
             ...RUECKMELDUNG_ROLLEN_KEYS.map(k =>
-                this.setStateAsync(`einsatz.rueckmeldungen.rollen.${k}`, counts[k], true),
+                this.setStateAsync(`${statePrefix}.rueckmeldungen.rollen.${k}`, counts[k], true),
             ),
             ...RUECKMELDUNG_FUNKTIONEN_KEYS.map(k =>
-                this.setStateAsync(`einsatz.rueckmeldungen.funktionen.${k}`, counts[k], true),
+                this.setStateAsync(`${statePrefix}.rueckmeldungen.funktionen.${k}`, counts[k], true),
             ),
         ];
-        tasks.push(this.setStateAsync('einsatz.rueckmeldungenGesamt', list.length, true));
+        tasks.push(this.setStateAsync(`${statePrefix}.rueckmeldungenGesamt`, list.length, true));
         const results = await Promise.allSettled(tasks);
         for (const r of results) {
             if (r.status === 'rejected') {
-                this.safeWarn('updateRueckmeldungCounts', r.reason);
+                this.safeWarn(`updateRueckmeldungCounts (${statePrefix})`, r.reason);
             }
         }
     }
@@ -3374,7 +3613,7 @@ class WaipWeb extends utils.Adapter {
                 } catch (e) {
                     this.safeWarn('einsatz.routenGesamt.setState', e);
                 }
-                await this.updateRueckmeldungCounts();
+                await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatz');
                 // DE: kartenbildPfad ebenfalls sofort leeren, statt auf generateEinsatzMapImage()
                 // weiter unten zu warten - sonst könnte er für den neuen Einsatz kurzzeitig (oder,
                 // falls keine gültigen Koordinaten vorliegen bzw. mapImageEnabled aus ist, sogar
@@ -3545,7 +3784,7 @@ class WaipWeb extends utils.Adapter {
 
             await this.persistEinsatzSnapshot();
             await this.writeJsonArrayState('einsatz.json.rueckmeldungen', this.currentEinsatzSnapshot.rueckmeldungen);
-            await this.updateRueckmeldungCounts();
+            await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatz');
         } catch (e) {
             // DE: Eine Rückmeldung konnte nicht verarbeitet werden -> echter Datenverlust.
             // EN: A feedback event couldn't be processed -> actual data loss.
@@ -3677,7 +3916,10 @@ class WaipWeb extends utils.Adapter {
         // ist jetzt also null -> alle Zähler werden konsistent auf 0 zurückgesetzt.
         // EN: rueckmeldungenGesamt/rueckmeldungen.* reads from this.currentEinsatzSnapshot,
         // which is now null -> all counters get consistently reset to 0.
-        await this.updateRueckmeldungCounts();
+        await this.updateRueckmeldungCounts(
+            this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen,
+            'einsatz',
+        );
     }
 
     /* DE: Handler für Server-Fehlermeldungen (io.error). Das bekannte "Fehler beim Erneuern
