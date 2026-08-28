@@ -205,6 +205,21 @@ const MAP_IMAGE_TIMEOUT_SECONDS_MAX = 60;
 const DASHBOARD_MIN_SLOT_COUNT = 1;
 const DASHBOARD_MAX_SLOT_COUNT = 20;
 const DEFAULT_DASHBOARD_SLOT_COUNT = 10;
+// DE: Konfigurierbarer Refresh-Intervall-Bereich für das Dashboard-Feature (siehe
+// startDashboardRefreshInterval(), noch zu implementieren). Untergrenze bewusst 30s statt
+// eines technischen Minimums - bei strikt sequenziellen Kurzverbindungen (Frage 1 im
+// Plandokument) dauert ein voller Refresh-Zyklus realistisch mehrere Sekunden pro
+// belegtem Slot, ein kürzeres Intervall wäre irreführend, siehe Plandokument
+// "Minimales Refresh-Intervall".
+// EN: Configurable refresh-interval range for the dashboard feature (see
+// startDashboardRefreshInterval(), not yet implemented). Lower bound deliberately 30s
+// instead of a technical minimum - with strictly sequential short-lived connections (plan
+// document question 1), a full refresh cycle realistically takes several seconds per
+// occupied slot, a shorter interval would be misleading, see the plan document "Minimum
+// refresh interval".
+const DASHBOARD_MIN_REFRESH_SEC = 30;
+const DASHBOARD_MAX_REFRESH_SEC = 300;
+const DEFAULT_DASHBOARD_REFRESH_SEC = 60;
 
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
@@ -1564,16 +1579,36 @@ class WaipWeb extends utils.Adapter {
         // buildDashboardChannelDefs()/buildDashboardStateDefs()). dashboardEnabled fällt
         // bewusst NICHT auf true zurück (anders als z.B. rdAlarmierungEnabled) - der
         // io-package.json-Default ist false, das Feature ist also opt-in.
+        // ⚠️ dashboardEnabled/dashboardSlotCount müssen HIER, vor cleanupObsoleteObjects()/
+        // syncDashboardObjects() gelesen werden - nicht erst zusammen mit
+        // dashboardRefreshSec weiter unten -, weil syncDashboardObjects() bereits vor
+        // initObjects() entscheiden muss, was gelöscht werden soll (siehe Plandokument 3.2a).
+        // dashboardRefreshSec wird dagegen erst von startDashboardRefreshInterval()
+        // gebraucht (noch nicht implementiert), daher an dieser Stelle mit den anderen
+        // beiden zusammen gelesen, obwohl es für den Objekt-Sync selbst nicht nötig wäre.
         // EN: Configuration for the dashboard feature (see syncDashboardObjects()/
         // buildDashboardChannelDefs()/buildDashboardStateDefs()). dashboardEnabled
         // deliberately does NOT fall back to true (unlike e.g. rdAlarmierungEnabled) - the
         // io-package.json default is false, so the feature is opt-in.
+        // ⚠️ dashboardEnabled/dashboardSlotCount must be read HERE, before
+        // cleanupObsoleteObjects()/syncDashboardObjects() - not together with
+        // dashboardRefreshSec further down -, because syncDashboardObjects() already has
+        // to decide what to delete before initObjects() runs (see the plan document
+        // 3.2a). dashboardRefreshSec is only needed by startDashboardRefreshInterval()
+        // (not yet implemented), so it's read here together with the other two even
+        // though it isn't needed for the object sync itself.
         this.dashboardEnabled = !!this.config.dashboardEnabled;
         this.dashboardSlotCount = clampNumber(
             this.config.dashboardSlotCount,
             DASHBOARD_MIN_SLOT_COUNT,
             DASHBOARD_MAX_SLOT_COUNT,
             DEFAULT_DASHBOARD_SLOT_COUNT,
+        );
+        this.dashboardRefreshSec = clampNumber(
+            this.config.dashboardRefreshSec,
+            DASHBOARD_MIN_REFRESH_SEC,
+            DASHBOARD_MAX_REFRESH_SEC,
+            DEFAULT_DASHBOARD_REFRESH_SEC,
         );
         // DE: dashboard.*-CHANNEL_DEFS/STATE_DEFS werden - anders als die restlichen,
         // modul-global statischen Defs dieses Adapters - erst hier zur Laufzeit gebaut, weil

@@ -525,7 +525,10 @@
         "mapImageZoom": 19,
         "mapImageOutlineColor": "#dd2020",
         "mapImageOutlineThickness": 4,
-        "mapImageTimeout": 10
+        "mapImageTimeout": 10,
+        "dashboardEnabled": false,
+        "dashboardRefreshSec": 60,
+        "dashboardSlotCount": 10
     },
     "objects": [],
     "instanceObjects": [

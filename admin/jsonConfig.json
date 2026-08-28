@@ -304,6 +304,59 @@
                     "xl": 4
                 }
             }
+        },
+        "tabDashboard": {
+            "type": "panel",
+            "label": "Dashboard",
+            "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMi41IiB5PSIyLjUiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHJ4PSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48cmVjdCB4PSIxMy41IiB5PSIyLjUiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHJ4PSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48cmVjdCB4PSIyLjUiIHk9IjEzLjUiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHJ4PSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzVmNjM2OCIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48cmVjdCB4PSIxMy41IiB5PSIxMy41IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiByeD0iMS41IiBmaWxsPSJub25lIiBzdHJva2U9IiM1ZjYzNjgiIHN0cm9rZS13aWR0aD0iMS42Ii8+PC9zdmc+",
+            "items": {
+                "dashboardEnabled": {
+                    "type": "checkbox",
+                    "label": "Enable dashboard",
+                    "help": "Shows the last N incidents (N = number below) matching this instance's Monitor ID (Connection tab) as dashboard.einsatz1..einsatzN, correlated via the incident's dispatch center/district/carrier/station IDs, same matching logic as the Monitor ID dropdown itself. Monitor ID 0 (all dispatch monitors) shows all incidents. Disabling the feature removes the entire dashboard object tree; reducing the count below removes only the now-unused slots. Both take effect on the next adapter restart after saving.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                },
+                "dashboardSlotCount": {
+                    "type": "number",
+                    "label": "Number of incidents to show",
+                    "help": "How many of the most recent matching incidents to show (dashboard.einsatz1..einsatzN). Higher values create proportionally more states/channels.",
+                    "hidden": "!data.dashboardEnabled",
+                    "min": 1,
+                    "max": 20,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "dashboardRefreshSec": {
+                    "type": "number",
+                    "label": "Refresh interval (s)",
+                    "help": "How often the dashboard is refreshed. A full refresh connects to the server once per slot in sequence, so it realistically takes several seconds per active slot - the minimum here reflects that.",
+                    "hidden": "!data.dashboardEnabled",
+                    "min": 30,
+                    "max": 300,
+                    "xs": 12,
+                    "sm": 6,
+                    "md": 4,
+                    "lg": 4,
+                    "xl": 4
+                },
+                "dashboardHelp": {
+                    "type": "staticText",
+                    "hidden": "!data.dashboardEnabled",
+                    "text": "Map images are derived from this adapter's own incident-map history (see 'Incident map image' tab) and are only available where it already generated one for a matching incident - most complete when Monitor ID is 0 and map images are enabled. A manual refresh can be triggered any time via the dashboard.refreshNow button state.",
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
+                }
+            }
         }
     }
 }
