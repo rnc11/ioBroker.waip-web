@@ -91,6 +91,170 @@ describe('isValidMonitor', () => {
     });
 });
 
+describe('dbrdEntryMatchesMonitor', () => {
+    // DE: Beispiel-Eintrag angelehnt an die live gegen /waip/ verifizierten Werte
+    // (Plandokument Abschnitt 1a): l=Leitstelle, a=Kreis, b=Träger, c=Wachen-Liste.
+    // EN: Example entry modeled on the values live-verified against /waip/ (plan document
+    // section 1a): l=dispatch center, a=district, b=carrier, c=station list.
+    const entry = { l: '4', a: '71', b: '7105', c: '710512,710506,710503' };
+
+    it('matches on l (Leitstelle)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '4')).to.be.true;
+    });
+
+    it('matches on a (Kreis)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '71')).to.be.true;
+    });
+
+    it('matches on b (Träger)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '7105')).to.be.true;
+    });
+
+    it('matches on a single value within the comma-separated c list (Wache)', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '710506')).to.be.true;
+    });
+
+    it('rejects a monitor id that matches none of l/a/b/c', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '999')).to.be.false;
+    });
+
+    it('treats monitorID "0" as "all" (global), like the /waip namespace', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '0')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor({ l: '1', a: '2', b: '3', c: '4' }, '0')).to.be.true;
+    });
+
+    it('treats an empty/missing monitorID as "all", consistent with isValidMonitor()', () => {
+        expect(t.dbrdEntryMatchesMonitor(entry, '')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(entry, null)).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(entry, undefined)).to.be.true;
+    });
+
+    it('tolerates whitespace and empty segments in the c list', () => {
+        const messy = { l: '1', a: '2', b: '3', c: ' 710506 ,, 710503 ,' };
+        expect(t.dbrdEntryMatchesMonitor(messy, '710506')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(messy, '710503')).to.be.true;
+        expect(t.dbrdEntryMatchesMonitor(messy, '')).to.be.true; // still "all"
+    });
+
+    it('rejects a non-global monitorID against a non-object entry instead of throwing', () => {
+        expect(t.dbrdEntryMatchesMonitor(null, '4')).to.be.false;
+        expect(t.dbrdEntryMatchesMonitor(undefined, '4')).to.be.false;
+        expect(t.dbrdEntryMatchesMonitor('a string', '4')).to.be.false;
+    });
+});
+
+describe('buildDashboardChannelDefs/buildDashboardStateDefs', () => {
+    // DE: dashboardSlotCount ist eine Laufzeit-Config (1..20, siehe Plandokument Frage 13) -
+    // die Defs werden pro Slotanzahl frisch gebaut, nicht mehr wie sonst in diesem Adapter
+    // üblich beim Modul-Laden statisch angelegt.
+    // EN: dashboardSlotCount is a runtime config value (1..20, see the plan document
+    // question 13) - the defs are built fresh per slot count, not statically at module
+    // load like everything else in this adapter.
+    // DE: 15 flache Felder + 8 Rückmeldungs-Zähler (4 Rollen + 4 Funktionen) + 5 json.*-States
+    // = 28 States pro Slot. Explizit ausgezählt statt geschätzt, damit ein versehentlich
+    // entferntes/hinzugefügtes Feld hier auffällt.
+    // EN: 15 flat fields + 8 feedback counters (4 roles + 4 functions) + 5 json.* states =
+    // 28 states per slot. Explicitly counted rather than guessed, so an accidentally
+    // removed/added field shows up here.
+    const FIELDS_PER_SLOT = 28;
+
+    it('builds exactly one root channel plus 5 channel/folder objects per slot', () => {
+        const defs = t.buildDashboardChannelDefs(3);
+        expect(defs.filter(d => d.id === 'dashboard')).to.have.lengthOf(1);
+        for (let i = 1; i <= 3; i++) {
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.rueckmeldungen`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.rueckmeldungen.rollen`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.rueckmeldungen.funktionen`)).to.be.true;
+            expect(defs.some(d => d.id === `dashboard.einsatz${i}.json`)).to.be.true;
+        }
+        // 1 root + 3 slots * 5 objects each
+        expect(defs).to.have.lengthOf(1 + 3 * 5);
+        expect(defs.some(d => d.id === 'dashboard.einsatz4')).to.be.false;
+    });
+
+    it('builds no slot channels for slotCount 0 (only the root channel)', () => {
+        const defs = t.buildDashboardChannelDefs(0);
+        expect(defs).to.have.lengthOf(1);
+        expect(defs[0].id).to.equal('dashboard');
+    });
+
+    it('tolerates non-finite slotCount by treating it as 0', () => {
+        expect(t.buildDashboardChannelDefs(NaN)).to.have.lengthOf(1);
+        expect(t.buildDashboardChannelDefs(undefined)).to.have.lengthOf(1);
+        expect(t.buildDashboardChannelDefs(null)).to.have.lengthOf(1);
+    });
+
+    it('builds state defs for exactly the requested number of slots, no more', () => {
+        const defs = t.buildDashboardStateDefs(2);
+        const slot1 = defs.filter(d => d.id.startsWith('dashboard.einsatz1.'));
+        const slot2 = defs.filter(d => d.id.startsWith('dashboard.einsatz2.'));
+        const slot3 = defs.filter(d => d.id.startsWith('dashboard.einsatz3.'));
+        expect(slot1.length).to.be.above(0);
+        expect(slot2.length).to.equal(slot1.length);
+        expect(slot3).to.have.lengthOf(0);
+    });
+
+    it('gives every slot a state count consistent across slots', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        expect(defs).to.have.lengthOf(FIELDS_PER_SLOT);
+    });
+
+    it('has no restzeit/ablaufzeit/tts states (do not exist in the /dbrd payload)', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = defs.map(d => d.id);
+        expect(ids.some(id => id.endsWith('.restzeit'))).to.be.false;
+        expect(ids.some(id => id.endsWith('.ablaufzeit'))).to.be.false;
+        expect(ids.some(id => id.includes('.tts.'))).to.be.false;
+    });
+
+    it('has a json.wachen state with no einsatz.* counterpart (deliberate asymmetry)', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        expect(defs.some(d => d.id === 'dashboard.einsatz1.json.wachen')).to.be.true;
+        expect(t.STATE_DEFS.some(d => d.id === 'einsatz.json.wachen')).to.be.false;
+    });
+
+    it('has no json.history10/emWeitere states (not part of the dashboard schema)', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = defs.map(d => d.id);
+        expect(ids.some(id => id.includes('history10'))).to.be.false;
+        expect(ids.some(id => id.includes('emWeitere'))).to.be.false;
+    });
+
+    it('declares every generated state with a type and a role', () => {
+        const defs = t.buildDashboardStateDefs(2);
+        const bad = defs.filter(d => !d.type || !d.role).map(d => d.id);
+        expect(bad, bad.join(', ')).to.be.empty;
+    });
+
+    it('has a channel/folder parent for every generated state path segment', () => {
+        // DE: dieselbe Struktur-Garantie wie der bestehende 'state definitions -
+        // internal consistency'-Test, aber für die dynamisch erzeugten Dashboard-Defs.
+        // EN: the same structural guarantee as the existing 'state definitions -
+        // internal consistency' test, but for the dynamically generated dashboard defs.
+        const channelDefs = t.buildDashboardChannelDefs(2);
+        const stateDefs = t.buildDashboardStateDefs(2);
+        const channelIds = new Set(channelDefs.map(d => d.id));
+        const missing = [];
+        for (const def of stateDefs) {
+            const parts = def.id.split('.');
+            for (let i = 1; i < parts.length; i++) {
+                const parent = parts.slice(0, i).join('.');
+                if (!channelIds.has(parent)) {
+                    missing.push(`${def.id} -> missing parent ${parent}`);
+                }
+            }
+        }
+        expect(missing, missing.join('; ')).to.be.empty;
+    });
+
+    it('produces no duplicate state ids across slots', () => {
+        const defs = t.buildDashboardStateDefs(5);
+        const ids = defs.map(d => d.id);
+        expect(ids).to.have.lengthOf(new Set(ids).size);
+    });
+});
+
 describe('normalizeStichwortForMatch', () => {
     it('treats spaces and hyphens as equivalent (dispatch-center spelling variants)', () => {
         // DE: Kern der Stichwort-Tabelle: eine Zeile muss alle Schreibvarianten abdecken.
@@ -675,5 +839,837 @@ describe('WaipWeb.prototype - pure instance helpers', () => {
             expect(resolve('https://waip.example', '')).to.equal('');
             expect(resolve('https://waip.example', null)).to.be.null;
         });
+    });
+});
+
+describe('deriveDashboardJsonArrayStateIds/deriveDashboardNullableNumberStateIds', () => {
+    it('derives json-array ids only from string/json-role defs', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = t.deriveDashboardJsonArrayStateIds(defs);
+        expect(ids.has('dashboard.einsatz1.json.current')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.json.wachen')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.stichwort')).to.be.false;
+    });
+
+    it('derives nullable-number ids only for id/latitude/longitude', () => {
+        const defs = t.buildDashboardStateDefs(1);
+        const ids = t.deriveDashboardNullableNumberStateIds(defs);
+        expect(ids.has('dashboard.einsatz1.id')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.latitude')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.longitude')).to.be.true;
+        expect(ids.has('dashboard.einsatz1.sondersignal')).to.be.false; // ordinary number, stays 0
+        expect(ids.has('dashboard.einsatz1.routenGesamt')).to.be.false;
+    });
+
+    it('never drifts out of sync when buildDashboardStateDefs changes slot count', () => {
+        const defs2 = t.buildDashboardStateDefs(2);
+        const jsonIds = t.deriveDashboardJsonArrayStateIds(defs2);
+        const numIds = t.deriveDashboardNullableNumberStateIds(defs2);
+        // 5 json.* states per slot * 2 slots
+        expect(jsonIds.size).to.equal(10);
+        // id/latitude/longitude per slot * 2 slots
+        expect(numIds.size).to.equal(6);
+    });
+});
+
+describe('WaipWeb - syncDashboardObjects / deleteObjectTreeAsync (mocked ioBroker core)', () => {
+    /* DE: Nutzt @iobroker/testing's createMocks() für eine In-Memory-Objekt-DB - siehe Skill
+       iobroker-adapter-development, Abschnitt Testing. delObjectAsync fehlt im Mock (bekannte
+       Lücke, siehe dort) und wird hier nachgerüstet.
+       EN: Uses @iobroker/testing's createMocks() for an in-memory object DB - see the
+       iobroker-adapter-development skill, Testing section. delObjectAsync is missing from
+       the mock (known gap, see there) and is patched on here. */
+    const { utils } = require('@iobroker/testing');
+
+    function makeInstance({ dashboardEnabled, dashboardSlotCount, existingIds = [] }) {
+        const { database, adapter } = utils.unit.createMocks({ name: 'waip-web', instance: 0 });
+        adapter.delObjectAsync = id =>
+            new Promise((res, rej) => adapter.delObject(id, e => (e ? rej(e) : res())));
+        for (const id of existingIds) {
+            database.publishObject({ _id: `${adapter.namespace}.${id}`, type: id.includes('.') ? 'channel' : 'channel', common: { name: id }, native: {} });
+        }
+        const inst = Object.create(t.WaipWeb.prototype);
+        Object.assign(inst, adapter);
+        inst.getObjectAsync = adapter.getObjectAsync;
+        inst.getObjectListAsync = adapter.getObjectListAsync;
+        inst.delObjectAsync = adapter.delObjectAsync;
+        inst.namespace = adapter.namespace;
+        inst.log = adapter.log;
+        inst.dashboardEnabled = dashboardEnabled;
+        inst.dashboardSlotCount = dashboardSlotCount;
+        inst.appendMonitorAudit = () => Promise.resolve();
+        return { inst, database, adapter };
+    }
+
+    function objectIds(database, adapter) {
+        return Object.keys(database.getObjects(`${adapter.namespace}.*`));
+    }
+
+    it('Fall A: deaktiviert + bestehender dashboard-Kanal -> wird komplett entfernt', async () => {
+        const { inst, database, adapter } = makeInstance({
+            dashboardEnabled: false,
+            dashboardSlotCount: 10,
+            existingIds: [
+                'dashboard',
+                'dashboard.einsatz1',
+                'dashboard.einsatz1.stichwort',
+                'dashboard.einsatz2',
+                'dashboard.einsatz2.stichwort',
+            ],
+        });
+        await inst.syncDashboardObjects();
+        const remaining = objectIds(database, adapter).filter(id => id.includes('.dashboard'));
+        expect(remaining).to.be.empty;
+    });
+
+    it('Fall A2: deaktiviert + kein dashboard-Kanal -> no-op, kein Fehler', async () => {
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: false, dashboardSlotCount: 10 });
+        await inst.syncDashboardObjects();
+        expect(objectIds(database, adapter).filter(id => id.includes('.dashboard'))).to.be.empty;
+    });
+
+    it('Fall B: aktiv, Slot-Anzahl 10 -> 5 -> Slots 6-10 entfernt, 1-5 bleiben', async () => {
+        const existingIds = ['dashboard'];
+        for (let i = 1; i <= 10; i++) {
+            existingIds.push(`dashboard.einsatz${i}`, `dashboard.einsatz${i}.stichwort`);
+        }
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: true, dashboardSlotCount: 5, existingIds });
+        await inst.syncDashboardObjects();
+        const remaining = objectIds(database, adapter).filter(id => id.includes('.dashboard.einsatz'));
+        for (let i = 1; i <= 5; i++) {
+            expect(remaining.some(id => id.endsWith(`.dashboard.einsatz${i}`))).to.be.true;
+        }
+        for (let i = 6; i <= 10; i++) {
+            expect(remaining.some(id => id.includes(`.dashboard.einsatz${i}`))).to.be.false;
+        }
+    });
+
+    it('Fall C: aktiv, Slot-Anzahl 5 -> 10 -> keine Löschung (initObjects legt 6-10 neu an)', async () => {
+        const existingIds = ['dashboard'];
+        for (let i = 1; i <= 5; i++) {
+            existingIds.push(`dashboard.einsatz${i}`, `dashboard.einsatz${i}.stichwort`);
+        }
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: true, dashboardSlotCount: 10, existingIds });
+        await inst.syncDashboardObjects();
+        const remaining = objectIds(database, adapter).filter(id => id.includes('.dashboard.einsatz'));
+        for (let i = 1; i <= 5; i++) {
+            expect(remaining.some(id => id.endsWith(`.dashboard.einsatz${i}`))).to.be.true;
+        }
+    });
+
+    it('Fall D: Reaktivierung nach vollständiger Löschung -> kein dashboard-Kanal, kein Fehler', async () => {
+        const { inst, database, adapter } = makeInstance({ dashboardEnabled: true, dashboardSlotCount: 10 });
+        await inst.syncDashboardObjects();
+        expect(objectIds(database, adapter).filter(id => id.includes('.dashboard'))).to.be.empty;
+    });
+
+    it('deleteObjectTreeAsync removes children before the parent, root last', async () => {
+        const { inst, database, adapter } = makeInstance({
+            dashboardEnabled: false,
+            dashboardSlotCount: 10,
+            existingIds: ['dashboard', 'dashboard.einsatz1', 'dashboard.einsatz1.json', 'dashboard.einsatz1.json.current'],
+        });
+        await inst.deleteObjectTreeAsync('dashboard');
+        expect(objectIds(database, adapter).filter(id => id.includes('.dashboard'))).to.be.empty;
+    });
+});
+
+describe('fetchDbrdList', () => {
+    const proto = t.WaipWeb.prototype;
+
+    // DE: Nachgebildetes /dbrd/-HTML, angelehnt an das live verifizierte Format
+    // (Plandokument Abschnitt 1): ein serverseitig gerendertes Grundgerüst mit einem
+    // eingebetteten <script>-Block, der `let data = [...]` enthält. Das GeoJSON-Feld
+    // enthält bewusst eigene eckige Klammern (Polygon-Koordinaten), um die
+    // Balanced-Bracket-Extraktion gegen ein zu simples "erstes ]"-Regex abzusichern.
+    // EN: Reconstructed /dbrd/ HTML, modeled on the live-verified format (plan document
+    // section 1): a server-rendered skeleton with an embedded <script> block containing
+    // `let data = [...]`. The GeoJSON field deliberately contains its own square brackets
+    // (polygon coordinates) to guard the balanced-bracket extraction against a
+    // too-simple "first ]" regex.
+    function makeHtml(entries) {
+        return `<!DOCTYPE html><html><body><div id="app"></div>
+<script>
+let data = ${JSON.stringify(entries)};
+renderDashboard(data);
+</script>
+</body></html>`;
+    }
+
+    const sampleEntry = {
+        uuid: '40411df6-1081-483c-4edb-d1e740bdc943',
+        einsatzart: 'Hilfeleistungseinsatz',
+        stichwort: 'H:VU-mit-P',
+        ort: 'Burg (Spreewald)',
+        ortsteil: null,
+        geometry:
+            '{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[14.1,51.7],[14.2,51.7],[14.2,51.8]]]}}',
+        l: '4',
+        a: '71',
+        b: '7105',
+        c: '710512,710506,710503',
+    };
+
+    function makeInstance(body, statusCode = 200) {
+        const inst = Object.create(proto);
+        inst.url = 'https://waip.example';
+        inst.httpGet = async () => ({ statusCode, body });
+        return inst;
+    }
+
+    it('extracts the embedded data array, including entries with nested brackets in geometry', async () => {
+        const inst = makeInstance(makeHtml([sampleEntry]));
+        const list = await inst.fetchDbrdList();
+        expect(list).to.have.lengthOf(1);
+        expect(list[0].uuid).to.equal(sampleEntry.uuid);
+        expect(list[0].l).to.equal('4');
+        expect(list[0].c).to.equal('710512,710506,710503');
+        expect(JSON.parse(list[0].geometry).geometry.coordinates[0]).to.have.lengthOf(3);
+    });
+
+    it('returns an empty array for an empty data array (no active incidents)', async () => {
+        const inst = makeInstance(makeHtml([]));
+        const list = await inst.fetchDbrdList();
+        expect(list).to.deep.equal([]);
+    });
+
+    it('handles multiple entries', async () => {
+        const second = { ...sampleEntry, uuid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', l: '4', a: '71', b: '7105', c: '710503' };
+        const inst = makeInstance(makeHtml([sampleEntry, second]));
+        const list = await inst.fetchDbrdList();
+        expect(list).to.have.lengthOf(2);
+        expect(list.map(e => e.uuid)).to.deep.equal([sampleEntry.uuid, second.uuid]);
+    });
+
+    it('throws when the URL is not configured', async () => {
+        const inst = makeInstance('');
+        inst.url = '';
+        let threw = false;
+        try {
+            await inst.fetchDbrdList();
+        } catch (e) {
+            threw = true;
+            expect(e.message).to.match(/no WAIP server URL configured/);
+        }
+        expect(threw).to.be.true;
+    });
+
+    it('throws on a non-200 status', async () => {
+        const inst = makeInstance('not found', 404);
+        let threw = false;
+        try {
+            await inst.fetchDbrdList();
+        } catch (e) {
+            threw = true;
+            expect(e.message).to.match(/status 404/);
+        }
+        expect(threw).to.be.true;
+    });
+
+    it('throws when the page has no embedded data array (server format changed)', async () => {
+        const inst = makeInstance('<html><body>no dashboard here</body></html>');
+        let threw = false;
+        try {
+            await inst.fetchDbrdList();
+        } catch (e) {
+            threw = true;
+            expect(e.message).to.match(/could not find/);
+        }
+        expect(threw).to.be.true;
+    });
+
+    it('throws on malformed JSON inside the data array', async () => {
+        const html = `<script>let data = [ { uuid: 'unquoted-key-is-invalid-json' } ];</script>`;
+        const inst = makeInstance(html);
+        let threw = false;
+        try {
+            await inst.fetchDbrdList();
+        } catch (e) {
+            threw = true;
+            expect(e.message).to.match(/could not parse/);
+        }
+        expect(threw).to.be.true;
+    });
+});
+
+describe('fetchDbrdDetail', () => {
+    const proto = t.WaipWeb.prototype;
+
+    /* DE: Minimaler Fake-Socket (EventEmitter-Stil) statt eines echten socket.io-Servers -
+       trigger() simuliert einen eingehenden Server-Event, emit()/on() spiegeln die vom
+       Code tatsächlich genutzte socket.io-client-API.
+       EN: Minimal fake socket (EventEmitter-style) instead of a real socket.io server -
+       trigger() simulates an incoming server event, emit()/on() mirror the socket.io-client
+       API the code actually uses. */
+    class FakeSocket {
+        constructor() {
+            this.handlers = {};
+            this.emitted = [];
+            this.disconnected = false;
+        }
+        on(event, handler) {
+            (this.handlers[event] = this.handlers[event] || []).push(handler);
+        }
+        emit(event, data) {
+            this.emitted.push([event, data]);
+        }
+        removeAllListeners() {
+            this.handlers = {};
+        }
+        disconnect() {
+            this.disconnected = true;
+        }
+        trigger(event, data) {
+            for (const h of this.handlers[event] || []) {
+                h(data);
+            }
+        }
+    }
+
+    // DE: setTimeout/clearTimeout werden durch manuell steuerbare Fakes ersetzt (kein
+    // sinon/fake-timer-Setup nötig) - der Test feuert die Timer-Callbacks gezielt selbst,
+    // statt DASHBOARD_CONNECT_TIMEOUT_MS/DASHBOARD_COLLECT_WINDOW_MS real abzuwarten.
+    // EN: setTimeout/clearTimeout are replaced by manually controllable fakes (no
+    // sinon/fake-timer setup needed) - the test fires the timer callbacks itself instead
+    // of actually waiting out DASHBOARD_CONNECT_TIMEOUT_MS/DASHBOARD_COLLECT_WINDOW_MS.
+    function makeInstance() {
+        const socket = new FakeSocket();
+        const timers = [];
+        const inst = Object.create(proto);
+        inst.url = 'https://waip.example';
+        inst.sessionCookie = null;
+        inst.ioClientFactory = () => socket;
+        inst.setTimeout = (fn, ms) => {
+            const handle = { fn, ms, cleared: false };
+            timers.push(handle);
+            return handle;
+        };
+        inst.clearTimeout = handle => {
+            handle.cleared = true;
+        };
+        inst.safeLog = () => {};
+        return { inst, socket, timers };
+    }
+
+    const sampleEinsatz = { id: 1607178, uuid: 'fbacf1ff-uuid', einsatzart: 'Hilfeleistungseinsatz', stichwort: 'H:VU-mit-P' };
+
+    it('collects einsatz/routes/rueckmeldungen on a normal successful cycle', async () => {
+        const { inst, socket, timers } = makeInstance();
+        const promise = inst.fetchDbrdDetail('fbacf1ff-uuid');
+
+        socket.trigger('connect');
+        expect(socket.emitted).to.deep.equal([['dbrd', 'fbacf1ff-uuid']]);
+
+        socket.trigger('io.Einsatz', sampleEinsatz);
+        socket.trigger('io.routes', [{ nr_wache: 5 }]);
+        socket.trigger('io.new_rmld', { rmld_uuid: 'a' });
+        socket.trigger('io.new_rmld', { rmld_uuid: 'b' });
+
+        // DE: den Sammelfenster-Timer (nach io.Einsatz gesetzt, kürzer als der
+        // Verbindungs-Timeout) manuell auslösen - über den ms-Wert unterschieden, da beide
+        // Timer-Callbacks "finish" im Funktionstext enthalten.
+        // EN: manually fire the collection-window timer (set after io.Einsatz, shorter
+        // than the connect timeout) - distinguished by the ms value, since both timer
+        // callbacks contain "finish" in their function text.
+        const collectTimer = timers.find(tm => tm.ms === 2000);
+        collectTimer.fn();
+
+        const result = await promise;
+        expect(result.einsatz).to.deep.equal(sampleEinsatz);
+        expect(result.routes).to.deep.equal([{ nr_wache: 5 }]);
+        expect(result.rueckmeldungen).to.deep.equal([{ rmld_uuid: 'a' }, { rmld_uuid: 'b' }]);
+        expect(socket.disconnected).to.be.true;
+    });
+
+    it('resolves to "timeout" on a connect timeout (distinguished from io.error/io.deleted for logRecurringFailure)', async () => {
+        const { inst, timers } = makeInstance();
+        const promise = inst.fetchDbrdDetail('some-uuid');
+
+        // DE: nie 'connect' auslösen, stattdessen den Verbindungs-Timeout-Timer selbst feuern.
+        // EN: never fire 'connect', instead trigger the connection-timeout timer itself.
+        timers[0].fn();
+
+        const result = await promise;
+        expect(result).to.equal('timeout');
+    });
+
+    it('resolves to null on io.error (incident already gone, race with /dbrd/ listing)', async () => {
+        const { inst, socket } = makeInstance();
+        const promise = inst.fetchDbrdDetail('some-uuid');
+        socket.trigger('connect');
+        socket.trigger('io.error', 'Einsatz ist nicht mehr vorhanden (Anfrage lieferte kein Ergebnis)!');
+        const result = await promise;
+        expect(result).to.be.null;
+        expect(socket.disconnected).to.be.true;
+    });
+
+    it('resolves to null on io.deleted', async () => {
+        const { inst, socket } = makeInstance();
+        const promise = inst.fetchDbrdDetail('some-uuid');
+        socket.trigger('connect');
+        socket.trigger('io.deleted');
+        const result = await promise;
+        expect(result).to.be.null;
+    });
+
+    it('resolves to "timeout" on connect_error', async () => {
+        const { inst, socket } = makeInstance();
+        const promise = inst.fetchDbrdDetail('some-uuid');
+        socket.trigger('connect_error', new Error('ECONNREFUSED'));
+        const result = await promise;
+        expect(result).to.equal('timeout');
+    });
+
+    it('ignores a second terminal event after the first one already settled the promise', async () => {
+        // DE: Absicherung gegen einen doppelten finish()-Aufruf (z.B. io.error gefolgt von
+        // einem verzögerten io.deleted) - darf die bereits aufgelöste Promise nicht erneut anfassen.
+        // EN: Guards against a double finish() call (e.g. io.error followed by a delayed
+        // io.deleted) - must not touch the already-settled promise again.
+        const { inst, socket } = makeInstance();
+        const promise = inst.fetchDbrdDetail('some-uuid');
+        socket.trigger('connect');
+        socket.trigger('io.error', 'gone');
+        socket.trigger('io.deleted');
+        const result = await promise;
+        expect(result).to.be.null;
+    });
+
+    it('defaults routes to an empty array when the server sends a non-array', async () => {
+        const { inst, socket, timers } = makeInstance();
+        const promise = inst.fetchDbrdDetail('some-uuid');
+        socket.trigger('connect');
+        socket.trigger('io.Einsatz', sampleEinsatz);
+        socket.trigger('io.routes', null);
+        const collectTimer = timers.find(tm => tm.ms === 2000);
+        collectTimer.fn();
+        const result = await promise;
+        expect(result.routes).to.deep.equal([]);
+    });
+});
+
+describe('updateRueckmeldungCounts (parametrized, plan document section 4.8)', () => {
+    const proto = t.WaipWeb.prototype;
+
+    // DE: rmld_role deckt EK/GF/ZF/VF ab, die rmld_capability_*-Flags AGT/FZF/MA/MED -
+    // eine Rückmeldung kann beides gleichzeitig tragen (z.B. Gruppenführer, der zugleich
+    // Atemschutzgeräteträger ist).
+    // EN: rmld_role covers EK/GF/ZF/VF, the rmld_capability_* flags cover AGT/FZF/MA/MED -
+    // a single feedback entry can carry both at once (e.g. a crew leader who is also an
+    // apparatus wearer).
+    const sampleRueckmeldungen = [
+        { rmld_role: 'team_member', rmld_capability_agt: '1' },
+        { rmld_role: 'team_member' },
+        { rmld_role: 'crew_leader', rmld_capability_fzf: '1' },
+        { rmld_role: 'division_chief' },
+        { rmld_role: 'group_commander' },
+        { rmld_capability_ma: '1' },
+        { rmld_capability_med: '1' },
+    ];
+
+    function makeInstance() {
+        const written = {};
+        const inst = Object.create(proto);
+        inst.setStateAsync = async (id, val) => {
+            written[id] = val;
+        };
+        inst.safeWarn = () => {};
+        return { inst, written };
+    }
+
+    it('writes the expected counts under the given statePrefix (einsatz.*, regression for the pre-4.8 behavior)', async () => {
+        const { inst, written } = makeInstance();
+        await inst.updateRueckmeldungCounts(sampleRueckmeldungen, 'einsatz');
+        expect(written['einsatz.rueckmeldungen.rollen.ek']).to.equal(2);
+        expect(written['einsatz.rueckmeldungen.rollen.gf']).to.equal(1);
+        expect(written['einsatz.rueckmeldungen.rollen.zf']).to.equal(1);
+        expect(written['einsatz.rueckmeldungen.rollen.vf']).to.equal(1);
+        expect(written['einsatz.rueckmeldungen.funktionen.agt']).to.equal(1);
+        expect(written['einsatz.rueckmeldungen.funktionen.fzf']).to.equal(1);
+        expect(written['einsatz.rueckmeldungen.funktionen.ma']).to.equal(1);
+        expect(written['einsatz.rueckmeldungen.funktionen.med']).to.equal(1);
+        expect(written['einsatz.rueckmeldungenGesamt']).to.equal(sampleRueckmeldungen.length);
+    });
+
+    it('writes to a dashboard slot prefix with the identical counting logic', async () => {
+        const { inst, written } = makeInstance();
+        await inst.updateRueckmeldungCounts(sampleRueckmeldungen, 'dashboard.einsatz3');
+        expect(written['dashboard.einsatz3.rueckmeldungen.rollen.ek']).to.equal(2);
+        expect(written['dashboard.einsatz3.rueckmeldungen.funktionen.med']).to.equal(1);
+        expect(written['dashboard.einsatz3.rueckmeldungenGesamt']).to.equal(sampleRueckmeldungen.length);
+        // DE: keine Vermischung mit dem einsatz.*-Präfix.
+        // EN: no bleed-over into the einsatz.* prefix.
+        expect(written['einsatz.rueckmeldungenGesamt']).to.be.undefined;
+    });
+
+    it('resets all counters to 0 for an empty/null rueckmeldungen list (e.g. after a standby reset)', async () => {
+        const { inst, written } = makeInstance();
+        await inst.updateRueckmeldungCounts(null, 'einsatz');
+        expect(written['einsatz.rueckmeldungen.rollen.ek']).to.equal(0);
+        expect(written['einsatz.rueckmeldungen.funktionen.med']).to.equal(0);
+        expect(written['einsatz.rueckmeldungenGesamt']).to.equal(0);
+    });
+
+    it('two slots with different rueckmeldungen never cross-contaminate their counts', async () => {
+        const { inst, written } = makeInstance();
+        await inst.updateRueckmeldungCounts([{ rmld_role: 'team_member' }], 'dashboard.einsatz1');
+        await inst.updateRueckmeldungCounts(
+            [{ rmld_role: 'crew_leader' }, { rmld_role: 'crew_leader' }],
+            'dashboard.einsatz2',
+        );
+        expect(written['dashboard.einsatz1.rueckmeldungen.rollen.ek']).to.equal(1);
+        expect(written['dashboard.einsatz1.rueckmeldungen.rollen.gf']).to.equal(0);
+        expect(written['dashboard.einsatz2.rueckmeldungen.rollen.gf']).to.equal(2);
+        expect(written['dashboard.einsatz2.rueckmeldungen.rollen.ek']).to.equal(0);
+    });
+});
+
+describe('resolveDashboardMapImage', () => {
+    const proto = t.WaipWeb.prototype;
+    const fsPromises = require('node:fs/promises');
+    const os = require('node:os');
+    const path = require('node:path');
+
+    let tmpDir;
+
+    beforeEach(async () => {
+        tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'waip-web-mapimg-'));
+    });
+
+    afterEach(async () => {
+        await fsPromises.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    function makeInstance() {
+        const inst = Object.create(proto);
+        inst.mapImageDir = tmpDir;
+        inst.safeLog = () => {};
+        return inst;
+    }
+
+    async function touch(filename) {
+        await fsPromises.writeFile(path.join(tmpDir, filename), '');
+    }
+
+    it('finds the map image matching the uuid fragment (same truncation as generateEinsatzMapImage)', async () => {
+        const inst = makeInstance();
+        await touch('einsatz_1000_40411df6.png');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.equal(path.join(tmpDir, 'einsatz_1000_40411df6.png'));
+    });
+
+    it('returns null when no file matches the fragment (no map image was ever generated for this incident)', async () => {
+        const inst = makeInstance();
+        await touch('einsatz_1000_aaaaaaaa.png');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.be.null;
+    });
+
+    it('returns the newest match on a fragment collision (highest timestamp prefix wins)', async () => {
+        const inst = makeInstance();
+        await touch('einsatz_1000_40411df6.png');
+        await touch('einsatz_9999_40411df6.png');
+        await touch('einsatz_5000_40411df6.png');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.equal(path.join(tmpDir, 'einsatz_9999_40411df6.png'));
+    });
+
+    it('returns null for an empty/missing uuid without touching the filesystem', async () => {
+        const inst = makeInstance();
+        expect(await inst.resolveDashboardMapImage('')).to.be.null;
+        expect(await inst.resolveDashboardMapImage(null)).to.be.null;
+    });
+
+    it('returns null (not a thrown error) when mapImageDir does not exist', async () => {
+        const inst = makeInstance();
+        inst.mapImageDir = path.join(tmpDir, 'does-not-exist');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.be.null;
+    });
+
+    it('ignores files not matching the einsatz_*.png naming convention', async () => {
+        const inst = makeInstance();
+        await touch('other_1000_40411df6.png');
+        await touch('einsatz_1000_40411df6.txt');
+        const result = await inst.resolveDashboardMapImage('40411df6-1081-483c-4edb-d1e740bdc943');
+        expect(result).to.be.null;
+    });
+});
+
+describe('refreshDashboard / _refreshDashboardNow (orchestration, plan document section 4.1/4.3/4.7)', () => {
+    const proto = t.WaipWeb.prototype;
+
+    // DE: 3 Slots statt der Default-10 halten die Testfälle übersichtlich - die Logik
+    // skaliert nicht mit der Slot-Anzahl.
+    // EN: 3 slots instead of the default 10 keep the test cases manageable - the logic
+    // doesn't scale with slot count.
+    const SLOT_COUNT = 3;
+
+    function makeInstance(overrides = {}) {
+        const written = {};
+        const dashboardStateDefs = t.buildDashboardStateDefs(SLOT_COUNT);
+        const inst = Object.create(proto);
+        Object.assign(
+            inst,
+            {
+                dashboardEnabled: true,
+                dashboardSlotCount: SLOT_COUNT,
+                dashboardStateDefs,
+                dashboardJsonArrayStateIds: t.deriveDashboardJsonArrayStateIds(dashboardStateDefs),
+                dashboardNullableNumberStateIds: t.deriveDashboardNullableNumberStateIds(dashboardStateDefs),
+                monitorID: '0',
+                mapImageDir: '/does/not/exist/on/this/machine',
+                stichwortMapping: [],
+                rdKeywordDecodingEnabled: false,
+                log: { info: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
+                _recurringFailureKeys: new Set(),
+                _warnCache: new Map(),
+                _monitorAuditQueue: Promise.resolve(),
+                _monitorAuditCache: null,
+                _dashboardRefreshQueue: Promise.resolve(),
+                _dashboardRefreshFirstCycleDone: false,
+                getStateAsync: async () => null,
+                setStateAsync: async (id, val) => {
+                    written[id] = val;
+                },
+                fetchDbrdList: async () => [],
+                fetchDbrdDetail: async () => null,
+            },
+            overrides,
+        );
+        return { inst, written };
+    }
+
+    function sampleListingEntry(uuid, overrides = {}) {
+        return { uuid, einsatzart: 'Hilfeleistungseinsatz', stichwort: 'H:VU-mit-P', ort: 'Burg', ortsteil: null, l: '4', a: '71', b: '7105', c: '710512,710506,710503', ...overrides };
+    }
+
+    function sampleDetail(overrides = {}) {
+        return {
+            einsatz: { id: 1607178, uuid: 'fbacf1ff-uuid', einsatzart: 'Hilfeleistungseinsatz', stichwort: 'H:VU-mit-P', ort: 'Burg', ortsteil: null, sondersignal: 1, einsatzmittel: [], wachen: [] },
+            routes: [],
+            rueckmeldungen: [],
+            ...overrides,
+        };
+    }
+
+    it('fills matching slots and clears the remaining ones (fewer incidents than slots)', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid =>
+                uuid === entry1.uuid ? sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } }) : null,
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(true);
+        expect(written['dashboard.einsatz1.uuid']).to.equal(entry1.uuid);
+        // DE: unbelegte Slots 2/3 tragen die Leerwerte statt der Slot-1-Daten.
+        // EN: unoccupied slots 2/3 carry the empty values instead of slot 1's data.
+        expect(written['dashboard.einsatz2.alarmAktiv']).to.equal(false);
+        expect(written['dashboard.einsatz2.uuid']).to.be.null;
+        expect(written['dashboard.einsatz3.alarmAktiv']).to.equal(false);
+    });
+
+    it('maps filtered incidents onto slots 1..N positionally, respecting server order', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const entry2 = sampleListingEntry('22222222-2222-2222-2222-222222222222', { ort: 'Elsterwerda' });
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1, entry2],
+            fetchDbrdDetail: async uuid =>
+                sampleDetail({
+                    einsatz: {
+                        ...sampleDetail().einsatz,
+                        uuid,
+                        ort: uuid === entry1.uuid ? entry1.ort : entry2.ort,
+                    },
+                }),
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.uuid']).to.equal(entry1.uuid);
+        expect(written['dashboard.einsatz1.ort']).to.equal('Burg');
+        expect(written['dashboard.einsatz2.uuid']).to.equal(entry2.uuid);
+        expect(written['dashboard.einsatz2.ort']).to.equal('Elsterwerda');
+        expect(written['dashboard.einsatz3.alarmAktiv']).to.equal(false);
+    });
+
+    it('excludes incidents that do not match the configured monitorID before connecting', async () => {
+        const matching = sampleListingEntry('11111111-1111-1111-1111-111111111111', { l: '4', a: '71', b: '7105', c: '710503' });
+        const nonMatching = sampleListingEntry('99999999-9999-9999-9999-999999999999', { l: '9', a: '99', b: '9999', c: '999999' });
+        let detailCalls = 0;
+        const { inst, written } = makeInstance({
+            monitorID: '71',
+            fetchDbrdList: async () => [nonMatching, matching],
+            fetchDbrdDetail: async uuid => {
+                detailCalls++;
+                return sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } });
+            },
+        });
+        await inst.refreshDashboard();
+        // DE: nur EIN fetchDbrdDetail-Aufruf - der nicht-passende Eintrag wurde bereits vor
+        // dem Verbindungsaufbau ausgefiltert (Plandokument Frage 9).
+        // EN: only ONE fetchDbrdDetail call - the non-matching entry was already filtered
+        // out before the connection attempt (plan document question 9).
+        expect(detailCalls).to.equal(1);
+        expect(written['dashboard.einsatz1.uuid']).to.equal(matching.uuid);
+    });
+
+    it('clamps to dashboardSlotCount when more matching incidents exist than slots', async () => {
+        const entries = [
+            sampleListingEntry('11111111-1111-1111-1111-111111111111'),
+            sampleListingEntry('22222222-2222-2222-2222-222222222222'),
+            sampleListingEntry('33333333-3333-3333-3333-333333333333'),
+            sampleListingEntry('44444444-4444-4444-4444-444444444444'),
+        ];
+        let detailCalls = 0;
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => entries,
+            fetchDbrdDetail: async uuid => {
+                detailCalls++;
+                return sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } });
+            },
+        });
+        await inst.refreshDashboard();
+        expect(detailCalls).to.equal(SLOT_COUNT);
+        expect(written['dashboard.einsatz3.uuid']).to.equal(entries[2].uuid);
+    });
+
+    it('treats a slot returning null (io.error/io.deleted race) as empty, without aborting the cycle', async () => {
+        const gone = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const ok = sampleListingEntry('22222222-2222-2222-2222-222222222222');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [gone, ok],
+            fetchDbrdDetail: async uuid =>
+                uuid === gone.uuid ? null : sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } }),
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(false);
+        expect(written['dashboard.einsatz2.uuid']).to.equal(ok.uuid);
+    });
+
+    it('treats a slot timeout as empty and logs a recurring warning', async () => {
+        const timedOut = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const warnings = [];
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [timedOut],
+            fetchDbrdDetail: async () => 'timeout',
+            log: { info: () => {}, debug: () => {}, warn: msg => warnings.push(msg), error: () => {} },
+        });
+        await inst.refreshDashboard();
+        expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(false);
+        expect(warnings.some(w => /timed out/.test(w))).to.be.true;
+    });
+
+    it('logs the first successful cycle to the monitor audit log exactly once', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid => sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } }),
+        });
+        await inst.refreshDashboard();
+        await inst.refreshDashboard();
+        const audit = JSON.parse(written['debug.monitorAudit']);
+        const refreshEntries = audit.filter(e => e.event === 'dashboard_refresh');
+        expect(refreshEntries).to.have.lengthOf(1);
+        expect(refreshEntries[0].slotsFilled).to.equal(1);
+        expect(refreshEntries[0].slotsTotal).to.equal(SLOT_COUNT);
+    });
+
+    it('a listing fetch failure is caught, logged, and does not throw', async () => {
+        const { inst } = makeInstance({
+            fetchDbrdList: async () => {
+                throw new Error('ECONNREFUSED');
+            },
+        });
+        await inst.refreshDashboard();
+        // DE: kein Wurf bis hierher = Erfolg. Der Zyklus bricht früh ab, ohne Slots zu berühren.
+        // EN: no throw up to this point = success. The cycle aborts early, without touching slots.
+    });
+
+    it('is a no-op when dashboardEnabled is off', async () => {
+        const { inst, written } = makeInstance({ dashboardEnabled: false, fetchDbrdList: async () => [sampleListingEntry('x')] });
+        await inst.refreshDashboard();
+        expect(Object.keys(written)).to.be.empty;
+    });
+
+    it('serializes two concurrent refreshDashboard() calls instead of running them in parallel', async () => {
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        let concurrent = 0;
+        let maxConcurrent = 0;
+        const { inst } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid => {
+                concurrent++;
+                maxConcurrent = Math.max(maxConcurrent, concurrent);
+                await new Promise(r => setTimeout(r, 5));
+                concurrent--;
+                return sampleDetail({ einsatz: { ...sampleDetail().einsatz, uuid } });
+            },
+        });
+        await Promise.all([inst.refreshDashboard(), inst.refreshDashboard()]);
+        expect(maxConcurrent).to.equal(1);
+    });
+});
+
+describe('onStateChange (dashboard.refreshNow button, plan document section 3.5)', () => {
+    const proto = t.WaipWeb.prototype;
+
+    function makeInstance() {
+        const written = {};
+        let refreshCalls = 0;
+        const inst = Object.create(proto);
+        inst.namespace = 'waip-web.0';
+        inst.safeWarn = () => {};
+        inst.refreshDashboard = async () => {
+            refreshCalls++;
+        };
+        inst.setStateAsync = async (id, val, ack) => {
+            written[id] = { val, ack };
+        };
+        return { inst, written, getRefreshCalls: () => refreshCalls };
+    }
+
+    it('triggers refreshDashboard() on a real user write (ack:false) and resets the button afterwards', async () => {
+        const { inst, written, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', { val: true, ack: false });
+        // DE: onStateChange() ist bewusst synchron (spiegelt den echten ioBroker-Callback) -
+        // die Promise-Kette läuft im Hintergrund weiter, daher hier auf den Abschluss warten.
+        // EN: onStateChange() is deliberately synchronous (mirrors the real ioBroker
+        // callback) - the promise chain keeps running in the background, so wait for it
+        // to finish here.
+        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(1);
+        expect(written['dashboard.refreshNow']).to.deep.equal({ val: false, ack: true });
+    });
+
+    it('does NOT trigger a refresh on the ack:true write it just performed itself (no infinite loop)', async () => {
+        const { inst, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', { val: false, ack: true });
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(0);
+    });
+
+    it('ignores state changes for other IDs', async () => {
+        const { inst, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.einsatz1.alarmAktiv', { val: true, ack: false });
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(0);
+    });
+
+    it('ignores a null state (object deletion notification)', async () => {
+        const { inst, getRefreshCalls } = makeInstance();
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', null);
+        await new Promise(r => setTimeout(r, 0));
+        expect(getRefreshCalls()).to.equal(0);
+    });
+
+    it('still resets the button state even if refreshDashboard() rejects', async () => {
+        const { inst, written } = makeInstance();
+        inst.refreshDashboard = async () => {
+            throw new Error('boom');
+        };
+        inst.onStateChange('waip-web.0.dashboard.refreshNow', { val: true, ack: false });
+        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 0));
+        expect(written['dashboard.refreshNow']).to.deep.equal({ val: false, ack: true });
     });
 });

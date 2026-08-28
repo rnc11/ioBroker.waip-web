@@ -194,6 +194,58 @@ const DEFAULT_MAP_IMAGE_TIMEOUT_SECONDS = 10;
 const MAP_IMAGE_TIMEOUT_SECONDS_MIN = 1;
 const MAP_IMAGE_TIMEOUT_SECONDS_MAX = 60;
 
+// DE: Konfigurierbarer Slot-Bereich für das Dashboard-Feature (siehe onReady()/
+// syncDashboardObjects()/buildDashboardChannelDefs()/buildDashboardStateDefs()) -
+// dashboardSlotCount ist bewusst kein fester Wert, sondern 1..20 (siehe Plandokument
+// Frage 13).
+// EN: Configurable slot range for the dashboard feature (see onReady()/
+// syncDashboardObjects()/buildDashboardChannelDefs()/buildDashboardStateDefs()) -
+// dashboardSlotCount is deliberately not a fixed value, but 1..20 (see the plan
+// document question 13).
+const DASHBOARD_MIN_SLOT_COUNT = 1;
+const DASHBOARD_MAX_SLOT_COUNT = 20;
+const DEFAULT_DASHBOARD_SLOT_COUNT = 10;
+// DE: Konfigurierbarer Refresh-Intervall-Bereich für das Dashboard-Feature (siehe
+// startDashboardRefreshInterval(), noch zu implementieren). Untergrenze bewusst 30s statt
+// eines technischen Minimums - bei strikt sequenziellen Kurzverbindungen (Frage 1 im
+// Plandokument) dauert ein voller Refresh-Zyklus realistisch mehrere Sekunden pro
+// belegtem Slot, ein kürzeres Intervall wäre irreführend, siehe Plandokument
+// "Minimales Refresh-Intervall".
+// EN: Configurable refresh-interval range for the dashboard feature (see
+// startDashboardRefreshInterval(), not yet implemented). Lower bound deliberately 30s
+// instead of a technical minimum - with strictly sequential short-lived connections (plan
+// document question 1), a full refresh cycle realistically takes several seconds per
+// occupied slot, a shorter interval would be misleading, see the plan document "Minimum
+// refresh interval".
+const DASHBOARD_MIN_REFRESH_SEC = 30;
+const DASHBOARD_MAX_REFRESH_SEC = 300;
+const DEFAULT_DASHBOARD_REFRESH_SEC = 60;
+// DE: Timeout für den Verbindungsaufbau je Dashboard-Slot-Kurzverbindung (siehe
+// fetchDbrdDetail()) sowie das anschließende Sammelfenster, in dem nach dem
+// io.Einsatz-Event noch auf io.routes/io.new_rmld gewartet wird. Der bestätigte
+// vollständige Replay (siehe Plandokument Abschnitt 1 - alle Events kamen im Live-Test
+// innerhalb von 25ms) liefert alle Daten weit innerhalb dieses Fensters; es ist ein
+// großzügiger Sicherheitsspielraum, kein Normalfall-Wartezeitraum.
+// EN: Timeout for the connection setup of each dashboard-slot short-lived connection
+// (see fetchDbrdDetail()), and the subsequent collection window during which the
+// adapter still waits for io.routes/io.new_rmld after the io.Einsatz event. The
+// confirmed full replay (see the plan document section 1 - all events arrived within
+// 25ms in the live test) delivers all data well within this window; it's a generous
+// safety margin, not a normal-case wait time.
+const DASHBOARD_CONNECT_TIMEOUT_MS = 5000;
+const DASHBOARD_COLLECT_WINDOW_MS = 2000;
+// DE: Flache Felder aus io.Einsatz, die 1:1 nach dashboard.einsatzN.<feld> geschrieben
+// werden (siehe refreshDashboard()). Analog zu ALLOWED_EINSATZ_FIELDS, aber OHNE
+// ablaufzeit (existiert im /dbrd-Payload nicht, live verifiziert - siehe Plandokument
+// Abschnitt 1) - kartenbildPfad/latitude/longitude/beschreibung/alarmierungszeit werden
+// wie bei einsatz.* als Sonderfälle behandelt, nicht über diese Liste.
+// EN: Flat fields from io.Einsatz written 1:1 to dashboard.einsatzN.<field> (see
+// refreshDashboard()). Analogous to ALLOWED_EINSATZ_FIELDS, but WITHOUT ablaufzeit
+// (doesn't exist in the /dbrd payload, live-verified - see the plan document section 1)
+// - kartenbildPfad/latitude/longitude/beschreibung/alarmierungszeit are handled as
+// special cases just like for einsatz.*, not through this list.
+const DASHBOARD_ALLOWED_FIELDS = ['id', 'uuid', 'einsatzart', 'stichwort', 'ort', 'ortsteil', 'sondersignal'];
+
 /* DE: Für die dynamische Monitor-Auswahl im Admin (siehe fetchMonitorList/onMessage):
    Die /waip/-Übersichtsseite einer WAIP-Web-Instanz gliedert die verfügbaren
    Monitore typischerweise in diese vier Überschriften. Nicht jede Instanz nutzt
@@ -571,6 +623,212 @@ const STATE_DEFS = [
 // EN: Fast lookup for setField() of a state's declared type (see there).
 const STATE_DEF_BY_ID = new Map(STATE_DEFS.map(def => [def.id, def]));
 
+/* DE: Erzeugt die CHANNEL_DEFS-Ergänzung für den Dashboard-Kanal (dashboard.einsatz1 ..
+   dashboard.einsatzN). Reine Funktion, weil slotCount eine Laufzeit-Config ist
+   (this.dashboardSlotCount, 1..20) statt einer festen Modul-Konstante - CHANNEL_DEFS/
+   STATE_DEFS können für dieses Feature also nicht mehr wie sonst in diesem Adapter
+   üblich beim Modul-Laden statisch gebaut werden, sondern erst in onReady() nach dem
+   Auslesen der Config (siehe Plandokument Abschnitt 3.2). Für slotCount <= 0 liefert die
+   Funktion nur den Wurzel-Kanal zurück (keine Slots) statt zu werfen - der Aufrufer klemmt
+   den Wert vorher ohnehin auf [DASHBOARD_MIN_SLOT_COUNT, DASHBOARD_MAX_SLOT_COUNT].
+   EN: Builds the CHANNEL_DEFS addition for the dashboard channel (dashboard.einsatz1 ..
+   dashboard.einsatzN). A pure function because slotCount is a runtime config value
+   (this.dashboardSlotCount, 1..20) rather than a fixed module constant - CHANNEL_DEFS/
+   STATE_DEFS for this feature therefore can't be built statically at module load like
+   everything else in this adapter, only in onReady() after reading the config (see the
+   plan document section 3.2). For slotCount <= 0 the function returns just the root
+   channel (no slots) instead of throwing - the caller clamps the value beforehand anyway
+   to [DASHBOARD_MIN_SLOT_COUNT, DASHBOARD_MAX_SLOT_COUNT]. */
+function buildDashboardChannelDefs(slotCount) {
+    const defs = [
+        {
+            id: 'dashboard',
+            type: 'channel',
+            name: 'Dashboard: letzte N Einsätze (N konfigurierbar, siehe dashboardSlotCount)',
+        },
+    ];
+    const n = Number.isFinite(slotCount) ? Math.max(0, Math.trunc(slotCount)) : 0;
+    for (let i = 1; i <= n; i++) {
+        defs.push(
+            { id: `dashboard.einsatz${i}`, type: 'channel', name: `Dashboard-Slot ${i}: ${i}-aktuellster Einsatz` },
+            { id: `dashboard.einsatz${i}.rueckmeldungen`, type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
+            { id: `dashboard.einsatz${i}.rueckmeldungen.rollen`, type: 'folder', name: 'Rückmeldungen nach Rolle' },
+            {
+                id: `dashboard.einsatz${i}.rueckmeldungen.funktionen`,
+                type: 'folder',
+                name: 'Rückmeldungen nach Funktion',
+            },
+            {
+                id: `dashboard.einsatz${i}.json`,
+                type: 'folder',
+                name: 'Einsatzdaten als flache JSON-Arrays für Tabellen-Widgets',
+            },
+        );
+    }
+    return defs;
+}
+
+/* DE: Erzeugt die STATE_DEFS-Ergänzung für den Dashboard-Kanal, pro Slot 1..slotCount.
+   Spiegel der flachen einsatz.*-States (siehe Plandokument Abschnitt 3.3), bewusst OHNE
+   restzeit/ablaufzeit (existieren im /dbrd-Payload nicht, live verifiziert) und OHNE
+   tts.* (kein io.playtts-Äquivalent im /dbrd-Namespace). dashboard.einsatzN.json.wachen
+   ist ein bewusst neuer State ohne einsatz.*-Pendant (wachen[] existiert nur im
+   /dbrd-Payload) - dashboard.einsatzN.json.* hat außerdem KEIN history10/emWeitere.
+   EN: Builds the STATE_DEFS addition for the dashboard channel, per slot 1..slotCount.
+   Mirrors the flat einsatz.* states (see the plan document section 3.3), deliberately
+   WITHOUT restzeit/ablaufzeit (don't exist in the /dbrd payload, live-verified) and
+   WITHOUT tts.* (no io.playtts equivalent in the /dbrd namespace).
+   dashboard.einsatzN.json.wachen is a deliberate new state with no einsatz.* counterpart
+   (wachen[] only exists in the /dbrd payload) - dashboard.einsatzN.json.* also has NO
+   history10/emWeitere. */
+function buildDashboardStateDefs(slotCount) {
+    const defs = [];
+    const n = Number.isFinite(slotCount) ? Math.max(0, Math.trunc(slotCount)) : 0;
+    for (let i = 1; i <= n; i++) {
+        const p = `dashboard.einsatz${i}`;
+        defs.push(
+            {
+                id: `${p}.alarmAktiv`,
+                type: 'boolean',
+                role: 'indicator.alarm',
+                name: `Slot ${i}: Alarm aktiv`,
+                def: false,
+            },
+            { id: `${p}.id`, type: 'number', role: 'value', name: `Slot ${i}: Einsatz ID` },
+            { id: `${p}.uuid`, type: 'string', role: 'text', name: `Slot ${i}: Einsatz UUID` },
+            { id: `${p}.einsatzart`, type: 'string', role: 'text', name: `Slot ${i}: Einsatzart` },
+            { id: `${p}.stichwort`, type: 'string', role: 'text', name: `Slot ${i}: Alarmstichwort` },
+            { id: `${p}.beschreibung`, type: 'string', role: 'text', name: `Slot ${i}: Beschreibung zum Stichwort` },
+            { id: `${p}.ort`, type: 'string', role: 'text', name: `Slot ${i}: Ort` },
+            { id: `${p}.ortsteil`, type: 'string', role: 'text', name: `Slot ${i}: Ortsteil` },
+            { id: `${p}.alarmierungszeit`, type: 'string', role: 'date', name: `Slot ${i}: Alarmierungszeit` },
+            { id: `${p}.sondersignal`, type: 'number', role: 'value', name: `Slot ${i}: Sondersignal`, def: 0 },
+            { id: `${p}.latitude`, type: 'number', role: 'value.gps.latitude', name: `Slot ${i}: Breitengrad` },
+            { id: `${p}.longitude`, type: 'number', role: 'value.gps.longitude', name: `Slot ${i}: Längengrad` },
+            {
+                id: `${p}.kartenbildPfad`,
+                type: 'string',
+                role: 'text',
+                name: `Slot ${i}: Pfad zum abgeleiteten Kartenbild (aus dem bestehenden Kartenbild-Fundus, nicht neu generiert) - leer, falls keins gefunden wurde`,
+            },
+            { id: `${p}.routenGesamt`, type: 'number', role: 'value', name: `Slot ${i}: Anzahl Routen`, def: 0 },
+            {
+                id: `${p}.rueckmeldungenGesamt`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen gesamt`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.ek`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Einsatzkräfte`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.gf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Gruppenführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.zf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Zugführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.rollen.vf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Verbandsführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.agt`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Atemschutzgeräteträger`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.fzf`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Fahrzeugführer`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.ma`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Maschinisten`,
+                def: 0,
+            },
+            {
+                id: `${p}.rueckmeldungen.funktionen.med`,
+                type: 'number',
+                role: 'value',
+                name: `Slot ${i}: Rückmeldungen Medizinisch/Sanitäter`,
+                def: 0,
+            },
+            {
+                id: `${p}.json.current`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: Einsatzstamm, flaches JSON-Array (leer, falls Slot unbelegt)`,
+            },
+            { id: `${p}.json.routen`, type: 'string', role: 'json', name: `Slot ${i}: Routen, flaches JSON-Array` },
+            {
+                id: `${p}.json.rueckmeldungen`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: Rückmeldungen, flaches JSON-Array`,
+            },
+            {
+                id: `${p}.json.emAlarmiert`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: Einsatzmittel, flaches JSON-Array (ungefiltert)`,
+            },
+            {
+                id: `${p}.json.wachen`,
+                type: 'string',
+                role: 'json',
+                name: `Slot ${i}: beteiligte Wachen, flaches JSON-Array (deduplizierte Liste, nur im /dbrd-Payload vorhanden)`,
+            },
+        );
+    }
+    return defs;
+}
+
+/* DE: Leitet die Dashboard-Pendants zu JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS aus
+   einer buildDashboardStateDefs()-Ausgabe ab, statt sie als zweite, von Hand gepflegte
+   Konstantenliste zu führen - dadurch können sie nie aus dem Tritt geraten, wenn sich die
+   generierten Felder ändern. Reine Funktion, testbar wie jeder andere Helfer hier.
+   EN: Derives the dashboard counterparts to JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS
+   from a buildDashboardStateDefs() output, instead of keeping them as a second,
+   hand-maintained constant list - this way they can never drift out of sync when the
+   generated fields change. A pure function, testable like every other helper here. */
+function deriveDashboardJsonArrayStateIds(dashboardStateDefs) {
+    return new Set(dashboardStateDefs.filter(d => d.type === 'string' && d.role === 'json').map(d => d.id));
+}
+
+function deriveDashboardNullableNumberStateIds(dashboardStateDefs) {
+    return new Set(
+        dashboardStateDefs
+            .filter(
+                d =>
+                    d.type === 'number' &&
+                    (d.id.endsWith('.id') || d.id.endsWith('.latitude') || d.id.endsWith('.longitude')),
+            )
+            .map(d => d.id),
+    );
+}
+
 // DE: IDs, deren "string"-Wert tatsächlich ein JSON-*Array* enthält - liefert den korrekten
 // Leerwert "[]" für resetAllStates() (alle anderen "string"-States werden auf null
 // gesetzt). einsatz.json.current, debug.lastEvent und debug.normalizedPosition sind
@@ -628,6 +886,42 @@ function isValidMonitor(mon) {
         return false;
     }
     return String(mon).trim() !== '';
+}
+
+/* DE: Prüft ob ein Eintrag aus der /dbrd/-Übersichtsliste zur konfigurierten monitorID
+   gehört. entry.l/a/b/c sind Leitstelle/Kreis/Träger/kommagetrennte Wachen-Liste - live
+   gegen die /waip/-Übersichtsseite verifiziert, siehe Plandokument Abschnitt 1a. Ein
+   Eintrag ist relevant, wenn monitorID mit l ODER a ODER b ODER einem der c-Werte
+   übereinstimmt (String-Vergleich). monitorID '0'/leer bedeutet weiterhin "alle", wie
+   beim bestehenden /waip-Namespace (siehe isValidMonitor()).
+   Anders als payloadMonitorMatch() (die serverseitige Socket.IO-Room-Registrierung des
+   /waip-Namespace) filtert diese Funktion rein client-seitig, weil /dbrd/ ungefiltert
+   ALLE Einsätze der Leitstelle liefert - siehe Plandokument Frage 9.
+   EN: Checks whether an entry from the /dbrd/ overview list belongs to the configured
+   monitorID. entry.l/a/b/c are dispatch-center/district/carrier/comma-separated-stations
+   - live-verified against the /waip/ overview page, see the plan document section 1a. An
+   entry is relevant if monitorID matches l OR a OR b OR one of the c values (string
+   comparison). monitorID '0'/empty still means "all", as with the existing /waip
+   namespace (see isValidMonitor()).
+   Unlike payloadMonitorMatch() (the /waip namespace's server-side Socket.IO room
+   registration), this function filters purely client-side, because /dbrd/ returns ALL of
+   the dispatch center's incidents unfiltered - see the plan document question 9. */
+function dbrdEntryMatchesMonitor(entry, monitorID) {
+    if (!isValidMonitor(monitorID) || String(monitorID) === '0') {
+        return true;
+    }
+    const target = String(monitorID);
+    if (!entry || typeof entry !== 'object') {
+        return false;
+    }
+    if (String(entry.l) === target || String(entry.a) === target || String(entry.b) === target) {
+        return true;
+    }
+    const wachen = String(entry.c || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+    return wachen.includes(target);
 }
 
 /*
@@ -1173,6 +1467,13 @@ class WaipWeb extends utils.Adapter {
         this.on('ready', this.onReady.bind(this));
         this.on('unload', this.onUnload.bind(this));
         this.on('message', this.onMessage.bind(this));
+        // DE: Erstmaliger stateChange-Listener in diesem Adapter (siehe onStateChange()) -
+        // bisher wurde nirgends subscribeStates() genutzt. Nur für den Dashboard-Refresh-
+        // Button (dashboard.refreshNow, Plandokument Abschnitt 3.5) benötigt.
+        // EN: First stateChange listener in this adapter (see onStateChange()) - until now
+        // subscribeStates() was never used anywhere. Only needed for the dashboard refresh
+        // button (dashboard.refreshNow, plan document section 3.5).
+        this.on('stateChange', this.onStateChange.bind(this));
 
         this.socket = null;
         this.currentMonitor = '';
@@ -1182,6 +1483,7 @@ class WaipWeb extends utils.Adapter {
         this.registrationTimer = null;
         this.reconnectTimer = null;
         this.restzeitInterval = null;
+        this.dashboardRefreshInterval = null; // -> startDashboardRefreshInterval()/onUnload()
         this.sessionKeepaliveTimer = null;
         this.nextSessionKeepaliveDelayMs = null;
         this.sessionCookie = null;
@@ -1199,6 +1501,16 @@ class WaipWeb extends utils.Adapter {
         // loaded from the DB.
         this._monitorAuditQueue = Promise.resolve();
         this._monitorAuditCache = null;
+        // DE: Serialisierungskette für refreshDashboard() (Plandokument Abschnitt 4.3,
+        // identisches Muster wie this._monitorAuditQueue oben) - verhindert, dass ein
+        // zeitgesteuerter und ein alarm-/manuell-getriggerter Refresh überlappend laufen
+        // und sich beim sequenziellen Abarbeiten der Slots gegenseitig ins Gehege kommen.
+        // EN: Serialization chain for refreshDashboard() (plan document section 4.3,
+        // identical pattern to this._monitorAuditQueue above) - prevents a timed and an
+        // alarm-/manually-triggered refresh from running concurrently and interfering
+        // with each other while sequentially working through the slots.
+        this._dashboardRefreshQueue = Promise.resolve();
+        this._dashboardRefreshFirstCycleDone = false;
         this._wrongMonitorWindowStart = 0; // -> checkWrongMonitorRate()
         this._wrongMonitorWindowCount = 0;
         this.lastServerVersion = null;
@@ -1218,6 +1530,15 @@ class WaipWeb extends utils.Adapter {
 
         this.HISTORY_SIZE = HISTORY_SIZE;
         this.ALLOWED_EINSATZ_FIELDS = ALLOWED_EINSATZ_FIELDS;
+        // DE: Als überschreibbare Instanz-Property statt des Moduls direkt zu importieren -
+        // erlaubt Unit-Tests von fetchDbrdDetail(), eine Fake-Factory einzusetzen, ohne
+        // einen echten Socket.IO-Server zu brauchen (analog zu this.httpGet für
+        // fetchDbrdList()). Produktiv immer der echte socket.io-client-Import.
+        // EN: An overridable instance property instead of importing the module directly -
+        // lets unit tests for fetchDbrdDetail() substitute a fake factory without needing
+        // a real Socket.IO server (analogous to this.httpGet for fetchDbrdList()). Always
+        // the real socket.io-client import in production.
+        this.ioClientFactory = io;
     }
 
     async onReady() {
@@ -1306,6 +1627,88 @@ class WaipWeb extends utils.Adapter {
             DEFAULT_MAP_IMAGE_TIMEOUT_SECONDS,
         );
         this.mapImageDir = path.join(utils.getAbsoluteInstanceDataDir(this), 'maps');
+        // DE: Konfiguration für das Dashboard-Feature (siehe syncDashboardObjects()/
+        // buildDashboardChannelDefs()/buildDashboardStateDefs()). dashboardEnabled fällt
+        // bewusst NICHT auf true zurück (anders als z.B. rdAlarmierungEnabled) - der
+        // io-package.json-Default ist false, das Feature ist also opt-in.
+        // ⚠️ dashboardEnabled/dashboardSlotCount müssen HIER, vor cleanupObsoleteObjects()/
+        // syncDashboardObjects() gelesen werden - nicht erst zusammen mit
+        // dashboardRefreshSec weiter unten -, weil syncDashboardObjects() bereits vor
+        // initObjects() entscheiden muss, was gelöscht werden soll (siehe Plandokument 3.2a).
+        // dashboardRefreshSec wird dagegen erst von startDashboardRefreshInterval()
+        // gebraucht (noch nicht implementiert), daher an dieser Stelle mit den anderen
+        // beiden zusammen gelesen, obwohl es für den Objekt-Sync selbst nicht nötig wäre.
+        // EN: Configuration for the dashboard feature (see syncDashboardObjects()/
+        // buildDashboardChannelDefs()/buildDashboardStateDefs()). dashboardEnabled
+        // deliberately does NOT fall back to true (unlike e.g. rdAlarmierungEnabled) - the
+        // io-package.json default is false, so the feature is opt-in.
+        // ⚠️ dashboardEnabled/dashboardSlotCount must be read HERE, before
+        // cleanupObsoleteObjects()/syncDashboardObjects() - not together with
+        // dashboardRefreshSec further down -, because syncDashboardObjects() already has
+        // to decide what to delete before initObjects() runs (see the plan document
+        // 3.2a). dashboardRefreshSec is only needed by startDashboardRefreshInterval()
+        // (not yet implemented), so it's read here together with the other two even
+        // though it isn't needed for the object sync itself.
+        this.dashboardEnabled = !!this.config.dashboardEnabled;
+        this.dashboardSlotCount = clampNumber(
+            this.config.dashboardSlotCount,
+            DASHBOARD_MIN_SLOT_COUNT,
+            DASHBOARD_MAX_SLOT_COUNT,
+            DEFAULT_DASHBOARD_SLOT_COUNT,
+        );
+        this.dashboardRefreshSec = clampNumber(
+            this.config.dashboardRefreshSec,
+            DASHBOARD_MIN_REFRESH_SEC,
+            DASHBOARD_MAX_REFRESH_SEC,
+            DEFAULT_DASHBOARD_REFRESH_SEC,
+        );
+        // DE: dashboard.*-CHANNEL_DEFS/STATE_DEFS werden - anders als die restlichen,
+        // modul-global statischen Defs dieses Adapters - erst hier zur Laufzeit gebaut, weil
+        // dashboardSlotCount ein Konfigurationswert ist (siehe buildDashboardChannelDefs()/
+        // buildDashboardStateDefs()). Leere Arrays, falls das Feature deaktiviert ist -
+        // initObjects()/resetAllStates() legen dann konsequent keine dashboard.*-Objekte an
+        // (syncDashboardObjects() hat sie zuvor bereits entfernt, siehe oben).
+        // EN: dashboard.* CHANNEL_DEFS/STATE_DEFS - unlike the rest of this adapter's
+        // module-global static defs - are built here at runtime because dashboardSlotCount
+        // is a configuration value (see buildDashboardChannelDefs()/buildDashboardStateDefs()).
+        // Empty arrays if the feature is disabled - initObjects()/resetAllStates() then
+        // consistently create no dashboard.* objects (syncDashboardObjects() already removed
+        // them above).
+        this.dashboardChannelDefs = this.dashboardEnabled ? buildDashboardChannelDefs(this.dashboardSlotCount) : [];
+        this.dashboardStateDefs = this.dashboardEnabled ? buildDashboardStateDefs(this.dashboardSlotCount) : [];
+        // DE: dashboard.refreshNow (Plandokument Abschnitt 3.5 - manueller Refresh-Trigger,
+        // Frage 12) ist bewusst NICHT Teil von buildDashboardStateDefs() (dessen Test
+        // "gives every slot a state count consistent across slots" prüft eine feste Anzahl
+        // Felder PRO SLOT - refreshNow gehört zum Wurzel-Kanal, nicht zu einem Slot,
+        // genau wie 'dashboard' selbst kein Slot-Channel in buildDashboardChannelDefs() ist).
+        // Wird hier separat angehängt, sodass initObjects()/resetAllStates() ihn trotzdem
+        // konsistent mitbehandeln.
+        // EN: dashboard.refreshNow (plan document section 3.5 - manual refresh trigger,
+        // question 12) is deliberately NOT part of buildDashboardStateDefs() (its test
+        // "gives every slot a state count consistent across slots" checks a fixed field
+        // count PER SLOT - refreshNow belongs to the root channel, not a slot, just like
+        // 'dashboard' itself isn't a slot channel in buildDashboardChannelDefs()). Appended
+        // separately here so initObjects()/resetAllStates() still handle it consistently.
+        if (this.dashboardEnabled) {
+            this.dashboardStateDefs.push({
+                id: 'dashboard.refreshNow',
+                type: 'boolean',
+                role: 'button',
+                name: 'Manuellen Dashboard-Refresh auslösen',
+                read: false,
+                write: true,
+                def: false,
+            });
+        }
+        // DE: Dashboard-Pendants zu JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS (siehe
+        // computeEmptyStateValue()) - abgeleitet aus dashboardStateDefs statt einer zweiten
+        // Konstantenliste, damit sie mit buildDashboardStateDefs() nie auseinanderlaufen
+        // können.
+        // EN: Dashboard counterparts to JSON_ARRAY_STATE_IDS/NULLABLE_NUMBER_STATE_IDS (see
+        // computeEmptyStateValue()) - derived from dashboardStateDefs instead of a second
+        // constant list, so they can never drift out of sync with buildDashboardStateDefs().
+        this.dashboardJsonArrayStateIds = deriveDashboardJsonArrayStateIds(this.dashboardStateDefs);
+        this.dashboardNullableNumberStateIds = deriveDashboardNullableNumberStateIds(this.dashboardStateDefs);
         // DE: Normalisiert einmalig beim Start (statt bei jedem Lookup): normalizeStichwortForMatch()
         // sorgt für case-insensitiven Vergleich UND behandelt Leerzeichen/Bindestriche als identisch
         // (siehe deren Kommentar), alphabetisch nach Muster sortiert. Die Reihenfolge hat für
@@ -1330,6 +1733,7 @@ class WaipWeb extends utils.Adapter {
 
         await this.cleanupObsoleteObjects();
         await this.migrateObjectTypes();
+        await this.syncDashboardObjects();
         await this.initObjects();
         await this.resetAllStates();
         // DE: Session-Cookie holen, bevor die erste Socket.IO-Verbindung aufgebaut wird
@@ -1337,6 +1741,33 @@ class WaipWeb extends utils.Adapter {
         await this.refreshSessionCookie();
         this.startSessionKeepalive();
         this.startRestzeitInterval();
+        if (this.dashboardEnabled) {
+            this.log.info(`Dashboard feature enabled - refreshing every ${this.dashboardRefreshSec}s`);
+            this.appendMonitorAudit({ ts: new Date().toISOString(), event: 'dashboard_enabled' }).catch(() => {});
+            // DE: Sofortiger erster Durchlauf (Plandokument Frage 10) - VOR dem Start des
+            // wiederkehrenden Timers, damit das Dashboard nach einem Adapter-Neustart nicht
+            // bis zu dashboardRefreshSec (max. 300s) lang leer bleibt. Bewusst AWAITED, aber
+            // Fehler werden bereits in _refreshDashboardNow() abgefangen - schlägt hier
+            // trotzdem etwas unerwartet fehl, darf das den restlichen Adapter-Start nicht
+            // verhindern.
+            // EN: Immediate first run (plan document question 10) - BEFORE starting the
+            // recurring timer, so the dashboard doesn't stay empty for up to
+            // dashboardRefreshSec (max. 300s) after an adapter restart. Deliberately
+            // AWAITED, but errors are already caught inside _refreshDashboardNow() -
+            // should something still unexpectedly fail here, it must not prevent the rest
+            // of adapter startup.
+            try {
+                await this.refreshDashboard();
+            } catch (e) {
+                this.safeWarn('initial refreshDashboard', e);
+            }
+            this.startDashboardRefreshInterval();
+            // DE: Nur abonnieren, wenn das Feature aktiv ist - kein Sinn, den Button bei
+            // deaktiviertem Dashboard zu abonnieren (siehe Plandokument Abschnitt 3.5).
+            // EN: Only subscribe when the feature is active - no point subscribing to the
+            // button while the dashboard is disabled (see the plan document section 3.5).
+            this.subscribeStates('dashboard.refreshNow');
+        }
         // DE: Nicht awaiten - der Alarm-Empfang soll nicht auf diesen (rein informativen)
         // Namens-Lookup warten müssen.
         // EN: Not awaited - alarm reception shouldn't have to wait for this (purely
@@ -1360,6 +1791,10 @@ class WaipWeb extends utils.Adapter {
             if (this.restzeitInterval) {
                 this.clearInterval(this.restzeitInterval);
                 this.restzeitInterval = null;
+            }
+            if (this.dashboardRefreshInterval) {
+                this.clearInterval(this.dashboardRefreshInterval);
+                this.dashboardRefreshInterval = null;
             }
             if (this.sessionKeepaliveTimer) {
                 this.clearTimeout(this.sessionKeepaliveTimer);
@@ -1453,6 +1888,106 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
+    /* DE: Löscht rootId und alle seine Kind-Objekte (States/Channels/Folder). Traversiert
+       manuell statt sich auf delObjectAsync(rootId, { recursive: true }) zu verlassen: der
+       @iobroker/testing-Mock (siehe test/unit.js künftiges Pendant) versteht die
+       recursive-Option nicht und würde nur rootId selbst löschen, die Kinder blieben als
+       Leichen zurück - siehe Skill iobroker-adapter-development, Abschnitt Testing. Löscht
+       Kinder VOR dem Elternobjekt (längste IDs zuerst), damit ein echter js-controller auch
+       ohne recursive-Unterstützung nicht an einem nicht-leeren Channel/Folder scheitert.
+       EN: Deletes rootId and all its child objects (states/channels/folders). Traverses
+       manually instead of relying on delObjectAsync(rootId, { recursive: true }): the
+       @iobroker/testing mock doesn't understand the recursive option and would only delete
+       rootId itself, leaving the children behind - see the iobroker-adapter-development
+       skill, Testing section. Deletes children BEFORE the parent (longest IDs first) so a
+       real js-controller without recursive support doesn't choke on a non-empty
+       channel/folder either. */
+    async deleteObjectTreeAsync(rootId) {
+        const fullRoot = `${this.namespace}.${rootId}`;
+        let rows = [];
+        try {
+            const list = await this.getObjectListAsync({ startkey: `${fullRoot}.`, endkey: `${fullRoot}.\u9999` });
+            rows = (list && list.rows) || [];
+        } catch (e) {
+            this.safeWarn(`deleteObjectTreeAsync listing ${rootId}`, e);
+        }
+        const childIds = rows.map(row => row.id).sort((a, b) => b.length - a.length);
+        for (const id of childIds) {
+            try {
+                await this.delObjectAsync(id);
+            } catch (e) {
+                this.safeWarn(`deleteObjectTreeAsync child ${id}`, e);
+            }
+        }
+        try {
+            await this.delObjectAsync(rootId);
+        } catch (e) {
+            this.safeWarn(`deleteObjectTreeAsync root ${rootId}`, e);
+        }
+    }
+
+    /* DE: Synchronisiert den dashboard-Objektbaum mit der aktuellen Konfiguration - läuft
+       in onReady() VOR initObjects(), damit dieses nicht sofort wieder anlegt, was hier
+       gerade entfernt wurde (siehe Plandokument Abschnitt 3.2a). Zwei Fälle:
+       1. Feature deaktiviert (this.dashboardEnabled === false): der GESAMTE dashboard-Kanal
+          wird gelöscht, nicht nur seine States geleert - explizite Nutzeranforderung
+          (2026-08-29). Existiert er nicht (schon deaktiviert/nie aktiviert), passiert nichts.
+       2. Feature aktiv: Slots N > this.dashboardSlotCount sind durch eine Verkleinerung der
+          Konfiguration überzählig geworden und werden einzeln entfernt (State UND Channel,
+          nicht nur geleert). Existiert der dashboard-Kanal noch gar nicht (Erstinstallation
+          oder Reaktivierung nach einer vorherigen Komplett-Löschung), gibt es nichts zu
+          bereinigen - initObjects() legt anschließend alles frisch an, kein Sonderfall nötig.
+       EN: Syncs the dashboard object tree with the current configuration - runs in
+       onReady() BEFORE initObjects(), so that call doesn't immediately recreate what was
+       just removed here (see the plan document section 3.2a). Two cases:
+       1. Feature disabled (this.dashboardEnabled === false): the ENTIRE dashboard channel
+          is deleted, not just its states emptied - explicit user requirement (2026-08-29).
+          If it doesn't exist (already disabled/never enabled), nothing happens.
+       2. Feature active: slots N > this.dashboardSlotCount became excess through a
+          configuration shrink and are removed individually (state AND channel, not just
+          emptied). If the dashboard channel doesn't exist yet at all (fresh install or
+          reactivation after a previous full removal), there's nothing to clean up -
+          initObjects() creates everything fresh afterwards, no special case needed. */
+    async syncDashboardObjects() {
+        const rootExists = !!(await this.getObjectAsync('dashboard'));
+        if (!this.dashboardEnabled) {
+            if (rootExists) {
+                await this.deleteObjectTreeAsync('dashboard');
+                this.log.info('Dashboard feature disabled - removed the dashboard channel and all its objects');
+                this.appendMonitorAudit({ ts: new Date().toISOString(), event: 'dashboard_removed' }).catch(() => {});
+            }
+            return;
+        }
+        if (!rootExists) {
+            return;
+        }
+        let rows = [];
+        try {
+            const list = await this.getObjectListAsync({
+                startkey: `${this.namespace}.dashboard.`,
+                endkey: `${this.namespace}.dashboard.\u9999`,
+            });
+            rows = (list && list.rows) || [];
+        } catch (e) {
+            this.safeWarn('syncDashboardObjects listing', e);
+            return;
+        }
+        const slotRe = /^dashboard\.einsatz(\d+)(?:\.|$)/;
+        const excessSlots = new Set();
+        const prefix = `${this.namespace}.`;
+        for (const row of rows) {
+            const shortId = row.id.startsWith(prefix) ? row.id.slice(prefix.length) : row.id;
+            const m = shortId.match(slotRe);
+            if (m && Number(m[1]) > this.dashboardSlotCount) {
+                excessSlots.add(Number(m[1]));
+            }
+        }
+        for (const n of excessSlots) {
+            await this.deleteObjectTreeAsync(`dashboard.einsatz${n}`);
+            this.log.info(`Dashboard slot count reduced - removed now-unused slot dashboard.einsatz${n}`);
+        }
+    }
+
     /* DE: Legt Channel-/State-Objekte an, die noch nicht existieren (setObjectNotExistsAsync
        lässt bereits vorhandene unangetastet). Bricht die Schleifen ab, sobald this._stopping
        gesetzt ist (siehe onUnload()) - wird der Adapter mitten in dieser Initialisierung
@@ -1469,7 +2004,9 @@ class WaipWeb extends utils.Adapter {
        call would fail individually and - since onReady() itself isn't caught anywhere -
        surface as an unhandled promise rejection in the log instead of a single warning. */
     async initObjects() {
-        for (const def of CHANNEL_DEFS) {
+        const channelDefs = [...CHANNEL_DEFS, ...this.dashboardChannelDefs];
+        const stateDefs = [...STATE_DEFS, ...this.dashboardStateDefs];
+        for (const def of channelDefs) {
             if (this._stopping) {
                 return;
             }
@@ -1486,7 +2023,7 @@ class WaipWeb extends utils.Adapter {
                 }
             }
         }
-        for (const def of STATE_DEFS) {
+        for (const def of stateDefs) {
             if (this._stopping) {
                 return;
             }
@@ -1497,8 +2034,16 @@ class WaipWeb extends utils.Adapter {
                         name: def.name,
                         type: def.type,
                         role: def.role,
-                        read: true,
-                        write: false,
+                        // DE: Fällt auf das bisherige Verhalten (read:true/write:false) zurück,
+                        // falls def.read/def.write nicht gesetzt sind - nur dashboard.refreshNow
+                        // (Button-State, Plandokument Abschnitt 3.5) definiert sie bislang
+                        // explizit anders (read:false/write:true).
+                        // EN: Falls back to the previous behavior (read:true/write:false) if
+                        // def.read/def.write aren't set - only dashboard.refreshNow (button
+                        // state, plan document section 3.5) explicitly defines them
+                        // differently so far (read:false/write:true).
+                        read: def.read !== undefined ? def.read : true,
+                        write: def.write !== undefined ? def.write : false,
                         unit: def.unit,
                         def: def.def !== undefined ? def.def : null,
                     },
@@ -1534,7 +2079,7 @@ class WaipWeb extends utils.Adapter {
        forever after installation instead of "[]". */
     async resetAllStates() {
         const tasks = [];
-        for (const def of STATE_DEFS) {
+        for (const def of [...STATE_DEFS, ...this.dashboardStateDefs]) {
             const emptyValue = this.computeEmptyStateValue(def);
             if (RESET_EXCLUDED_STATE_IDS.has(def.id)) {
                 tasks.push(this.initStateIfMissing(def.id, emptyValue));
@@ -1557,9 +2102,11 @@ class WaipWeb extends utils.Adapter {
             return false;
         }
         if (def.type === 'number') {
-            return NULLABLE_NUMBER_STATE_IDS.has(def.id) ? null : 0;
+            return NULLABLE_NUMBER_STATE_IDS.has(def.id) || this.dashboardNullableNumberStateIds?.has(def.id)
+                ? null
+                : 0;
         }
-        if (JSON_ARRAY_STATE_IDS.has(def.id)) {
+        if (JSON_ARRAY_STATE_IDS.has(def.id) || this.dashboardJsonArrayStateIds?.has(def.id)) {
             return '[]';
         }
         return null;
@@ -1693,6 +2240,217 @@ class WaipWeb extends utils.Adapter {
         result.sort((a, b) => Number(a.value) - Number(b.value));
 
         return result;
+    }
+
+    /* DE: Holt die öffentliche Einsatzübersichtsseite (/dbrd/) der konfigurierten WAIP-Web-
+       Instanz und extrahiert das darin eingebettete `let data = [...]`-JSON-Array mit den
+       aktuell verfügbaren Einsätzen (siehe Plandokument Abschnitt 1) - live verifiziert:
+       kein REST/JSON-Endpoint, sondern serverseitig vorgerendertes HTML mit einem
+       eingebetteten <script>-Block. Rein lesend, erfordert kein Cookie/Login (identisch zu
+       fetchMonitorList()). Balanced-Bracket-Extraktion statt eines einfachen Regex-Matches,
+       weil das Array verschachtelte Objekte/Strings mit eigenen eckigen Klammern enthält
+       (z.B. GeoJSON-Koordinaten in `geometry`) - ein "erstes ]"-Regex würde dort vorzeitig
+       abschneiden.
+       EN: Fetches the configured WAIP-Web instance's public incident overview page
+       (/dbrd/) and extracts the embedded `let data = [...]` JSON array with the currently
+       available incidents (see the plan document section 1) - live-verified: not a
+       REST/JSON endpoint, but server-rendered HTML with an embedded <script> block.
+       Read-only, requires no cookie/login (identical to fetchMonitorList()). Uses
+       balanced-bracket extraction instead of a simple regex match, because the array
+       contains nested objects/strings with their own square brackets (e.g. GeoJSON
+       coordinates in `geometry`) - a "first ]" regex would cut it off prematurely. */
+    async fetchDbrdList() {
+        const clean = String(this.url || '').replace(/\/+$/, '');
+        if (!clean) {
+            throw new Error('no WAIP server URL configured');
+        }
+        const res = await this.httpGet(`${clean}/dbrd/`);
+        if (res.statusCode !== 200 || !res.body) {
+            throw new Error(`Could not fetch incident list (status ${res.statusCode})`);
+        }
+        const html = res.body;
+        const marker = /let\s+data\s*=\s*/.exec(html);
+        if (!marker) {
+            throw new Error('could not find the embedded incident list (data array) on /dbrd/');
+        }
+        const start = html.indexOf('[', marker.index + marker[0].length);
+        if (start === -1) {
+            throw new Error('could not find the start of the embedded incident list on /dbrd/');
+        }
+        let depth = 0;
+        let end = -1;
+        let inString = false;
+        let stringChar = '';
+        for (let i = start; i < html.length; i++) {
+            const ch = html[i];
+            if (inString) {
+                if (ch === '\\') {
+                    i++; // DE: escaptes Zeichen überspringen / EN: skip the escaped character
+                } else if (ch === stringChar) {
+                    inString = false;
+                }
+                continue;
+            }
+            if (ch === '"' || ch === "'") {
+                inString = true;
+                stringChar = ch;
+            } else if (ch === '[') {
+                depth++;
+            } else if (ch === ']') {
+                depth--;
+                if (depth === 0) {
+                    end = i;
+                    break;
+                }
+            }
+        }
+        if (end === -1) {
+            throw new Error('unbalanced brackets while extracting the embedded incident list on /dbrd/');
+        }
+        const raw = html.slice(start, end + 1);
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (e) {
+            throw new Error(`could not parse the embedded incident list as JSON: ${e.message}`);
+        }
+        return Array.isArray(parsed) ? parsed : [];
+    }
+
+    /* DE: Sammelt die Detaildaten eines einzelnen Einsatzes über eine kurzlebige,
+       eigenständige Socket.IO-Verbindung zum /dbrd-Namespace (Plandokument Abschnitt 4.2 -
+       live verifiziert: der Server sendet beim emit('dbrd', uuid) den kompletten
+       historischen Rückmeldungs-Verlauf per Replay nach, siehe Plandokument Abschnitt 1,
+       daher genügt eine Kurzverbindung statt einer Dauerverbindung). Öffnet bewusst NICHT
+       this.socket (den /waip-Namespace) mit, sondern eine komplett unabhängige
+       socket.io-client-Instanz, die am Ende dieser Funktion garantiert wieder geschlossen
+       wird (finally-Block, analog zu cleanupSocket()).
+
+       Rückgabe bei Erfolg: { einsatz, routes, rueckmeldungen }.
+       Rückgabe bei "Einsatz nicht mehr verfügbar" (io.error ODER io.deleted - siehe
+       Plandokument Abschnitt 1: beide Events bedeuten dasselbe, ein zwischen
+       /dbrd/-Listing und Verbindungsaufbau bereits abgeschlossener Einsatz liefert real
+       io.error, nicht io.deleted wie im offiziellen Client vorgesehen): null - kein
+       Fehler-Log auf warn/error-Ebene, das ist im Normalbetrieb erwarteter Vorgang.
+       Rückgabe bei Verbindungs-Timeout/connect_error: der String 'timeout' - bewusst von
+       null unterschieden, damit refreshDashboard() dafür das eigene
+       logRecurringFailure('dashboardSlotTimeout', ...) aus Plandokument Abschnitt 4.7
+       auslösen kann, statt es mit dem regulären "Einsatz nicht mehr verfügbar"-Fall zu
+       verwechseln.
+
+       EN: Collects a single incident's detail data via a short-lived, standalone Socket.IO
+       connection to the /dbrd namespace (plan document section 4.2 - live-verified: the
+       server replays the complete historical feedback trail on emit('dbrd', uuid), see the
+       plan document section 1, so a short-lived connection suffices instead of a
+       persistent one). Deliberately does NOT reuse this.socket (the /waip namespace), but
+       opens a fully independent socket.io-client instance that is guaranteed to be closed
+       again at the end of this function (finally block, analogous to cleanupSocket()).
+
+       Return on success: { einsatz, routes, rueckmeldungen }.
+       Return on "incident no longer available" (io.error OR io.deleted - see the plan
+       document section 1: both events mean the same thing, an incident already finished
+       between the /dbrd/ listing and the connection setup returns io.error in reality, not
+       io.deleted as the official client expects): null - no warn/error-level log, that's
+       an expected occurrence in normal operation.
+       Return on connect timeout/connect_error: the string 'timeout' - deliberately
+       distinguished from null, so refreshDashboard() can trigger its own
+       logRecurringFailure('dashboardSlotTimeout', ...) from the plan document section 4.7
+       for it, instead of confusing it with the regular "incident no longer available"
+       case. */
+    async fetchDbrdDetail(uuid) {
+        return new Promise(resolve => {
+            const namespaceUrl = `${this.url}/dbrd`;
+            const socket = this.ioClientFactory(namespaceUrl, {
+                path: '/socket.io',
+                forceNew: true,
+                transports: ['websocket', 'polling'],
+                reconnection: false,
+                timeout: DASHBOARD_CONNECT_TIMEOUT_MS,
+                extraHeaders: this.sessionCookie ? { Cookie: this.sessionCookie } : undefined,
+            });
+
+            let settled = false;
+            let connectTimeoutHandle = null;
+            let collectTimeoutHandle = null;
+            const einsatz = { einsatz: null, routes: [], rueckmeldungen: [] };
+
+            const cleanup = () => {
+                if (connectTimeoutHandle) {
+                    this.clearTimeout(connectTimeoutHandle);
+                    connectTimeoutHandle = null;
+                }
+                if (collectTimeoutHandle) {
+                    this.clearTimeout(collectTimeoutHandle);
+                    collectTimeoutHandle = null;
+                }
+                try {
+                    socket.removeAllListeners();
+                    socket.disconnect();
+                } catch (e) {
+                    this.safeLog('debug', `fetchDbrdDetail cleanup (uuid ${uuid})`, e);
+                }
+            };
+
+            const finish = result => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                cleanup();
+                resolve(result);
+            };
+
+            connectTimeoutHandle = this.setTimeout(() => {
+                this.safeLog('debug', `fetchDbrdDetail: connect timeout (uuid ${uuid})`);
+                finish('timeout');
+            }, DASHBOARD_CONNECT_TIMEOUT_MS);
+
+            socket.on('connect', () => {
+                socket.emit('dbrd', uuid);
+            });
+
+            socket.on('io.Einsatz', data => {
+                einsatz.einsatz = data;
+                // DE: Sammelfenster erst NACH dem ersten Einsatz-Event starten, nicht schon
+                // beim Verbindungsaufbau - so hat der Replay von io.routes/io.new_rmld den
+                // vollen DASHBOARD_COLLECT_WINDOW_MS zur Verfügung, unabhängig davon, wie
+                // lange der Verbindungsaufbau selbst gedauert hat.
+                // EN: Start the collection window only AFTER the first incident event, not
+                // already at connection setup - this way the replay of
+                // io.routes/io.new_rmld gets the full DASHBOARD_COLLECT_WINDOW_MS,
+                // regardless of how long the connection setup itself took.
+                if (!collectTimeoutHandle) {
+                    collectTimeoutHandle = this.setTimeout(() => finish(einsatz), DASHBOARD_COLLECT_WINDOW_MS);
+                }
+            });
+            socket.on('io.routes', data => {
+                einsatz.routes = Array.isArray(data) ? data : [];
+            });
+            socket.on('io.new_rmld', data => {
+                einsatz.rueckmeldungen.push(data);
+            });
+            // DE: io.error und io.deleted identisch behandeln - siehe Plandokument
+            // Abschnitt 1, Server-Quellcode-Fund: beide bedeuten "nicht mehr verfügbar".
+            // EN: Treat io.error and io.deleted identically - see the plan document
+            // section 1, server source-code finding: both mean "no longer available".
+            socket.on('io.error', data => {
+                this.safeLog(
+                    'debug',
+                    `fetchDbrdDetail: incident no longer available (io.error, uuid ${uuid}): ${
+                        typeof data === 'string' ? data : JSON.stringify(data)
+                    }`,
+                );
+                finish(null);
+            });
+            socket.on('io.deleted', () => {
+                this.safeLog('debug', `fetchDbrdDetail: incident no longer available (io.deleted, uuid ${uuid})`);
+                finish(null);
+            });
+            socket.on('connect_error', err => {
+                this.safeLog('debug', `fetchDbrdDetail: connect_error (uuid ${uuid})`, err);
+                finish('timeout');
+            });
+        });
     }
 
     /* DE: Löst this.monitorID einmalig zu einem Anzeigenamen ohne ID auf (z.B. "Leitstelle:
@@ -2541,6 +3299,284 @@ class WaipWeb extends utils.Adapter {
         }
     }
 
+    /* DE: Leitet für einen Dashboard-Slot einen bereits vorhandenen Kartenbild-Pfad aus dem
+       bestehenden generateEinsatzMapImage()-Fundus ab, statt ein eigenes Kartenbild zu
+       erzeugen (Plandokument Abschnitt 4.5 / Frage 4) - reiner Dateisystem-Lookup, kein
+       Netzwerk-I/O, daher unproblematisch bei this.dashboardSlotCount Aufrufen pro
+       Refresh. Nutzt dieselbe UUID-Fragment-Kürzung wie generateEinsatzMapImage()
+       (uuidFragment), damit ein Dashboard-Einsatz genau dann ein Bild findet, wenn
+       handleAlarm() für diesen Einsatz (als aktuell konfigurierter Monitor) bereits eines
+       erzeugt hat. Bei mehreren Treffern (Fragment-Kollision, siehe generateEinsatzMapImage()-
+       Kommentar) gewinnt der lexikographisch letzte Dateiname = der mit dem höchsten
+       Zeitstempel-Präfix = der neueste (identische Sortierlogik wie pruneMapImages()).
+       Kein Treffer -> null, kein Fehler (siehe Plandokument: "das ist normales, erwartetes
+       Verhalten, kein Bug" bei einer engen monitorID).
+       EN: Derives an already-existing map-image path for a dashboard slot from the
+       existing generateEinsatzMapImage() history instead of generating its own image (plan
+       document section 4.5 / question 4) - a pure filesystem lookup, no network I/O,
+       hence unproblematic at this.dashboardSlotCount calls per refresh. Uses the same
+       UUID-fragment truncation as generateEinsatzMapImage() (uuidFragment), so a dashboard
+       incident finds an image exactly when handleAlarm() has already generated one for
+       that incident (as the currently configured monitor). On multiple matches (fragment
+       collision, see the generateEinsatzMapImage() comment), the lexicographically last
+       filename wins = the one with the highest timestamp prefix = the newest (identical
+       sort logic to pruneMapImages()). No match -> null, no error (see the plan document:
+       "this is normal, expected behavior, not a bug" with a narrow monitorID). */
+    async resolveDashboardMapImage(uuid) {
+        const uuidFragment = String(uuid || '')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .slice(0, 8);
+        if (!uuidFragment) {
+            return null;
+        }
+        try {
+            const entries = await fsPromises.readdir(this.mapImageDir);
+            const matches = entries.filter(f => f.startsWith('einsatz_') && f.includes(`_${uuidFragment}.png`)).sort();
+            if (!matches.length) {
+                return null;
+            }
+            return path.join(this.mapImageDir, matches[matches.length - 1]);
+        } catch (e) {
+            // DE: z.B. mapImageDir existiert (noch) nicht, weil mapImageEnabled bisher immer
+            // aus war - kein Fehlerzustand, identisch zu "kein Treffer".
+            // EN: e.g. mapImageDir doesn't exist (yet) because mapImageEnabled has always
+            // been off - not an error condition, identical to "no match".
+            this.safeLog('debug', `resolveDashboardMapImage (uuid ${uuid})`, e);
+            return null;
+        }
+    }
+
+    /* DE: Öffentlicher Einstiegspunkt für einen Dashboard-Refresh-Zyklus - serialisiert
+       gegen sich selbst über this._dashboardRefreshQueue (Plandokument Abschnitt 4.3,
+       identisches Muster wie appendMonitorAudit()/this._monitorAuditQueue), damit ein
+       zeitgesteuerter (startDashboardRefreshInterval(), Phase 7), ein alarm-getriggerter
+       (Hook in handleAlarm(), Phase 7) und ein manueller (dashboard.refreshNow-Button,
+       Phase 7) Refresh niemals überlappend laufen - der zweite Aufruf wartet einfach,
+       bis der erste fertig ist, statt zwei Zyklen parallel sequenziell durch dieselben
+       Slots laufen zu lassen. _refreshDashboardNow() fängt alle eigenen Fehler ab (siehe
+       dort), daher bleibt diese Queue immer resolved und kann nie dauerhaft blockieren.
+       No-op, falls dashboardEnabled aus ist (Aufrufer prüfen das i.d.R. bereits selbst,
+       siehe Phase 7 - diese Prüfung hier ist eine zusätzliche Absicherung).
+       EN: Public entry point for a dashboard refresh cycle - serialized against itself via
+       this._dashboardRefreshQueue (plan document section 4.3, identical pattern to
+       appendMonitorAudit()/this._monitorAuditQueue), so a timed
+       (startDashboardRefreshInterval(), phase 7), an alarm-triggered (hook in
+       handleAlarm(), phase 7), and a manual (dashboard.refreshNow button, phase 7) refresh
+       never run concurrently - the second call simply waits for the first to finish
+       instead of two cycles running through the same slots in parallel.
+       _refreshDashboardNow() catches all its own errors (see there), so this queue always
+       stays resolved and can never permanently block. No-op if dashboardEnabled is off
+       (callers usually already check this themselves, see phase 7 - this check here is an
+       additional safeguard). */
+    refreshDashboard() {
+        if (!this.dashboardEnabled) {
+            this.safeLog('debug', 'refreshDashboard: dashboardEnabled is off, skipping');
+            return this._dashboardRefreshQueue;
+        }
+        this._dashboardRefreshQueue = this._dashboardRefreshQueue.then(() => this._refreshDashboardNow());
+        return this._dashboardRefreshQueue;
+    }
+
+    /* DE: Führt einen einzelnen Dashboard-Refresh-Zyklus aus (Plandokument Abschnitt 4.1,
+       voller Ablauf). Wird ausschließlich über refreshDashboard() aufgerufen, nie direkt -
+       das stellt die Serialisierung sicher.
+       EN: Runs a single dashboard refresh cycle (plan document section 4.1, full flow).
+       Called exclusively through refreshDashboard(), never directly - that's what
+       guarantees the serialization. */
+    async _refreshDashboardNow() {
+        let list;
+        try {
+            list = await this.fetchDbrdList();
+        } catch (e) {
+            this.logRecurringFailure('dashboardListing', 'warn', 'refreshDashboard: fetchDbrdList', e);
+            return;
+        }
+        this.logRecovered('dashboardListing', 'Dashboard listing fetch recovered');
+
+        const filtered = list.filter(entry => {
+            const matches = dbrdEntryMatchesMonitor(entry, this.monitorID);
+            if (!matches) {
+                this.safeLog(
+                    'debug',
+                    `Dashboard: incident ${String(entry && entry.uuid).slice(0, 8)} excluded, does not match monitor ${this.monitorID} (l=${entry && entry.l} a=${entry && entry.a} b=${entry && entry.b} c=${entry && entry.c})`,
+                );
+            }
+            return matches;
+        });
+
+        const n = Math.min(this.dashboardSlotCount, filtered.length);
+        let slotsFilled = 0;
+        let anySlotTimedOut = false;
+
+        // DE: SEQUENZIELL (Plandokument Frage 1) - eine Kurzverbindung nach der anderen,
+        // nicht parallel, um die Serverlast minimal zu halten.
+        // EN: SEQUENTIAL (plan document question 1) - one short-lived connection after
+        // another, not in parallel, to keep server load minimal.
+        for (let i = 1; i <= this.dashboardSlotCount; i++) {
+            if (i > n) {
+                await this.clearDashboardSlot(i);
+                continue;
+            }
+            const entry = filtered[i - 1];
+            const detail = await this.fetchDbrdDetail(entry.uuid);
+            if (detail === 'timeout') {
+                anySlotTimedOut = true;
+                await this.clearDashboardSlot(i);
+                continue;
+            }
+            if (!detail) {
+                // DE: io.error/io.deleted - Einsatz zwischen Listing und Verbindungsaufbau
+                // bereits abgeschlossen (Race, siehe Plandokument Abschnitt 1). Erwarteter
+                // Vorgang, kein Fehler - fetchDbrdDetail() hat bereits auf debug geloggt.
+                // EN: io.error/io.deleted - incident already finished between the listing
+                // and the connection setup (race, see the plan document section 1).
+                // Expected occurrence, not an error - fetchDbrdDetail() already logged at
+                // debug.
+                await this.clearDashboardSlot(i);
+                continue;
+            }
+            await this.writeDashboardSlot(i, entry, detail);
+            slotsFilled++;
+        }
+
+        if (anySlotTimedOut) {
+            this.logRecurringFailure(
+                'dashboardSlotTimeout',
+                'warn',
+                'refreshDashboard',
+                `at least one dashboard slot connection timed out (limit ${DASHBOARD_CONNECT_TIMEOUT_MS}ms)`,
+            );
+        } else {
+            this.logRecovered('dashboardSlotTimeout', 'Dashboard slot connections recovering');
+        }
+
+        if (!this._dashboardRefreshFirstCycleDone) {
+            this._dashboardRefreshFirstCycleDone = true;
+            this.log.info(
+                `Dashboard refresh complete: ${slotsFilled} of ${this.dashboardSlotCount} slots filled (monitor ${this.monitorID})`,
+            );
+            this.appendMonitorAudit({
+                ts: new Date().toISOString(),
+                event: 'dashboard_refresh',
+                slotsFilled,
+                slotsTotal: this.dashboardSlotCount,
+            }).catch(() => {});
+        }
+    }
+
+    /* DE: Befüllt Dashboard-Slot i mit den Daten eines fetchDbrdDetail()-Ergebnisses.
+       Schreibt IMMER alle Felder neu (Plandokument Frage 11 - kein Vorher-Nachher-Vergleich,
+       ioBroker dedupliziert unveränderte Werte bereits selbst auf State-Ebene), auch wenn
+       derselbe Einsatz bereits im vorigen Zyklus auf diesem Slot lag - so kommen neue
+       Rückmeldungen/Routen garantiert durch, ohne eigene Change-Detection-Logik.
+       EN: Fills dashboard slot i with the data from a fetchDbrdDetail() result. ALWAYS
+       rewrites every field (plan document question 11 - no before/after comparison,
+       ioBroker already deduplicates unchanged values itself at the state level), even if
+       the same incident already occupied this slot in the previous cycle - this way new
+       feedback/routes are guaranteed to come through, without any custom change-detection
+       logic. */
+    async writeDashboardSlot(i, listingEntry, detail) {
+        const p = `dashboard.einsatz${i}`;
+        const einsatz = normalizeData(detail.einsatz || {});
+        const routes = Array.isArray(detail.routes) ? detail.routes : [];
+        const rueckmeldungen = Array.isArray(detail.rueckmeldungen) ? detail.rueckmeldungen : [];
+
+        const tasks = [this.setField(`${p}.alarmAktiv`, true)];
+        for (const k of DASHBOARD_ALLOWED_FIELDS) {
+            const val = Object.prototype.hasOwnProperty.call(einsatz, k) ? einsatz[k] : (listingEntry[k] ?? null);
+            tasks.push(this.setField(`${p}.${k}`, val));
+        }
+        tasks.push(
+            this.setField(
+                `${p}.beschreibung`,
+                this.lookupStichwortBeschreibung(einsatz.stichwort || listingEntry.stichwort),
+            ),
+        );
+        tasks.push(this.setField(`${p}.alarmierungszeit`, einsatz.zeitstempel ?? null));
+        const lat = einsatz.position && typeof einsatz.position.lat === 'number' ? einsatz.position.lat : null;
+        const lon = einsatz.position && typeof einsatz.position.lon === 'number' ? einsatz.position.lon : null;
+        tasks.push(this.setField(`${p}.latitude`, lat));
+        tasks.push(this.setField(`${p}.longitude`, lon));
+        tasks.push(this.setField(`${p}.routenGesamt`, routes.length));
+        tasks.push(this.updateRueckmeldungCounts(rueckmeldungen, p));
+        tasks.push(
+            this.writeJsonArrayState(
+                `${p}.json.routen`,
+                routes.map(r => this.flattenRoutenEntry(r)),
+            ),
+        );
+        tasks.push(this.writeJsonArrayState(`${p}.json.rueckmeldungen`, rueckmeldungen));
+        tasks.push(this.writeJsonArrayState(`${p}.json.emAlarmiert`, einsatz.einsatzmittel));
+        tasks.push(this.writeJsonArrayState(`${p}.json.wachen`, einsatz.wachen));
+        tasks.push(
+            this.setStateAsync(
+                `${p}.json.current`,
+                JSON.stringify([this.buildFlatDashboardJson(einsatz, listingEntry)]),
+                true,
+            ),
+        );
+
+        const mapImagePath = await this.resolveDashboardMapImage(listingEntry.uuid);
+        if (!mapImagePath) {
+            this.safeLog(
+                'debug',
+                `Dashboard slot ${i}: no matching incident-map image found for uuid ${String(listingEntry.uuid).slice(0, 8)}`,
+            );
+        }
+        tasks.push(this.setField(`${p}.kartenbildPfad`, mapImagePath));
+
+        const results = await Promise.allSettled(tasks);
+        for (const r of results) {
+            if (r.status === 'rejected') {
+                this.safeWarn(`writeDashboardSlot ${i}`, r.reason);
+            }
+        }
+    }
+
+    /* DE: Baut das flache JSON-Objekt für dashboard.einsatzN.json.current - Dashboard-
+       Pendant zu buildFlatEinsatzJson(), aber ohne registeredMonitor/registeredMonitorName
+       (die beziehen sich beim Dashboard nicht sinnvoll auf einen einzelnen Slot) und ohne
+       den lat/lon-Präfix aus this.ALLOWED_EINSATZ_FIELDS (das Dashboard-Schema nutzt
+       DASHBOARD_ALLOWED_FIELDS, siehe dort).
+       EN: Builds the flat JSON object for dashboard.einsatzN.json.current - dashboard
+       counterpart to buildFlatEinsatzJson(), but without registeredMonitor/
+       registeredMonitorName (they don't meaningfully apply to a single dashboard slot)
+       and without the lat/lon prefix from this.ALLOWED_EINSATZ_FIELDS (the dashboard
+       schema uses DASHBOARD_ALLOWED_FIELDS, see there). */
+    buildFlatDashboardJson(einsatz, listingEntry) {
+        const flat = {};
+        for (const k of DASHBOARD_ALLOWED_FIELDS) {
+            flat[k] = Object.prototype.hasOwnProperty.call(einsatz, k) ? einsatz[k] : (listingEntry[k] ?? null);
+        }
+        flat.lat = einsatz.position && typeof einsatz.position.lat === 'number' ? einsatz.position.lat : null;
+        flat.lon = einsatz.position && typeof einsatz.position.lon === 'number' ? einsatz.position.lon : null;
+        flat.beschreibung = this.lookupStichwortBeschreibung(einsatz.stichwort || listingEntry.stichwort);
+        flat.alarmierungszeit = einsatz.zeitstempel ?? null;
+        return flat;
+    }
+
+    /* DE: Setzt Dashboard-Slot i auf die Leerwerte zurück (Plandokument Frage 7 - für
+       Slots, die durch den Monitor-Filter nicht belegt werden konnten, identisch zum
+       bestehenden resetAllStates()-Verhalten für unbelegte Felder). Nutzt
+       computeEmptyStateValue() für die dashboard.*-STATE_DEFS dieses Slots, statt die
+       Leerwerte hier ein zweites Mal von Hand zu pflegen.
+       EN: Resets dashboard slot i to its empty values (plan document question 7 - for
+       slots the monitor filter couldn't fill, identical to the existing
+       resetAllStates() behavior for unoccupied fields). Uses computeEmptyStateValue()
+       for this slot's dashboard.* STATE_DEFS instead of hand-maintaining the empty
+       values a second time here. */
+    async clearDashboardSlot(i) {
+        const prefix = `dashboard.einsatz${i}.`;
+        const defs = this.dashboardStateDefs.filter(d => d.id.startsWith(prefix));
+        const tasks = defs.map(d => this.setField(d.id, this.computeEmptyStateValue(d)));
+        const results = await Promise.allSettled(tasks);
+        for (const r of results) {
+            if (r.status === 'rejected') {
+                this.safeWarn(`clearDashboardSlot ${i}`, r.reason);
+            }
+        }
+    }
+
     /* DE: Extrahiert aus einem Einsatz-Snapshot nur die flachen Einsatzstamm-Felder
        (ALLOWED_EINSATZ_FIELDS + lat/lon aus position), ergänzt um den zum Aufrufzeitpunkt
        registrierten Monitor - ohne routen/rueckmeldungen/emAlarmiert/emWeitere. Gemeinsam
@@ -2816,11 +3852,24 @@ class WaipWeb extends utils.Adapter {
        MED (aus den rmld_capability_*-Flags) unter .funktionen.
        EN: Computes the per-role/skill counters from the feedback entries collected in the
        snapshot (mirroring the EK/GF/ZF/VF/AGT/FZF/MA/MED/total badges of the web UI) and
-       updates einsatz.rueckmeldungen.rollen.<k> and .funktionen.<k> as well as
-       einsatz.rueckmeldungenGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen, AGT/FZF/MA/
-       MED (from the rmld_capability_* flags) under .funktionen. */
-    async updateRueckmeldungCounts() {
-        const list = (this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen) || [];
+       updates <statePrefix>.rueckmeldungen.rollen.<k> and .funktionen.<k> as well as
+       <statePrefix>.rueckmeldungenGesamt. EK/GF/ZF/VF (from rmld_role) live under .rollen,
+       AGT/FZF/MA/MED (from the rmld_capability_* flags) under .funktionen.
+
+       DE: Parametrisiert (2026-08-29, Plandokument Abschnitt 4.8) statt fest auf
+       this.currentEinsatzSnapshot/einsatz.* zu lesen/schreiben, damit dieselbe Logik auch
+       für die parallelen Dashboard-Slots wiederverwendbar ist (siehe refreshDashboard(),
+       Phase 6) - der bestehende einsatz.*-Aufruf übergibt weiterhin
+       this.currentEinsatzSnapshot.rueckmeldungen/'einsatz' und verhält sich dadurch exakt
+       wie zuvor (reines Refactoring, keine Verhaltensänderung für einsatz.*).
+       EN: Parametrized (2026-08-29, plan document section 4.8) instead of reading/writing
+       this.currentEinsatzSnapshot/einsatz.* directly, so the same logic can be reused for
+       the parallel dashboard slots too (see refreshDashboard(), phase 6) - the existing
+       einsatz.* call site still passes this.currentEinsatzSnapshot.rueckmeldungen/'einsatz'
+       and therefore behaves exactly as before (pure refactoring, no behavior change for
+       einsatz.*). */
+    async updateRueckmeldungCounts(rueckmeldungen, statePrefix) {
+        const list = Array.isArray(rueckmeldungen) ? rueckmeldungen : [];
         const counts = { ek: 0, gf: 0, zf: 0, vf: 0, agt: 0, fzf: 0, ma: 0, med: 0 };
         for (const r of list) {
             if (r.rmld_role === 'team_member') {
@@ -2847,17 +3896,17 @@ class WaipWeb extends utils.Adapter {
         }
         const tasks = [
             ...RUECKMELDUNG_ROLLEN_KEYS.map(k =>
-                this.setStateAsync(`einsatz.rueckmeldungen.rollen.${k}`, counts[k], true),
+                this.setStateAsync(`${statePrefix}.rueckmeldungen.rollen.${k}`, counts[k], true),
             ),
             ...RUECKMELDUNG_FUNKTIONEN_KEYS.map(k =>
-                this.setStateAsync(`einsatz.rueckmeldungen.funktionen.${k}`, counts[k], true),
+                this.setStateAsync(`${statePrefix}.rueckmeldungen.funktionen.${k}`, counts[k], true),
             ),
         ];
-        tasks.push(this.setStateAsync('einsatz.rueckmeldungenGesamt', list.length, true));
+        tasks.push(this.setStateAsync(`${statePrefix}.rueckmeldungenGesamt`, list.length, true));
         const results = await Promise.allSettled(tasks);
         for (const r of results) {
             if (r.status === 'rejected') {
-                this.safeWarn('updateRueckmeldungCounts', r.reason);
+                this.safeWarn(`updateRueckmeldungCounts (${statePrefix})`, r.reason);
             }
         }
     }
@@ -2942,7 +3991,7 @@ class WaipWeb extends utils.Adapter {
                 } catch (e) {
                     this.safeWarn('einsatz.routenGesamt.setState', e);
                 }
-                await this.updateRueckmeldungCounts();
+                await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatz');
                 // DE: kartenbildPfad ebenfalls sofort leeren, statt auf generateEinsatzMapImage()
                 // weiter unten zu warten - sonst könnte er für den neuen Einsatz kurzzeitig (oder,
                 // falls keine gültigen Koordinaten vorliegen bzw. mapImageEnabled aus ist, sogar
@@ -3068,6 +4117,25 @@ class WaipWeb extends utils.Adapter {
             await this.persistEinsatzSnapshot();
             await this.writeJsonArrayState('einsatz.json.emAlarmiert', this.currentEinsatzSnapshot.emAlarmiert);
             await this.writeJsonArrayState('einsatz.json.emWeitere', this.currentEinsatzSnapshot.emWeitere);
+            // DE: Ereignisgetriggerter Dashboard-Refresh (Plandokument Abschnitt 4.1) - NICHT
+            // awaited, damit ein (evtl. mehrere Sekunden dauernder, siehe fetchDbrdDetail())
+            // Dashboard-Zyklus die Alarmverarbeitung selbst nicht verzögert. Die
+            // Serialisierung aus refreshDashboard() (this._dashboardRefreshQueue) schützt
+            // zuverlässig davor, dass dieser Aufruf mit einem bereits laufenden
+            // zeitgesteuerten oder manuellen Zyklus überlappt - er reiht sich einfach hinten
+            // an. Nur falls dashboardEnabled, sonst ist refreshDashboard() ohnehin ein No-op
+            // (siehe dort), aber die Prüfung hier vermeidet unnötige Log-Zeilen dafür.
+            // EN: Event-triggered dashboard refresh (plan document section 4.1) - NOT
+            // awaited, so a (possibly multi-second, see fetchDbrdDetail()) dashboard cycle
+            // doesn't delay alarm processing itself. The serialization in
+            // refreshDashboard() (this._dashboardRefreshQueue) reliably prevents this call
+            // from overlapping with an already-running timed or manual cycle - it simply
+            // queues up behind it. Only if dashboardEnabled, since refreshDashboard() is a
+            // no-op anyway otherwise (see there), but the check here avoids an unnecessary
+            // log line for that case.
+            if (this.dashboardEnabled) {
+                this.refreshDashboard().catch(e => this.safeWarn('dashboard.handleAlarm hook', e));
+            }
         } catch (e) {
             // DE: Ein Alarm-Event konnte nicht verarbeitet werden -> echter Datenverlust.
             // EN: An alarm event couldn't be processed -> actual data loss.
@@ -3113,7 +4181,7 @@ class WaipWeb extends utils.Adapter {
 
             await this.persistEinsatzSnapshot();
             await this.writeJsonArrayState('einsatz.json.rueckmeldungen', this.currentEinsatzSnapshot.rueckmeldungen);
-            await this.updateRueckmeldungCounts();
+            await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatz');
         } catch (e) {
             // DE: Eine Rückmeldung konnte nicht verarbeitet werden -> echter Datenverlust.
             // EN: A feedback event couldn't be processed -> actual data loss.
@@ -3245,7 +4313,10 @@ class WaipWeb extends utils.Adapter {
         // ist jetzt also null -> alle Zähler werden konsistent auf 0 zurückgesetzt.
         // EN: rueckmeldungenGesamt/rueckmeldungen.* reads from this.currentEinsatzSnapshot,
         // which is now null -> all counters get consistently reset to 0.
-        await this.updateRueckmeldungCounts();
+        await this.updateRueckmeldungCounts(
+            this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen,
+            'einsatz',
+        );
     }
 
     /* DE: Handler für Server-Fehlermeldungen (io.error). Das bekannte "Fehler beim Erneuern
@@ -3759,6 +4830,54 @@ class WaipWeb extends utils.Adapter {
         }, 1000);
     }
 
+    /* DE: Intervall: zeitgesteuerter Dashboard-Refresh (Plandokument Abschnitt 4.1), analog
+       zu startRestzeitInterval() oben. Intervall ist this.dashboardRefreshSec (30-300s,
+       siehe onReady()) statt eines festen Werts. Nur aus onReady() aufgerufen, wenn
+       dashboardEnabled ist (siehe dort) - onUnload() räumt den Timer wieder auf. Fehler
+       innerhalb eines Zyklus werden bereits von _refreshDashboardNow() abgefangen, daher
+       hier kein zusätzliches try/catch nötig.
+       EN: Interval: timed dashboard refresh (plan document section 4.1), analogous to
+       startRestzeitInterval() above. Interval is this.dashboardRefreshSec (30-300s, see
+       onReady()) instead of a fixed value. Only called from onReady() when dashboardEnabled
+       is on (see there) - onUnload() cleans the timer back up. Errors within a cycle are
+       already caught by _refreshDashboardNow(), so no additional try/catch is needed here. */
+    startDashboardRefreshInterval() {
+        this.dashboardRefreshInterval = this.setInterval(() => {
+            this.refreshDashboard().catch(e => this.safeWarn('dashboard.timedRefresh', e));
+        }, this.dashboardRefreshSec * 1000);
+    }
+
+    /* DE: Erstmaliger stateChange-Handler in diesem Adapter (siehe constructor -
+       this.on('stateChange', ...)) - bislang gab es keinen einzigen Button-State und keine
+       subscribeStates()-Nutzung. Ausschließlich für dashboard.refreshNow zuständig
+       (Plandokument Abschnitt 3.5, Frage 12).
+       ⚠️ Reihenfolge ist entscheidend: state.ack wird GEPRÜFT, bevor refreshDashboard()
+       aufgerufen wird (nur ein echter Nutzer-Write mit ack:false zählt als Auslöser), und
+       der abschließende setStateAsync(..., false, true) setzt ack EXPLIZIT auf true - sonst
+       würde dieser eigene Rücksetz-Write erneut denselben Handler mit ack:false auslösen und
+       eine Endlosschleife von Refresh-Zyklen verursachen.
+       EN: First stateChange handler in this adapter (see the constructor -
+       this.on('stateChange', ...)) - until now there was no single button state and no
+       subscribeStates() usage. Exclusively handles dashboard.refreshNow (plan document
+       section 3.5, question 12).
+       ⚠️ Order matters: state.ack is CHECKED before calling refreshDashboard() (only a
+       genuine user write with ack:false counts as a trigger), and the final
+       setStateAsync(..., false, true) EXPLICITLY sets ack to true - otherwise this own
+       reset write would trigger the same handler again with ack:false, causing an
+       infinite loop of refresh cycles. */
+    onStateChange(id, state) {
+        if (id !== `${this.namespace}.dashboard.refreshNow` || !state || state.ack) {
+            return;
+        }
+        this.refreshDashboard()
+            .catch(e => this.safeWarn('dashboard.refreshNow', e))
+            .finally(() => {
+                this.setStateAsync('dashboard.refreshNow', false, true).catch(e =>
+                    this.safeWarn('dashboard.refreshNow.reset', e),
+                );
+            });
+    }
+
     /* DE: Watchdog gegen ein verpasstes io.standby: steht einsatz.restzeit seit
        MISSED_STANDBY_GRACE_MS auf 0, obwohl noch ein Einsatz als aktiv geführt wird, wird
        angenommen, dass io.standby verpasst wurde (z.B. durch einen Disconnect zum
@@ -3827,6 +4946,11 @@ if (require.main !== module) {
        trap in hexColorToJimpInt). */
     module.exports.testables = {
         isValidMonitor,
+        dbrdEntryMatchesMonitor,
+        buildDashboardChannelDefs,
+        buildDashboardStateDefs,
+        deriveDashboardJsonArrayStateIds,
+        deriveDashboardNullableNumberStateIds,
         unwrapGeometryObject,
         extractPolygonRings,
         getCenterFromGeometry,

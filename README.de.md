@@ -22,10 +22,11 @@ ohne dass ein Browser-Tab dauerhaft offen sein muss.
   - [Rettungsdienst](#rettungsdienst)
   - [Stichwort-Stammdaten](#stichwort-stammdaten)
   - [Einsatzkarte](#einsatzkarte)
+  - [Dashboard](#dashboard)
 - [States (unter `waip-web.0.*`)](#states-unter-waip-web0)
   - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
     [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
-    [debug](#debug)
+    [dashboard](#dashboard-states) · [debug](#debug)
 - [Logging](#logging)
 - [Lizenz und Changelog](#lizenz-und-changelog)
 
@@ -188,6 +189,10 @@ Rettungsdienst-Wache:
   dass das gesamte Gebiet sichtbar bleibt, Dateipfad als State
   bereitgestellt -
   siehe [Einsatzkarte](#einsatzkarte)
+- Optionales Dashboard: spiegelt die letzten N Einsätze, die zum
+  Monitor dieser Instanz passen, als `dashboard.einsatz1` … `einsatzN` -
+  wird periodisch über kurzlebige Verbindungen abgefragt (keine
+  dauerhafte Dashboard-Verbindung), siehe [Dashboard](#dashboard)
 
 ## Konfiguration
 
@@ -390,6 +395,65 @@ die Option **"Auch Instanzdaten löschen"** anhaken (seit js-controller
 > so weit reduzieren, dass riesige Gebiete abgedeckt werden, und das
 > Ganze nicht zu einem Massen-Kachel-Abruf ausbauen.
 
+### Dashboard
+
+**Dashboard aktivieren** (Admin-Checkbox, standardmäßig aus): spiegelt
+zusätzlich zum einzelnen aktuellen Einsatz unter [einsatz](#einsatz)
+die letzten N Einsätze, die zum konfigurierten Monitor dieser Instanz
+passen, als `dashboard.einsatz1` … `dashboard.einsatzN`. Sinnvoll bei
+einer Monitor-ID, die auf "alle Wachalarme" (`0`) oder einen größeren
+Kreis/Träger eingestellt ist, wo mehrere Einsätze gleichzeitig aktiv
+sein können und `einsatz.*` allein immer nur den jeweils aktuellsten
+zeigt.
+
+Anders als die dauerhaft offene `/waip`-Verbindung dieses Adapters wird
+das Dashboard periodisch aktualisiert: Der Adapter ruft die öffentliche
+Einsatzübersichtsseite `/dbrd/` ab, filtert sie auf Einsätze, die zum
+Monitor dieser Instanz passen (dieselbe `l`/`a`/`b`/`c`-Korrelation
+Leitstelle/Kreis/Träger/Wache wie das Monitor-ID-Dropdown selbst –
+siehe [Verbindung](#verbindung)), und öffnet für jeden der bis zu N
+passenden Einsätze nacheinander (nie parallel) eine **kurzlebige**
+Socket.IO-Verbindung, um dessen aktuellen Stand abzurufen, bevor sie
+wieder geschlossen wird. Ein vollständiger Refresh dauert dadurch
+realistisch einige Sekunden pro belegtem Slot, nicht Millisekunden –
+das Minimum beim **Refresh-Intervall** unten trägt dem Rechnung.
+
+| Feld | Beschreibung | Standard |
+| --- | --- | --- |
+| Number of incidents to show | Wie viele der aktuellsten passenden Einsätze angezeigt werden, `dashboard.einsatz1` … `einsatzN` (1–20) | `10` |
+| Refresh interval (s) | Wie oft das Dashboard aktualisiert wird (30–300) | `60` |
+
+Zusätzlich zum regulären Timer läuft ein Refresh auch einmal sofort
+nach jedem (Neu-)Start des Adapters (damit das Dashboard nicht bis zum
+konfigurierten Intervall leer bleibt) sowie einmal bei jedem neuen
+Alarm für den eigenen Monitor dieser Instanz (`einsatz.*`). Ein
+manueller Refresh lässt sich jederzeit über den Button-State
+`dashboard.refreshNow` auslösen, z. B. per VIS-Button oder Skript.
+
+Kartenbilder unter `dashboard.einsatzN.kartenbildPfad` werden **nicht**
+eigens für Dashboard-Slots erzeugt – sie werden aus demselben
+Datei-Fundus abgeleitet, den [Einsatzkarte](#einsatzkarte) für den
+eigenen Monitor dieser Instanz bereits erzeugt hat. Ein Slot hat also
+nur dann ein Kartenbild, wenn dieser Adapter für genau diesen Einsatz
+über die eigene `einsatz.*`-Alarmverarbeitung bereits eines erzeugt
+hat – am vollständigsten, wenn die **Monitor-ID** auf `0` (alle
+Wachalarme) steht und **Kartenbild für jeden Einsatz erzeugen**
+aktiviert ist, da dann jeder Einsatz, der im Dashboard erscheinen kann,
+zuvor auch schon einmal `einsatz.*` durchlaufen hat. Bei einer
+enger gefassten Monitor-ID fehlt Dashboard-Slots für Einsätze außerhalb
+der eigenen Alarm-Historie das Kartenbild – das ist erwartetes
+Verhalten, kein Fehler.
+
+Wird das Feature deaktiviert, wird der komplette `dashboard.*`-Objekt-
+baum entfernt (Kanäle und States, nicht nur deren Werte); wird **Number
+of incidents to show** verringert, werden nur die dadurch nicht mehr
+benötigten Slots am Ende entfernt (z. B. entfernt eine Reduzierung von
+10 auf 5 die Slots `dashboard.einsatz6` … `einsatz10`). Beide Änderungen
+wirken erst nach dem **nächsten Adapter-Neustart** nach dem Speichern
+(ioBroker startet die Instanz ohnehin bei jeder Konfigurationsänderung
+neu – die Entfernung passiert nicht sofort, während der Admin-Dialog
+noch offen ist).
+
 ## States (unter `waip-web.0.*`)
 
 Rückmeldungen und Routen sind pro Einsatz Listen (1:n). Sie liegen als
@@ -502,6 +566,55 @@ relevant, deshalb wird nur die jeweils letzte vorgehalten.
 | --- | --- | --- |
 | `last` | string (URL) | Vollständige, absolute URL zur mp3-Datei der letzten Sprachansage. Der Server sendet nur einen (oft relativen) Pfad, der als `audio.src` in einem Browser mit derselben Origin gedacht ist; der Adapter löst diesen gegen die konfigurierte WAIP-Server-URL auf, damit der Link auch außerhalb der WAIP-Web-Seite funktioniert (z.B. in einem VIS-Audio-Widget) |
 | `lastTimestamp` | string (date) | Zeitpunkt der letzten Ansage |
+
+<a id="dashboard-states"></a>
+
+### dashboard
+
+Nur vorhanden, wenn [Dashboard](#dashboard) aktiviert ist – siehe dort
+für den Objektbaum-Lebenszyklus bei Aktivierung/Deaktivierung/
+Größenänderung. `dashboard.einsatzN` (`N` = 1 … die konfigurierte
+Slot-Anzahl) spiegelt dasselbe Schema wie `einsatz`/`einsatz.json`
+oben, für den N-aktuellsten Einsatz, der zum Monitor dieser Instanz
+passt – **nicht** beschränkt auf den einen aktuellen Einsatz. Alle
+Felder eines belegten Slots werden bei jedem Refresh immer komplett
+neu geschrieben (nicht nur bei Änderung), damit laufende Rückmeldungen
+für einen Einsatz, der über mehrere Refreshs hinweg auf demselben Slot
+bleibt, weiter aktualisiert werden; ein unbelegter Slot (weniger
+passende Einsätze als konfigurierte Slots) trägt an allen Feldern den
+Leerwert, genau wie `einsatz.*`, wenn kein Einsatz aktiv ist.
+
+Bewusst **ohne** `restzeit`/`ablaufzeit` (WAIP-Webs `/dbrd/`-
+Einsatzdetaildaten haben kein entsprechendes Feld, anders als der
+Live-Alarmstream unter `/waip`) und ohne Entsprechung zu `einsatz.tts`
+(kein TTS-Event im `/dbrd`-Namespace vorhanden). Umgekehrt hat
+`dashboard.einsatzN.json.wachen` kein `einsatz.json.*`-Gegenstück – es
+stammt aus einem Feld (`wachen[]`, die am Einsatz beteiligten Wachen),
+das nur im `/dbrd`-Payload enthalten ist.
+
+| State | Typ | Beschreibung |
+| --- | --- | --- |
+| `refreshNow` | boolean (Button) | `true` schreiben, um einen sofortigen Dashboard-Refresh auszulösen, z. B. per VIS-Button oder Skript. Setzt sich nach Abschluss des Refreshs selbst auf `false` zurück |
+| `einsatzN.alarmAktiv` | boolean | `true`, solange der Slot mit einem passenden Einsatz belegt ist |
+| `einsatzN.id` | number | Interne Einsatz-ID |
+| `einsatzN.uuid` | string | Eindeutige Einsatz-UUID |
+| `einsatzN.einsatzart` | string | Gleiche Bedeutung wie [einsatz.einsatzart](#einsatz) |
+| `einsatzN.stichwort` | string | Alarmstichwort |
+| `einsatzN.beschreibung` | string | Beschreibung zum Stichwort, ermittelt wie bei [einsatz.beschreibung](#einsatz) |
+| `einsatzN.ort` | string | Ort |
+| `einsatzN.ortsteil` | string | Ortsteil (falls abweichend von `ort`) |
+| `einsatzN.alarmierungszeit` | string (date) | Alarmierungszeitpunkt |
+| `einsatzN.sondersignal` | number | `1` = Sondersignal (Blaulicht & Martinshorn), sonst keins |
+| `einsatzN.latitude` / `einsatzN.longitude` | number | Einsatzort, gleiche Normalisierung wie bei [einsatz](#einsatz) |
+| `einsatzN.kartenbildPfad` | string | Pfad zu einem passenden, bereits erzeugten Einsatzkarten-Bild – siehe [Dashboard](#dashboard) oben. Leer, falls keins gefunden wurde |
+| `einsatzN.routenGesamt` | number | Anzahl Routen für den Einsatz dieses Slots |
+| `einsatzN.rueckmeldungenGesamt` | number | Rückmeldungen gesamt für den Einsatz dieses Slots |
+| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Dieselben acht Rückmeldungs-Zähler wie bei [einsatz.rueckmeldungen](#einsatz), pro Slot |
+| `einsatzN.json.current` | string (JSON-Array) | Flache Einsatzdaten dieses Slots, gleiches Schema wie `einsatz.json.current` (ohne `registeredMonitor`/`registeredMonitorName`) |
+| `einsatzN.json.routen` | string (JSON-Array) | Routen des Einsatzes dieses Slots, gleiches Schema wie `einsatz.json.routen` |
+| `einsatzN.json.rueckmeldungen` | string (JSON-Array) | Rückmeldungen des Einsatzes dieses Slots |
+| `einsatzN.json.emAlarmiert` | string (JSON-Array) | Alarmierte Einsatzmittel des Einsatzes dieses Slots |
+| `einsatzN.json.wachen` | string (JSON-Array) | Am Einsatz dieses Slots beteiligte Wachen (`em_station_id`/`em_station_name`) – nur über `/dbrd` verfügbar, kein `einsatz.json.*`-Gegenstück |
 
 ### debug
 
