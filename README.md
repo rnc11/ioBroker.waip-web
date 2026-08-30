@@ -406,7 +406,7 @@ itself - see [Connection](#connection)), and for each of up to N
 matching incidents opens one **short-lived** Socket.IO connection in
 turn (never in parallel) to collect its current state, then closes it
 again. A full refresh therefore realistically takes a few seconds per
-occupied slot, not milliseconds - the minimum **Refresh interval**
+occupied `einsatzN`, not milliseconds - the minimum **Refresh interval**
 below reflects that.
 
 | Field | Description | Default |
@@ -422,21 +422,21 @@ refresh can be triggered any time via the `dashboard.refreshNow`
 button state, e.g. from a VIS button or a script.
 
 Map images shown as `dashboard.einsatzN.kartenbildPfad` are **not**
-generated separately for dashboard slots - they are looked up in the
+generated separately for the dashboard - they are looked up in the
 same file history [Incident map image](#incident-map-image) already
-produces for this instance's own monitor. A slot only has a map image
+produces for this instance's own monitor. `einsatzN` only has a map image
 when this adapter has *already* generated one for that exact incident
 via its own `einsatzAktuell.*` alarm handling - most complete when **Monitor
 ID** is `0` (all dispatch monitors) and **Generate a map image for
 each incident** is enabled, since then every incident that can appear
 on the dashboard has also passed through `einsatzAktuell.*` at least once.
-With a narrower Monitor ID, dashboard slots for incidents outside that
+With a narrower Monitor ID, `einsatzN` entries for incidents outside that
 monitor's own alarm history will have no map image - this is expected,
 not a bug.
 
 Disabling the feature removes the entire `dashboard.*` object tree
 (channels and states, not just their values); reducing **Number of
-incidents to show** removes only the now-unused slots at the end
+incidents to show** removes only the now-unused `einsatzN` entries at the end
 (e.g. going from 10 to 5 removes `dashboard.einsatz6` … `einsatz10`).
 Both changes only take effect on the **next adapter restart** after
 saving (ioBroker restarts the instance on any configuration change
@@ -570,15 +570,15 @@ only matters in the moment, so only the most recent one is kept.
 
 Only present when [Dashboard](#dashboard) is enabled - see there for
 the object-tree lifecycle on enable/disable/resize. `dashboard.einsatzN`
-(`N` = 1 … the configured slot count) mirrors the same shape as
-`einsatzAktuell`/`einsatzAktuell.json` above, for the Nth most recent
-incident matching this instance's monitor - **not** limited to the
-single current incident. All fields of an occupied slot are always
-rewritten on every refresh (not just on change), so ongoing feedback for
-an incident that stays on the same slot across refreshes keeps updating;
-an unoccupied slot (fewer matching incidents than configured slots)
-has all fields at their empty value, exactly like `einsatzAktuell.*`
-when no incident is active.
+(`N` = 1 … the configured number of incidents to show) mirrors the same
+shape as `einsatzAktuell`/`einsatzAktuell.json` above, for the Nth most
+recent incident matching this instance's monitor - **not** limited to
+the single current incident. All fields of an occupied `einsatzN` are
+always rewritten on every refresh (not just on change), so ongoing
+feedback for an incident that stays at the same `einsatzN` across
+refreshes keeps updating; an unoccupied `einsatzN` (fewer matching
+incidents than configured) has all fields at their empty value, exactly
+like `einsatzAktuell.*` when no incident is active.
 
 Deliberately **without** `restzeit`/`ablaufzeit` (WAIP-Web's `/dbrd/`
 incident-detail data has no equivalent field, unlike the live `/waip`
@@ -591,7 +591,7 @@ only the `/dbrd` payload includes.
 | State | Type | Description |
 | --- | --- | --- |
 | `refreshNow` | boolean (button) | Write `true` to trigger an immediate dashboard refresh, e.g. from a VIS button or a script. Resets itself to `false` once the refresh completes |
-| `einsatzN.alarmAktiv` | boolean | `true` while the slot is occupied by a matching incident |
+| `einsatzN.alarmAktiv` | boolean | `true` while `einsatzN` is occupied by a matching incident |
 | `einsatzN.id` | number | Internal incident ID |
 | `einsatzN.uuid` | string | Unique incident UUID |
 | `einsatzN.einsatzart` | string | Same meaning as [einsatzAktuell.einsatzart](#einsatzaktuell) |
@@ -603,14 +603,14 @@ only the `/dbrd` payload includes.
 | `einsatzN.sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
 | `einsatzN.latitude` / `einsatzN.longitude` | number | Incident location, same normalization as [einsatzAktuell](#einsatzaktuell) |
 | `einsatzN.kartenbildPfad` | string | Path to a matching, previously generated incident map image - see [Dashboard](#dashboard) above. Empty if none was found |
-| `einsatzN.routenGesamt` | number | Number of routes for this slot's incident |
-| `einsatzN.rueckmeldungenGesamt` | number | Total feedback count for this slot's incident |
-| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Same eight feedback counters as [einsatzAktuell.rueckmeldungen](#einsatzaktuell), per slot |
-| `einsatzN.json.current` | string (JSON array) | This slot's flat incident data, same shape as `einsatzAktuell.json.current` (without `registeredMonitor`/`registeredMonitorName`) |
-| `einsatzN.json.routen` | string (JSON array) | Routes of this slot's incident, same shape as `einsatzAktuell.json.routen` |
-| `einsatzN.json.rueckmeldungen` | string (JSON array) | Feedback entries of this slot's incident |
-| `einsatzN.json.emAlarmiert` | string (JSON array) | Alerted resources of this slot's incident |
-| `einsatzN.json.wachen` | string (JSON array) | Participating stations of this slot's incident (`em_station_id`/`em_station_name`) - only available via `/dbrd`, no `einsatzAktuell.json.*` counterpart |
+| `einsatzN.routenGesamt` | number | Number of routes for `einsatzN`'s incident |
+| `einsatzN.rueckmeldungenGesamt` | number | Total feedback count for `einsatzN`'s incident |
+| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Same eight feedback counters as [einsatzAktuell.rueckmeldungen](#einsatzaktuell), per `einsatzN` |
+| `einsatzN.json.current` | string (JSON array) | `einsatzN`'s flat incident data, same shape as `einsatzAktuell.json.current` (without `registeredMonitor`/`registeredMonitorName`) |
+| `einsatzN.json.routen` | string (JSON array) | Routes of `einsatzN`'s incident, same shape as `einsatzAktuell.json.routen` |
+| `einsatzN.json.rueckmeldungen` | string (JSON array) | Feedback entries of `einsatzN`'s incident |
+| `einsatzN.json.emAlarmiert` | string (JSON array) | Alerted resources of `einsatzN`'s incident |
+| `einsatzN.json.wachen` | string (JSON array) | Participating stations of `einsatzN`'s incident (`em_station_id`/`em_station_name`) - only available via `/dbrd`, no `einsatzAktuell.json.*` counterpart |
 
 ### debug
 
@@ -658,8 +658,8 @@ example.
   bindings/scripts referencing the old `einsatz.*`/`einsatz.json.history10`
   paths - they are removed automatically on upgrade, along with their
   values.
-- Dashboard channel/state display names no longer use "Slot" - they now
-  say "Einsatz N" consistently with the `einsatzAktuell.*` naming, and
+- Dashboard channel/state display names are now consistent: they use
+  "Einsatz N" throughout, matching the `einsatzAktuell.*` naming, and
   the redundant "flat JSON array" phrase was removed from every state
   name. Object IDs are unaffected, only the display names shown in
   Admin/VIS.
@@ -692,7 +692,7 @@ example.
   not a permanent connection - see [Dashboard](#dashboard) and
   [dashboard states](#dashboard-states) for the full behavior,
   including the manual refresh button and the object-deletion behavior
-  when disabling the feature or reducing the slot count.
+  when disabling the feature or reducing the number of incidents to show.
 
 ### 0.7.38 (2026-08-27)
 

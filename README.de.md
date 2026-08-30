@@ -415,7 +415,7 @@ siehe [Verbindung](#verbindung)), und öffnet für jeden der bis zu N
 passenden Einsätze nacheinander (nie parallel) eine **kurzlebige**
 Socket.IO-Verbindung, um dessen aktuellen Stand abzurufen, bevor sie
 wieder geschlossen wird. Ein vollständiger Refresh dauert dadurch
-realistisch einige Sekunden pro belegtem Slot, nicht Millisekunden –
+realistisch einige Sekunden pro belegtem `einsatzN`, nicht Millisekunden –
 das Minimum beim **Refresh-Intervall** unten trägt dem Rechnung.
 
 | Feld | Beschreibung | Standard |
@@ -431,24 +431,24 @@ manueller Refresh lässt sich jederzeit über den Button-State
 `dashboard.refreshNow` auslösen, z. B. per VIS-Button oder Skript.
 
 Kartenbilder unter `dashboard.einsatzN.kartenbildPfad` werden **nicht**
-eigens für Dashboard-Slots erzeugt – sie werden aus demselben
+eigens für das Dashboard erzeugt – sie werden aus demselben
 Datei-Fundus abgeleitet, den [Einsatzkarte](#einsatzkarte) für den
-eigenen Monitor dieser Instanz bereits erzeugt hat. Ein Slot hat also
+eigenen Monitor dieser Instanz bereits erzeugt hat. `einsatzN` hat also
 nur dann ein Kartenbild, wenn dieser Adapter für genau diesen Einsatz
 über die eigene `einsatzAktuell.*`-Alarmverarbeitung bereits eines erzeugt
 hat – am vollständigsten, wenn die **Monitor-ID** auf `0` (alle
 Wachalarme) steht und **Kartenbild für jeden Einsatz erzeugen**
 aktiviert ist, da dann jeder Einsatz, der im Dashboard erscheinen kann,
 zuvor auch schon einmal `einsatzAktuell.*` durchlaufen hat. Bei einer
-enger gefassten Monitor-ID fehlt Dashboard-Slots für Einsätze außerhalb
+enger gefassten Monitor-ID fehlt `einsatzN`-Einträgen für Einsätze außerhalb
 der eigenen Alarm-Historie das Kartenbild – das ist erwartetes
 Verhalten, kein Fehler.
 
 Wird das Feature deaktiviert, wird der komplette `dashboard.*`-Objekt-
 baum entfernt (Kanäle und States, nicht nur deren Werte); wird **Number
 of incidents to show** verringert, werden nur die dadurch nicht mehr
-benötigten Slots am Ende entfernt (z. B. entfernt eine Reduzierung von
-10 auf 5 die Slots `dashboard.einsatz6` … `einsatz10`). Beide Änderungen
+benötigten `einsatzN`-Einträge am Ende entfernt (z. B. entfernt eine Reduzierung von
+10 auf 5 die Einträge `dashboard.einsatz6` … `einsatz10`). Beide Änderungen
 wirken erst nach dem **nächsten Adapter-Neustart** nach dem Speichern
 (ioBroker startet die Instanz ohnehin bei jeder Konfigurationsänderung
 neu – die Entfernung passiert nicht sofort, während der Admin-Dialog
@@ -583,14 +583,14 @@ relevant, deshalb wird nur die jeweils letzte vorgehalten.
 Nur vorhanden, wenn [Dashboard](#dashboard) aktiviert ist – siehe dort
 für den Objektbaum-Lebenszyklus bei Aktivierung/Deaktivierung/
 Größenänderung. `dashboard.einsatzN` (`N` = 1 … die konfigurierte
-Slot-Anzahl) spiegelt dasselbe Schema wie `einsatzAktuell`/`einsatzAktuell.json`
+Anzahl anzuzeigender Einsätze) spiegelt dasselbe Schema wie `einsatzAktuell`/`einsatzAktuell.json`
 oben, für den N-aktuellsten Einsatz, der zum Monitor dieser Instanz
 passt – **nicht** beschränkt auf den einen aktuellen Einsatz. Alle
-Felder eines belegten Slots werden bei jedem Refresh immer komplett
+Felder eines belegten `einsatzN` werden bei jedem Refresh immer komplett
 neu geschrieben (nicht nur bei Änderung), damit laufende Rückmeldungen
-für einen Einsatz, der über mehrere Refreshs hinweg auf demselben Slot
-bleibt, weiter aktualisiert werden; ein unbelegter Slot (weniger
-passende Einsätze als konfigurierte Slots) trägt an allen Feldern den
+für einen Einsatz, der über mehrere Refreshs hinweg an demselben `einsatzN`
+bleibt, weiter aktualisiert werden; ein unbelegtes `einsatzN` (weniger
+passende Einsätze als konfiguriert) trägt an allen Feldern den
 Leerwert, genau wie `einsatzAktuell.*`, wenn kein Einsatz aktiv ist.
 
 Bewusst **ohne** `restzeit`/`ablaufzeit` (WAIP-Webs `/dbrd/`-
@@ -604,7 +604,7 @@ das nur im `/dbrd`-Payload enthalten ist.
 | State | Typ | Beschreibung |
 | --- | --- | --- |
 | `refreshNow` | boolean (Button) | `true` schreiben, um einen sofortigen Dashboard-Refresh auszulösen, z. B. per VIS-Button oder Skript. Setzt sich nach Abschluss des Refreshs selbst auf `false` zurück |
-| `einsatzN.alarmAktiv` | boolean | `true`, solange der Slot mit einem passenden Einsatz belegt ist |
+| `einsatzN.alarmAktiv` | boolean | `true`, solange `einsatzN` mit einem passenden Einsatz belegt ist |
 | `einsatzN.id` | number | Interne Einsatz-ID |
 | `einsatzN.uuid` | string | Eindeutige Einsatz-UUID |
 | `einsatzN.einsatzart` | string | Gleiche Bedeutung wie [einsatzAktuell.einsatzart](#einsatzaktuell) |
@@ -616,14 +616,14 @@ das nur im `/dbrd`-Payload enthalten ist.
 | `einsatzN.sondersignal` | number | `1` = Sondersignal (Blaulicht & Martinshorn), sonst keins |
 | `einsatzN.latitude` / `einsatzN.longitude` | number | Einsatzort, gleiche Normalisierung wie bei [einsatzAktuell](#einsatzaktuell) |
 | `einsatzN.kartenbildPfad` | string | Pfad zu einem passenden, bereits erzeugten Einsatzkarten-Bild – siehe [Dashboard](#dashboard) oben. Leer, falls keins gefunden wurde |
-| `einsatzN.routenGesamt` | number | Anzahl Routen für den Einsatz dieses Slots |
-| `einsatzN.rueckmeldungenGesamt` | number | Rückmeldungen gesamt für den Einsatz dieses Slots |
-| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Dieselben acht Rückmeldungs-Zähler wie bei [einsatzAktuell.rueckmeldungen](#einsatzaktuell), pro Slot |
-| `einsatzN.json.current` | string (JSON-Array) | Flache Einsatzdaten dieses Slots, gleiches Schema wie `einsatzAktuell.json.current` (ohne `registeredMonitor`/`registeredMonitorName`) |
-| `einsatzN.json.routen` | string (JSON-Array) | Routen des Einsatzes dieses Slots, gleiches Schema wie `einsatzAktuell.json.routen` |
-| `einsatzN.json.rueckmeldungen` | string (JSON-Array) | Rückmeldungen des Einsatzes dieses Slots |
-| `einsatzN.json.emAlarmiert` | string (JSON-Array) | Alarmierte Einsatzmittel des Einsatzes dieses Slots |
-| `einsatzN.json.wachen` | string (JSON-Array) | Am Einsatz dieses Slots beteiligte Wachen (`em_station_id`/`em_station_name`) – nur über `/dbrd` verfügbar, kein `einsatzAktuell.json.*`-Gegenstück |
+| `einsatzN.routenGesamt` | number | Anzahl Routen für den Einsatz von `einsatzN` |
+| `einsatzN.rueckmeldungenGesamt` | number | Rückmeldungen gesamt für den Einsatz von `einsatzN` |
+| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Dieselben acht Rückmeldungs-Zähler wie bei [einsatzAktuell.rueckmeldungen](#einsatzaktuell), pro `einsatzN` |
+| `einsatzN.json.current` | string (JSON-Array) | Flache Einsatzdaten von `einsatzN`, gleiches Schema wie `einsatzAktuell.json.current` (ohne `registeredMonitor`/`registeredMonitorName`) |
+| `einsatzN.json.routen` | string (JSON-Array) | Routen des Einsatzes von `einsatzN`, gleiches Schema wie `einsatzAktuell.json.routen` |
+| `einsatzN.json.rueckmeldungen` | string (JSON-Array) | Rückmeldungen des Einsatzes von `einsatzN` |
+| `einsatzN.json.emAlarmiert` | string (JSON-Array) | Alarmierte Einsatzmittel des Einsatzes von `einsatzN` |
+| `einsatzN.json.wachen` | string (JSON-Array) | Am Einsatz von `einsatzN` beteiligte Wachen (`em_station_id`/`em_station_name`) – nur über `/dbrd` verfügbar, kein `einsatzAktuell.json.*`-Gegenstück |
 
 ### debug
 
