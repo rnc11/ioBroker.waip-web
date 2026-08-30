@@ -68,7 +68,17 @@ const DEFAULT_SESSION_KEEPALIVE_SEC = 300;
 // server/app_cfg.js: 60s!) - so the interval below is derived adaptively from the
 // expiry time the server reports, instead of assuming a fixed value.
 const SESSION_KEEPALIVE_MIN_MS = 55 * 1000;
-const HISTORY_SIZE = 10;
+// DE: Konfigurierbarer Bereich für die Größe von einsatzAktuell.json.history (siehe
+// onReady()/pushEinsatzToHistory()/trimHistoryIfNeeded()) - historySize ist ein
+// Konfigurationswert (1..100, Default 10 zur Wahrung des bisherigen Verhaltens
+// bestehender Instanzen), keine feste Konstante mehr.
+// EN: Configurable range for the size of einsatzAktuell.json.history (see
+// onReady()/pushEinsatzToHistory()/trimHistoryIfNeeded()) - historySize is a config
+// value (1..100, default 10 to preserve existing instances' prior behavior), no longer
+// a fixed constant.
+const HISTORY_SIZE_MIN = 1;
+const HISTORY_SIZE_MAX = 100;
+const DEFAULT_HISTORY_SIZE = 10;
 // DE: Obergrenze für debug.monitorAudit (siehe appendMonitorAudit()). Der State überlebt
 // Neustarts (RESET_EXCLUDED_STATE_IDS), muss also selbst begrenzt werden.
 // EN: Upper bound for debug.monitorAudit (see appendMonitorAudit()). The state survives
@@ -376,6 +386,57 @@ const OBSOLETE_OBJECT_IDS = [
     'einsatz.rueckmeldungAnzahl.funktionen.med',
     'einsatz.rueckmeldungGesamt',
     'einsatz.zeitstempel',
+    // DE: Umbenennung: der Kanal einsatz heißt jetzt einsatzAktuell (Abgrenzung zu den
+    // Dashboard-Kanälen dashboard.einsatz1..N). Alle State-Blätter unter dem alten Pfad
+    // müssen hier aufgeführt werden, damit sie vor initObjects() entfernt werden - die
+    // neuen Objekte unter einsatzAktuell.* legt initObjects() aus CHANNEL_DEFS/STATE_DEFS
+    // an. Die Channel/Folder-Objekte selbst (einsatz, .rueckmeldungen, .rollen,
+    // .funktionen, .json, .tts) stehen in OBSOLETE_FOLDER_IDS unten, da
+    // cleanupObsoleteObjects() hier oben bewusst nur obj.type === 'state' löscht.
+    // Gleichzeitig: einsatz.json.history10 wird zu einsatzAktuell.json.history (siehe
+    // dort) - auch das alte history10-Blatt ist hier mit aufgeführt.
+    // EN: Rename: the einsatz channel is now called einsatzAktuell (to distinguish it
+    // from the dashboard.einsatz1..N dashboard channels). Every state leaf under the old
+    // path must be listed here so it gets removed before initObjects() runs - the new
+    // objects under einsatzAktuell.* are created by initObjects() from
+    // CHANNEL_DEFS/STATE_DEFS. The channel/folder objects themselves (einsatz,
+    // .rueckmeldungen, .rollen, .funktionen, .json, .tts) are in OBSOLETE_FOLDER_IDS
+    // below, since cleanupObsoleteObjects() deliberately only ever deletes
+    // obj.type === 'state' here. At the same time: einsatz.json.history10 becomes
+    // einsatzAktuell.json.history (see there) - the old history10 leaf is listed here too.
+    'einsatz.alarmAktiv',
+    'einsatz.restzeit',
+    'einsatz.id',
+    'einsatz.uuid',
+    'einsatz.einsatzart',
+    'einsatz.stichwort',
+    'einsatz.beschreibung',
+    'einsatz.ort',
+    'einsatz.ortsteil',
+    'einsatz.alarmierungszeit',
+    'einsatz.ablaufzeit',
+    'einsatz.sondersignal',
+    'einsatz.latitude',
+    'einsatz.longitude',
+    'einsatz.kartenbildPfad',
+    'einsatz.routenGesamt',
+    'einsatz.rueckmeldungenGesamt',
+    'einsatz.rueckmeldungen.rollen.ek',
+    'einsatz.rueckmeldungen.rollen.gf',
+    'einsatz.rueckmeldungen.rollen.zf',
+    'einsatz.rueckmeldungen.rollen.vf',
+    'einsatz.rueckmeldungen.funktionen.agt',
+    'einsatz.rueckmeldungen.funktionen.fzf',
+    'einsatz.rueckmeldungen.funktionen.ma',
+    'einsatz.rueckmeldungen.funktionen.med',
+    'einsatz.json.current',
+    'einsatz.json.history10',
+    'einsatz.json.routen',
+    'einsatz.json.rueckmeldungen',
+    'einsatz.json.emAlarmiert',
+    'einsatz.json.emWeitere',
+    'einsatz.tts.last',
+    'einsatz.tts.lastTimestamp',
 ];
 
 // DE: Wie OBSOLETE_OBJECT_IDS, aber für Channel-/Folder-Objekte, die bei einer Umbenennung
@@ -396,6 +457,18 @@ const OBSOLETE_FOLDER_IDS = [
     'einsatz.rueckmeldungAnzahl.rollen',
     'einsatz.rueckmeldungAnzahl.funktionen',
     'einsatz.rueckmeldungAnzahl',
+    // DE: Umbenennung: der Kanal einsatz heißt jetzt einsatzAktuell (siehe
+    // OBSOLETE_OBJECT_IDS oben für die zugehörigen State-Blätter). Reihenfolge:
+    // Kind-Ordner vor den Eltern-Ordnern .rueckmeldungen/einsatz selbst.
+    // EN: Rename: the einsatz channel is now called einsatzAktuell (see
+    // OBSOLETE_OBJECT_IDS above for the associated state leaves). Order: child folders
+    // before the .rueckmeldungen/einsatz parent folders themselves.
+    'einsatz.rueckmeldungen.rollen',
+    'einsatz.rueckmeldungen.funktionen',
+    'einsatz.rueckmeldungen',
+    'einsatz.json',
+    'einsatz.tts',
+    'einsatz',
 ];
 
 // DE: Übergeordnete Channel/Folder-Objekte, die für jeden State-Zweig existieren müssen.
@@ -406,12 +479,24 @@ const OBSOLETE_FOLDER_IDS = [
 // (see STATE_DEFS) alone aren't enough.
 const CHANNEL_DEFS = [
     { id: 'status', type: 'channel', name: 'Verbindungs- und Registrierungsstatus' },
-    { id: 'einsatz', type: 'channel', name: 'Aktueller Einsatz' },
-    { id: 'einsatz.rueckmeldungen', type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
-    { id: 'einsatz.rueckmeldungen.rollen', type: 'folder', name: 'Rückmeldungen nach Rolle' },
-    { id: 'einsatz.rueckmeldungen.funktionen', type: 'folder', name: 'Rückmeldungen nach Funktion' },
-    { id: 'einsatz.json', type: 'folder', name: 'Einsatzdaten als flache JSON-Objekte/Arrays für Tabellen-Widgets' },
-    { id: 'einsatz.tts', type: 'folder', name: 'TTS-Ansage des aktuellen Einsatzes' },
+    { id: 'einsatzAktuell', type: 'channel', name: 'Aktueller Einsatz' },
+    {
+        id: 'einsatzAktuell.rueckmeldungen',
+        type: 'folder',
+        name: 'Einsatz aktuell: Rückmeldungen nach Rolle/Funktion',
+    },
+    {
+        id: 'einsatzAktuell.rueckmeldungen.rollen',
+        type: 'folder',
+        name: 'Einsatz aktuell: Rückmeldungen nach Rolle',
+    },
+    {
+        id: 'einsatzAktuell.rueckmeldungen.funktionen',
+        type: 'folder',
+        name: 'Einsatz aktuell: Rückmeldungen nach Funktion',
+    },
+    { id: 'einsatzAktuell.json', type: 'folder', name: 'Einsatz aktuell: Einsatzdaten für Tabellen-Widgets' },
+    { id: 'einsatzAktuell.tts', type: 'folder', name: 'Einsatz aktuell: TTS-Ansage des aktuellen Einsatzes' },
     { id: 'debug', type: 'channel', name: 'Diagnose- und Debug-Informationen' },
 ];
 
@@ -467,157 +552,184 @@ const STATE_DEFS = [
     },
     // DE: flache Felder des aktuellen Einsatzes
     // EN: flat fields of the current incident
-    { id: 'einsatz.alarmAktiv', type: 'boolean', role: 'indicator.alarm', name: 'Alarm aktiv', def: false },
     {
-        id: 'einsatz.restzeit',
+        id: 'einsatzAktuell.alarmAktiv',
+        type: 'boolean',
+        role: 'indicator.alarm',
+        name: 'Einsatz aktuell: Alarm aktiv',
+        def: false,
+    },
+    {
+        id: 'einsatzAktuell.restzeit',
         type: 'number',
         role: 'value.interval',
-        name: 'Restzeit bis Einsatzende',
+        name: 'Einsatz aktuell: Restzeit bis Einsatzende',
         unit: 's',
         def: 0,
     },
-    { id: 'einsatz.id', type: 'number', role: 'value', name: 'Einsatz ID' },
-    { id: 'einsatz.uuid', type: 'string', role: 'text', name: 'Einsatz UUID' },
-    { id: 'einsatz.einsatzart', type: 'string', role: 'text', name: 'Einsatzart' },
-    { id: 'einsatz.stichwort', type: 'string', role: 'text', name: 'Alarmstichwort' },
+    { id: 'einsatzAktuell.id', type: 'number', role: 'value', name: 'Einsatz aktuell: Einsatz ID' },
+    { id: 'einsatzAktuell.uuid', type: 'string', role: 'text', name: 'Einsatz aktuell: Einsatz UUID' },
+    { id: 'einsatzAktuell.einsatzart', type: 'string', role: 'text', name: 'Einsatz aktuell: Einsatzart' },
+    { id: 'einsatzAktuell.stichwort', type: 'string', role: 'text', name: 'Einsatz aktuell: Alarmstichwort' },
     {
-        id: 'einsatz.beschreibung',
+        id: 'einsatzAktuell.beschreibung',
         type: 'string',
         role: 'text',
-        name: 'Beschreibung zum Stichwort (Stammdaten-Zuordnung/automatische Dekodierung, null falls kein Treffer)',
+        name: 'Einsatz aktuell: Beschreibung zum Stichwort (Stammdaten-Zuordnung/automatische Dekodierung, null falls kein Treffer)',
     },
-    { id: 'einsatz.ort', type: 'string', role: 'text', name: 'Ort' },
-    { id: 'einsatz.ortsteil', type: 'string', role: 'text', name: 'Ortsteil' },
-    { id: 'einsatz.alarmierungszeit', type: 'string', role: 'date', name: 'Alarmierungszeit' },
-    { id: 'einsatz.ablaufzeit', type: 'string', role: 'date', name: 'Ablaufzeit' },
-    { id: 'einsatz.sondersignal', type: 'number', role: 'value', name: 'Sondersignal', def: 0 },
-    { id: 'einsatz.latitude', type: 'number', role: 'value.gps.latitude', name: 'Breitengrad' },
-    { id: 'einsatz.longitude', type: 'number', role: 'value.gps.longitude', name: 'Längengrad' },
+    { id: 'einsatzAktuell.ort', type: 'string', role: 'text', name: 'Einsatz aktuell: Ort' },
+    { id: 'einsatzAktuell.ortsteil', type: 'string', role: 'text', name: 'Einsatz aktuell: Ortsteil' },
+    { id: 'einsatzAktuell.alarmierungszeit', type: 'string', role: 'date', name: 'Einsatz aktuell: Alarmierungszeit' },
+    { id: 'einsatzAktuell.ablaufzeit', type: 'string', role: 'date', name: 'Einsatz aktuell: Ablaufzeit' },
+    { id: 'einsatzAktuell.sondersignal', type: 'number', role: 'value', name: 'Einsatz aktuell: Sondersignal', def: 0 },
     {
-        id: 'einsatz.kartenbildPfad',
+        id: 'einsatzAktuell.latitude',
+        type: 'number',
+        role: 'value.gps.latitude',
+        name: 'Einsatz aktuell: Breitengrad',
+    },
+    {
+        id: 'einsatzAktuell.longitude',
+        type: 'number',
+        role: 'value.gps.longitude',
+        name: 'Einsatz aktuell: Längengrad',
+    },
+    {
+        id: 'einsatzAktuell.kartenbildPfad',
         type: 'string',
         role: 'text',
-        name: 'Pfad zur zuletzt erzeugten Einsatzkarte (PNG) - leer, falls das Kartenbild-Feature deaktiviert ist, keine Koordinaten vorliegen oder die Erzeugung fehlschlug',
+        name: 'Einsatz aktuell: Pfad zur zuletzt erzeugten Einsatzkarte (PNG) - leer, falls das Kartenbild-Feature deaktiviert ist, keine Koordinaten vorliegen oder die Erzeugung fehlschlug',
     },
-    // DE: Flache JSON-Objekte/Arrays für Tabellen-Widgets (siehe einsatz.json.*-Channel).
+    // DE: Flache JSON-Objekte/Arrays für Tabellen-Widgets (siehe einsatzAktuell.json.*-Channel).
     // Jedes dieser States ist entweder ein flaches Objekt oder ein Array flacher Objekte -
     // bewusst ohne weitere Verschachtelung, da VIS-Tabellen-Widgets nur eine Ebene abflachen
     // können (siehe Diskussion zu den ursprünglich verschachtelten einsatz.json/history10).
-    // EN: Flat JSON objects/arrays for table widgets (see the einsatz.json.* channel).
+    // EN: Flat JSON objects/arrays for table widgets (see the einsatzAktuell.json.* channel).
     // Each of these states is either a flat object or an array of flat objects -
     // deliberately without further nesting, since VIS table widgets can only flatten one
     // level (see the discussion of the originally nested einsatz.json/history10).
     {
-        id: 'einsatz.json.current',
+        id: 'einsatzAktuell.json.current',
         type: 'string',
         role: 'json',
-        name: 'Einsatzstamm des aktuellen Einsatzes (JSON-Array mit einem Element, leer falls kein Einsatz aktiv)',
+        name: 'Einsatz aktuell: Einsatzstamm des aktuellen Einsatzes (ein Element, leer falls kein Einsatz aktiv)',
     },
     {
-        id: 'einsatz.json.history10',
+        id: 'einsatzAktuell.json.history',
         type: 'string',
         role: 'json',
-        name: `Einsatzstamm der letzten ${HISTORY_SIZE} abgeschlossenen Einsätze, gleiches Schema wie einsatz.json.current (JSON-Array)`,
+        name: 'Einsatz aktuell: Einsatzstamm der letzten N abgeschlossenen Einsätze (N konfigurierbar, siehe Verbindung), gleiches Schema wie einsatzAktuell.json.current',
     },
     {
-        id: 'einsatz.json.routen',
+        id: 'einsatzAktuell.json.routen',
         type: 'string',
         role: 'json',
-        name: 'Routen des aktuellen Einsatzes, flaches Array (JSON)',
+        name: 'Einsatz aktuell: Routen des aktuellen Einsatzes',
     },
     {
-        id: 'einsatz.json.rueckmeldungen',
+        id: 'einsatzAktuell.json.rueckmeldungen',
         type: 'string',
         role: 'json',
-        name: 'Rückmeldungen des aktuellen Einsatzes, flaches Array (JSON)',
+        name: 'Einsatz aktuell: Rückmeldungen des aktuellen Einsatzes',
     },
     {
-        id: 'einsatz.json.emAlarmiert',
+        id: 'einsatzAktuell.json.emAlarmiert',
         type: 'string',
         role: 'json',
-        name: 'Alarmierte Einsatzmittel des aktuellen Einsatzes, flaches Array (JSON)',
+        name: 'Einsatz aktuell: Alarmierte Einsatzmittel des aktuellen Einsatzes',
     },
     {
-        id: 'einsatz.json.emWeitere',
+        id: 'einsatzAktuell.json.emWeitere',
         type: 'string',
         role: 'json',
-        name: 'Weitere Einsatzmittel des aktuellen Einsatzes, flaches Array (JSON)',
+        name: 'Einsatz aktuell: Weitere Einsatzmittel des aktuellen Einsatzes',
     },
     // DE: abgeleitete Zähler
     // EN: derived counters
-    { id: 'einsatz.routenGesamt', type: 'number', role: 'value', name: 'Anzahl Routen im aktuellen Einsatz', def: 0 },
     {
-        id: 'einsatz.rueckmeldungenGesamt',
+        id: 'einsatzAktuell.routenGesamt',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen gesamt im aktuellen Einsatz',
+        name: 'Einsatz aktuell: Anzahl Routen',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.rollen.ek',
+        id: 'einsatzAktuell.rueckmeldungenGesamt',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Einsatzkräfte',
+        name: 'Einsatz aktuell: Rückmeldungen gesamt',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.rollen.gf',
+        id: 'einsatzAktuell.rueckmeldungen.rollen.ek',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Gruppenführer',
+        name: 'Einsatz aktuell: Rückmeldungen Einsatzkräfte',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.rollen.zf',
+        id: 'einsatzAktuell.rueckmeldungen.rollen.gf',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Zugführer',
+        name: 'Einsatz aktuell: Rückmeldungen Gruppenführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.rollen.vf',
+        id: 'einsatzAktuell.rueckmeldungen.rollen.zf',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Verbandsführer',
+        name: 'Einsatz aktuell: Rückmeldungen Zugführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.funktionen.agt',
+        id: 'einsatzAktuell.rueckmeldungen.rollen.vf',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Atemschutzgeräteträger',
+        name: 'Einsatz aktuell: Rückmeldungen Verbandsführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.funktionen.fzf',
+        id: 'einsatzAktuell.rueckmeldungen.funktionen.agt',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Fahrzeugführer',
+        name: 'Einsatz aktuell: Rückmeldungen Atemschutzgeräteträger',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.funktionen.ma',
+        id: 'einsatzAktuell.rueckmeldungen.funktionen.fzf',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Maschinisten',
+        name: 'Einsatz aktuell: Rückmeldungen Fahrzeugführer',
         def: 0,
     },
     {
-        id: 'einsatz.rueckmeldungen.funktionen.med',
+        id: 'einsatzAktuell.rueckmeldungen.funktionen.ma',
         type: 'number',
         role: 'value',
-        name: 'Rückmeldungen: Medizinisch/Sanitäter',
+        name: 'Einsatz aktuell: Rückmeldungen Maschinisten',
         def: 0,
     },
-    // DE: TTS des aktuellen Einsatzes (Kanal liegt unter einsatz, siehe CHANNEL_DEFS)
-    // EN: TTS announcement of the current incident (channel lives under einsatz, see CHANNEL_DEFS)
     {
-        id: 'einsatz.tts.last',
+        id: 'einsatzAktuell.rueckmeldungen.funktionen.med',
+        type: 'number',
+        role: 'value',
+        name: 'Einsatz aktuell: Rückmeldungen Medizinisch/Sanitäter',
+        def: 0,
+    },
+    // DE: TTS des aktuellen Einsatzes (Kanal liegt unter einsatzAktuell, siehe CHANNEL_DEFS)
+    // EN: TTS announcement of the current incident (channel lives under einsatzAktuell, see CHANNEL_DEFS)
+    {
+        id: 'einsatzAktuell.tts.last',
         type: 'string',
         role: 'text.url',
-        name: 'Vollständige URL der letzten TTS-Ansage (mp3)',
+        name: 'Einsatz aktuell: Vollständige URL der letzten TTS-Ansage (mp3)',
     },
-    { id: 'einsatz.tts.lastTimestamp', type: 'string', role: 'date', name: 'Zeitstempel letzte TTS-Ansage' },
+    {
+        id: 'einsatzAktuell.tts.lastTimestamp',
+        type: 'string',
+        role: 'date',
+        name: 'Einsatz aktuell: Zeitstempel letzte TTS-Ansage',
+    },
 ];
 // DE: Schneller Zugriff von setField() auf den deklarierten Typ eines States (siehe dort).
 // EN: Fast lookup for setField() of a state's declared type (see there).
@@ -644,24 +756,36 @@ function buildDashboardChannelDefs(slotCount) {
         {
             id: 'dashboard',
             type: 'channel',
-            name: 'Dashboard: letzte N Einsätze (N konfigurierbar, siehe dashboardSlotCount)',
+            name: 'Dashboard: letzte N Einsätze (N konfigurierbar)',
         },
     ];
     const n = Number.isFinite(slotCount) ? Math.max(0, Math.trunc(slotCount)) : 0;
     for (let i = 1; i <= n; i++) {
         defs.push(
-            { id: `dashboard.einsatz${i}`, type: 'channel', name: `Dashboard-Slot ${i}: ${i}-aktuellster Einsatz` },
-            { id: `dashboard.einsatz${i}.rueckmeldungen`, type: 'folder', name: 'Rückmeldungen nach Rolle/Funktion' },
-            { id: `dashboard.einsatz${i}.rueckmeldungen.rollen`, type: 'folder', name: 'Rückmeldungen nach Rolle' },
+            {
+                id: `dashboard.einsatz${i}`,
+                type: 'channel',
+                name: `Einsatz ${i} (Dashboard): ${i}-aktuellster Einsatz`,
+            },
+            {
+                id: `dashboard.einsatz${i}.rueckmeldungen`,
+                type: 'folder',
+                name: `Einsatz ${i}: Rückmeldungen nach Rolle/Funktion`,
+            },
+            {
+                id: `dashboard.einsatz${i}.rueckmeldungen.rollen`,
+                type: 'folder',
+                name: `Einsatz ${i}: Rückmeldungen nach Rolle`,
+            },
             {
                 id: `dashboard.einsatz${i}.rueckmeldungen.funktionen`,
                 type: 'folder',
-                name: 'Rückmeldungen nach Funktion',
+                name: `Einsatz ${i}: Rückmeldungen nach Funktion`,
             },
             {
                 id: `dashboard.einsatz${i}.json`,
                 type: 'folder',
-                name: 'Einsatzdaten als flache JSON-Arrays für Tabellen-Widgets',
+                name: `Einsatz ${i}: Einsatzdaten für Tabellen-Widgets`,
             },
         );
     }
@@ -669,18 +793,18 @@ function buildDashboardChannelDefs(slotCount) {
 }
 
 /* DE: Erzeugt die STATE_DEFS-Ergänzung für den Dashboard-Kanal, pro Slot 1..slotCount.
-   Spiegel der flachen einsatz.*-States (siehe Plandokument Abschnitt 3.3), bewusst OHNE
-   restzeit/ablaufzeit (existieren im /dbrd-Payload nicht, live verifiziert) und OHNE
+   Spiegel der flachen einsatzAktuell.*-States (siehe Plandokument Abschnitt 3.3), bewusst
+   OHNE restzeit/ablaufzeit (existieren im /dbrd-Payload nicht, live verifiziert) und OHNE
    tts.* (kein io.playtts-Äquivalent im /dbrd-Namespace). dashboard.einsatzN.json.wachen
-   ist ein bewusst neuer State ohne einsatz.*-Pendant (wachen[] existiert nur im
-   /dbrd-Payload) - dashboard.einsatzN.json.* hat außerdem KEIN history10/emWeitere.
+   ist ein bewusst neuer State ohne einsatzAktuell.*-Pendant (wachen[] existiert nur im
+   /dbrd-Payload) - dashboard.einsatzN.json.* hat außerdem KEIN history/emWeitere.
    EN: Builds the STATE_DEFS addition for the dashboard channel, per slot 1..slotCount.
-   Mirrors the flat einsatz.* states (see the plan document section 3.3), deliberately
-   WITHOUT restzeit/ablaufzeit (don't exist in the /dbrd payload, live-verified) and
-   WITHOUT tts.* (no io.playtts equivalent in the /dbrd namespace).
-   dashboard.einsatzN.json.wachen is a deliberate new state with no einsatz.* counterpart
-   (wachen[] only exists in the /dbrd payload) - dashboard.einsatzN.json.* also has NO
-   history10/emWeitere. */
+   Mirrors the flat einsatzAktuell.* states (see the plan document section 3.3),
+   deliberately WITHOUT restzeit/ablaufzeit (don't exist in the /dbrd payload,
+   live-verified) and WITHOUT tts.* (no io.playtts equivalent in the /dbrd namespace).
+   dashboard.einsatzN.json.wachen is a deliberate new state with no einsatzAktuell.*
+   counterpart (wachen[] only exists in the /dbrd payload) - dashboard.einsatzN.json.*
+   also has NO history/emWeitere. */
 function buildDashboardStateDefs(slotCount) {
     const defs = [];
     const n = Number.isFinite(slotCount) ? Math.max(0, Math.trunc(slotCount)) : 0;
@@ -691,114 +815,119 @@ function buildDashboardStateDefs(slotCount) {
                 id: `${p}.alarmAktiv`,
                 type: 'boolean',
                 role: 'indicator.alarm',
-                name: `Slot ${i}: Alarm aktiv`,
+                name: `Einsatz ${i}: Alarm aktiv`,
                 def: false,
             },
-            { id: `${p}.id`, type: 'number', role: 'value', name: `Slot ${i}: Einsatz ID` },
-            { id: `${p}.uuid`, type: 'string', role: 'text', name: `Slot ${i}: Einsatz UUID` },
-            { id: `${p}.einsatzart`, type: 'string', role: 'text', name: `Slot ${i}: Einsatzart` },
-            { id: `${p}.stichwort`, type: 'string', role: 'text', name: `Slot ${i}: Alarmstichwort` },
-            { id: `${p}.beschreibung`, type: 'string', role: 'text', name: `Slot ${i}: Beschreibung zum Stichwort` },
-            { id: `${p}.ort`, type: 'string', role: 'text', name: `Slot ${i}: Ort` },
-            { id: `${p}.ortsteil`, type: 'string', role: 'text', name: `Slot ${i}: Ortsteil` },
-            { id: `${p}.alarmierungszeit`, type: 'string', role: 'date', name: `Slot ${i}: Alarmierungszeit` },
-            { id: `${p}.sondersignal`, type: 'number', role: 'value', name: `Slot ${i}: Sondersignal`, def: 0 },
-            { id: `${p}.latitude`, type: 'number', role: 'value.gps.latitude', name: `Slot ${i}: Breitengrad` },
-            { id: `${p}.longitude`, type: 'number', role: 'value.gps.longitude', name: `Slot ${i}: Längengrad` },
+            { id: `${p}.id`, type: 'number', role: 'value', name: `Einsatz ${i}: Einsatz ID` },
+            { id: `${p}.uuid`, type: 'string', role: 'text', name: `Einsatz ${i}: Einsatz UUID` },
+            { id: `${p}.einsatzart`, type: 'string', role: 'text', name: `Einsatz ${i}: Einsatzart` },
+            { id: `${p}.stichwort`, type: 'string', role: 'text', name: `Einsatz ${i}: Alarmstichwort` },
+            {
+                id: `${p}.beschreibung`,
+                type: 'string',
+                role: 'text',
+                name: `Einsatz ${i}: Beschreibung zum Stichwort`,
+            },
+            { id: `${p}.ort`, type: 'string', role: 'text', name: `Einsatz ${i}: Ort` },
+            { id: `${p}.ortsteil`, type: 'string', role: 'text', name: `Einsatz ${i}: Ortsteil` },
+            { id: `${p}.alarmierungszeit`, type: 'string', role: 'date', name: `Einsatz ${i}: Alarmierungszeit` },
+            { id: `${p}.sondersignal`, type: 'number', role: 'value', name: `Einsatz ${i}: Sondersignal`, def: 0 },
+            { id: `${p}.latitude`, type: 'number', role: 'value.gps.latitude', name: `Einsatz ${i}: Breitengrad` },
+            { id: `${p}.longitude`, type: 'number', role: 'value.gps.longitude', name: `Einsatz ${i}: Längengrad` },
             {
                 id: `${p}.kartenbildPfad`,
                 type: 'string',
                 role: 'text',
-                name: `Slot ${i}: Pfad zum abgeleiteten Kartenbild (aus dem bestehenden Kartenbild-Fundus, nicht neu generiert) - leer, falls keins gefunden wurde`,
+                name: `Einsatz ${i}: Pfad zum abgeleiteten Kartenbild (aus dem bestehenden Kartenbild-Fundus, nicht neu generiert) - leer, falls keins gefunden wurde`,
             },
-            { id: `${p}.routenGesamt`, type: 'number', role: 'value', name: `Slot ${i}: Anzahl Routen`, def: 0 },
+            { id: `${p}.routenGesamt`, type: 'number', role: 'value', name: `Einsatz ${i}: Anzahl Routen`, def: 0 },
             {
                 id: `${p}.rueckmeldungenGesamt`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen gesamt`,
+                name: `Einsatz ${i}: Rückmeldungen gesamt`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.rollen.ek`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Einsatzkräfte`,
+                name: `Einsatz ${i}: Rückmeldungen Einsatzkräfte`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.rollen.gf`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Gruppenführer`,
+                name: `Einsatz ${i}: Rückmeldungen Gruppenführer`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.rollen.zf`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Zugführer`,
+                name: `Einsatz ${i}: Rückmeldungen Zugführer`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.rollen.vf`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Verbandsführer`,
+                name: `Einsatz ${i}: Rückmeldungen Verbandsführer`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.funktionen.agt`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Atemschutzgeräteträger`,
+                name: `Einsatz ${i}: Rückmeldungen Atemschutzgeräteträger`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.funktionen.fzf`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Fahrzeugführer`,
+                name: `Einsatz ${i}: Rückmeldungen Fahrzeugführer`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.funktionen.ma`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Maschinisten`,
+                name: `Einsatz ${i}: Rückmeldungen Maschinisten`,
                 def: 0,
             },
             {
                 id: `${p}.rueckmeldungen.funktionen.med`,
                 type: 'number',
                 role: 'value',
-                name: `Slot ${i}: Rückmeldungen Medizinisch/Sanitäter`,
+                name: `Einsatz ${i}: Rückmeldungen Medizinisch/Sanitäter`,
                 def: 0,
             },
             {
                 id: `${p}.json.current`,
                 type: 'string',
                 role: 'json',
-                name: `Slot ${i}: Einsatzstamm, flaches JSON-Array (leer, falls Slot unbelegt)`,
+                name: `Einsatz ${i}: Einsatzstamm (leer, falls kein Einsatz zugeordnet)`,
             },
-            { id: `${p}.json.routen`, type: 'string', role: 'json', name: `Slot ${i}: Routen, flaches JSON-Array` },
+            { id: `${p}.json.routen`, type: 'string', role: 'json', name: `Einsatz ${i}: Routen` },
             {
                 id: `${p}.json.rueckmeldungen`,
                 type: 'string',
                 role: 'json',
-                name: `Slot ${i}: Rückmeldungen, flaches JSON-Array`,
+                name: `Einsatz ${i}: Rückmeldungen`,
             },
             {
                 id: `${p}.json.emAlarmiert`,
                 type: 'string',
                 role: 'json',
-                name: `Slot ${i}: Einsatzmittel, flaches JSON-Array (ungefiltert)`,
+                name: `Einsatz ${i}: Einsatzmittel (ungefiltert)`,
             },
             {
                 id: `${p}.json.wachen`,
                 type: 'string',
                 role: 'json',
-                name: `Slot ${i}: beteiligte Wachen, flaches JSON-Array (deduplizierte Liste, nur im /dbrd-Payload vorhanden)`,
+                name: `Einsatz ${i}: beteiligte Wachen (deduplizierte Liste, nur im /dbrd-Payload vorhanden)`,
             },
         );
     }
@@ -848,12 +977,12 @@ function deriveDashboardNullableNumberStateIds(dashboardStateDefs) {
 // (see RESET_EXCLUDED_STATE_IDS) - resetAllStates() still needs the correct empty value
 // to initialize them on a fresh install.
 const JSON_ARRAY_STATE_IDS = new Set([
-    'einsatz.json.current',
-    'einsatz.json.routen',
-    'einsatz.json.rueckmeldungen',
-    'einsatz.json.emAlarmiert',
-    'einsatz.json.emWeitere',
-    'einsatz.json.history10',
+    'einsatzAktuell.json.current',
+    'einsatzAktuell.json.routen',
+    'einsatzAktuell.json.rueckmeldungen',
+    'einsatzAktuell.json.emAlarmiert',
+    'einsatzAktuell.json.emWeitere',
+    'einsatzAktuell.json.history',
     'debug.monitorAudit',
     'debug.lastEvent',
     'debug.normalizedPosition',
@@ -865,7 +994,7 @@ const JSON_ARRAY_STATE_IDS = new Set([
 // EN: "number" states where 0 would be a misleading "empty" value (incident ID,
 // coordinates - 0/0 would be a real but wrong position) - resetAllStates() resets
 // these to null instead of 0.
-const NULLABLE_NUMBER_STATE_IDS = new Set(['einsatz.id', 'einsatz.latitude', 'einsatz.longitude']);
+const NULLABLE_NUMBER_STATE_IDS = new Set(['einsatzAktuell.id', 'einsatzAktuell.latitude', 'einsatzAktuell.longitude']);
 
 // DE: States, die resetAllStates() bei einem *bestehenden* Wert bewusst NICHT bei jedem
 // Adapter-Start überschreibt - die Historie der letzten Einsätze (einsatz.json.history10)
@@ -877,7 +1006,7 @@ const NULLABLE_NUMBER_STATE_IDS = new Set(['einsatz.id', 'einsatz.latitude', 'ei
 // (einsatz.json.history10) and the connection/registration audit log
 // (debug.monitorAudit) are meant to survive restarts. If NO value exists yet (fresh
 // install), they're still initialized once - see initStateIfMissing().
-const RESET_EXCLUDED_STATE_IDS = new Set(['einsatz.json.history10', 'debug.monitorAudit']);
+const RESET_EXCLUDED_STATE_IDS = new Set(['einsatzAktuell.json.history', 'debug.monitorAudit']);
 
 /* DE: Prüft ob eine monitorID gültig ist (nicht-leer).
    EN: Checks whether a monitorID is valid (non-empty). */
@@ -1582,7 +1711,6 @@ class WaipWeb extends utils.Adapter {
         // every remaining definition - see initObjects().
         this._stopping = false;
 
-        this.HISTORY_SIZE = HISTORY_SIZE;
         this.ALLOWED_EINSATZ_FIELDS = ALLOWED_EINSATZ_FIELDS;
         // DE: Als überschreibbare Instanz-Property statt des Moduls direkt zu importieren -
         // erlaubt Unit-Tests von fetchDbrdDetail(), eine Fake-Factory einzusetzen, ohne
@@ -1598,6 +1726,19 @@ class WaipWeb extends utils.Adapter {
     async onReady() {
         this.REGISTRATION_TIMEOUT_MS = (Number(this.config.registrationTimeoutSec) || 10) * 1000;
         this.RECONNECT_DELAY_MS = (Number(this.config.reconnectDelaySec) || 5) * 1000;
+        // DE: Größe von einsatzAktuell.json.history (siehe pushEinsatzToHistory()) - anders
+        // als die beiden Timeout-Werte oben per clampNumber() geklemmt, da eine direkte
+        // Instanzkonfigurations-JSON-Bearbeitung/ein Import Werte außerhalb des
+        // Admin-UI-Bereichs (1..100) enthalten könnte.
+        // EN: Size of einsatzAktuell.json.history (see pushEinsatzToHistory()) - unlike the
+        // two timeout values above, clamped via clampNumber() since a direct instance
+        // config JSON edit/import could contain values outside the admin UI range (1..100).
+        this.historySize = clampNumber(
+            this.config.historySize,
+            HISTORY_SIZE_MIN,
+            HISTORY_SIZE_MAX,
+            DEFAULT_HISTORY_SIZE,
+        );
         // DE: Obergrenze für das Session-Keepalive-Intervall - bewusst nicht konfigurierbar,
         // analog zum fest einprogrammierten Wert in /js/session_keepalive.js der Website
         // selbst. Das tatsächliche Intervall wird adaptiv ermittelt (siehe refreshSessionCookie).
@@ -1789,6 +1930,7 @@ class WaipWeb extends utils.Adapter {
         await this.migrateObjectTypes();
         await this.syncDashboardObjects();
         await this.initObjects();
+        await this.trimHistoryIfNeeded();
         await this.resetAllStates();
         // DE: Session-Cookie holen, bevor die erste Socket.IO-Verbindung aufgebaut wird
         // EN: Fetch the session cookie before the first Socket.IO connection is established
@@ -3285,9 +3427,9 @@ class WaipWeb extends utils.Adapter {
             this.clearTimeout(timeoutHandle);
             this.safeWarn('generateEinsatzMapImage', e);
             try {
-                await this.setStateAsync('einsatz.kartenbildPfad', null, true);
+                await this.setStateAsync('einsatzAktuell.kartenbildPfad', null, true);
             } catch (e2) {
-                this.safeWarn('einsatz.kartenbildPfad.setState', e2);
+                this.safeWarn('einsatzAktuell.kartenbildPfad.setState', e2);
             }
             return;
         }
@@ -3299,9 +3441,9 @@ class WaipWeb extends utils.Adapter {
                 `image was not ready within the configured OSM timeout of ${this.mapImageTimeoutSeconds}s - leaving einsatz.kartenbildPfad empty for this incident`,
             );
             try {
-                await this.setStateAsync('einsatz.kartenbildPfad', null, true);
+                await this.setStateAsync('einsatzAktuell.kartenbildPfad', null, true);
             } catch (e) {
-                this.safeWarn('einsatz.kartenbildPfad.setState', e);
+                this.safeWarn('einsatzAktuell.kartenbildPfad.setState', e);
             }
             // DE: Ergebnis der im Hintergrund weiterlaufenden Erzeugung bewusst verwerfen (siehe
             // Funktionskommentar) - nur noch aufräumen, falls sie doch noch fertig wird, aber
@@ -3317,10 +3459,10 @@ class WaipWeb extends utils.Adapter {
         }
 
         try {
-            await this.setStateAsync('einsatz.kartenbildPfad', filePath, true);
+            await this.setStateAsync('einsatzAktuell.kartenbildPfad', filePath, true);
             await this.pruneMapImages();
         } catch (e) {
-            this.safeWarn('einsatz.kartenbildPfad.setState', e);
+            this.safeWarn('einsatzAktuell.kartenbildPfad.setState', e);
         }
     }
 
@@ -3859,7 +4001,7 @@ class WaipWeb extends utils.Adapter {
             // Widgets erwarten am Root immer ein Array, sonst liefern sie keine Zeile.
             // EN: Store as an array with one element (not the bare object) - VIS table widgets
             // always expect an array at the root, otherwise they render no row.
-            await this.setStateAsync('einsatz.json.current', JSON.stringify([flat]), true);
+            await this.setStateAsync('einsatzAktuell.json.current', JSON.stringify([flat]), true);
         } catch (e) {
             this.safeWarn('persistEinsatzSnapshot', e);
         }
@@ -3885,7 +4027,7 @@ class WaipWeb extends utils.Adapter {
             if (!src || !src.uuid) {
                 return;
             }
-            const st = await this.getStateAsync('einsatz.json.history10');
+            const st = await this.getStateAsync('einsatzAktuell.json.history');
             let arr = [];
             try {
                 arr = st && st.val ? JSON.parse(st.val) : [];
@@ -3900,12 +4042,51 @@ class WaipWeb extends utils.Adapter {
             // EN: Only archive the flat incident master data - routes/feedback/alerting only
             // apply to the current incident and aren't kept in history.
             arr.unshift(this.buildFlatEinsatzJson(src));
-            if (arr.length > this.HISTORY_SIZE) {
-                arr = arr.slice(0, this.HISTORY_SIZE);
+            if (arr.length > this.historySize) {
+                arr = arr.slice(0, this.historySize);
             }
-            await this.setStateAsync('einsatz.json.history10', JSON.stringify(arr), true);
+            await this.setStateAsync('einsatzAktuell.json.history', JSON.stringify(arr), true);
         } catch (e) {
             this.safeWarn('pushEinsatzToHistory', e);
+        }
+    }
+
+    /* DE: Kürzt eine beim Start bereits bestehende einsatzAktuell.json.history sofort auf
+       this.historySize, falls der Nutzer den Wert seit dem letzten Neustart verringert hat
+       (siehe Admin-UI-Hilfetext zu historySize). pushEinsatzToHistory() würde dieselbe
+       Kürzung ohnehin beim nächsten abgeschlossenen Einsatz vornehmen - diese Methode holt
+       das nur vor, damit überzählige Einträge nicht erst auf den nächsten Einsatz warten
+       müssen. Läuft nach initObjects() (der State muss existieren) und ist unabhängig von
+       resetAllStates(), da einsatzAktuell.json.history in RESET_EXCLUDED_STATE_IDS steht.
+       EN: Immediately trims an einsatzAktuell.json.history that already exists at startup
+       down to this.historySize, in case the user lowered the value since the last restart
+       (see the historySize admin UI help text). pushEinsatzToHistory() would perform the
+       same trim anyway on the next completed incident - this method just does it earlier
+       so excess entries don't have to wait for the next incident. Runs after initObjects()
+       (the state must exist) and is independent of resetAllStates(), since
+       einsatzAktuell.json.history is in RESET_EXCLUDED_STATE_IDS. */
+    async trimHistoryIfNeeded() {
+        try {
+            const st = await this.getStateAsync('einsatzAktuell.json.history');
+            if (!st || !st.val) {
+                return;
+            }
+            let arr;
+            try {
+                arr = JSON.parse(st.val);
+            } catch {
+                return;
+            }
+            if (!Array.isArray(arr) || arr.length <= this.historySize) {
+                return;
+            }
+            await this.setStateAsync(
+                'einsatzAktuell.json.history',
+                JSON.stringify(arr.slice(0, this.historySize)),
+                true,
+            );
+        } catch (e) {
+            this.safeWarn('trimHistoryIfNeeded', e);
         }
     }
 
@@ -3924,12 +4105,12 @@ class WaipWeb extends utils.Adapter {
        this.currentEinsatzSnapshot/einsatz.* zu lesen/schreiben, damit dieselbe Logik auch
        für die parallelen Dashboard-Slots wiederverwendbar ist (siehe refreshDashboard(),
        Phase 6) - der bestehende einsatz.*-Aufruf übergibt weiterhin
-       this.currentEinsatzSnapshot.rueckmeldungen/'einsatz' und verhält sich dadurch exakt
+       this.currentEinsatzSnapshot.rueckmeldungen/'einsatzAktuell' und verhält sich dadurch exakt
        wie zuvor (reines Refactoring, keine Verhaltensänderung für einsatz.*).
        EN: Parametrized (2026-08-29, plan document section 4.8) instead of reading/writing
        this.currentEinsatzSnapshot/einsatz.* directly, so the same logic can be reused for
        the parallel dashboard slots too (see refreshDashboard(), phase 6) - the existing
-       einsatz.* call site still passes this.currentEinsatzSnapshot.rueckmeldungen/'einsatz'
+       einsatz.* call site still passes this.currentEinsatzSnapshot.rueckmeldungen/'einsatzAktuell'
        and therefore behaves exactly as before (pure refactoring, no behavior change for
        einsatz.*). */
     async updateRueckmeldungCounts(rueckmeldungen, statePrefix) {
@@ -4048,14 +4229,14 @@ class WaipWeb extends utils.Adapter {
                 // was missed between the two incidents). einsatz.json.current and
                 // .emAlarmiert/.emWeitere get unconditionally rewritten further down in this
                 // method anyway, so they need no special handling here.
-                await this.writeJsonArrayState('einsatz.json.routen', []);
-                await this.writeJsonArrayState('einsatz.json.rueckmeldungen', []);
+                await this.writeJsonArrayState('einsatzAktuell.json.routen', []);
+                await this.writeJsonArrayState('einsatzAktuell.json.rueckmeldungen', []);
                 try {
-                    await this.setStateAsync('einsatz.routenGesamt', 0, true);
+                    await this.setStateAsync('einsatzAktuell.routenGesamt', 0, true);
                 } catch (e) {
-                    this.safeWarn('einsatz.routenGesamt.setState', e);
+                    this.safeWarn('einsatzAktuell.routenGesamt.setState', e);
                 }
-                await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatz');
+                await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatzAktuell');
                 // DE: kartenbildPfad ebenfalls sofort leeren, statt auf generateEinsatzMapImage()
                 // weiter unten zu warten - sonst könnte er für den neuen Einsatz kurzzeitig (oder,
                 // falls keine gültigen Koordinaten vorliegen bzw. mapImageEnabled aus ist, sogar
@@ -4067,9 +4248,9 @@ class WaipWeb extends utils.Adapter {
                 // show the PREVIOUS incident's image path for the new incident, even though
                 // alarmAktiv is already being set for the new one.
                 try {
-                    await this.setStateAsync('einsatz.kartenbildPfad', null, true);
+                    await this.setStateAsync('einsatzAktuell.kartenbildPfad', null, true);
                 } catch (e) {
-                    this.safeWarn('einsatz.kartenbildPfad.setState', e);
+                    this.safeWarn('einsatzAktuell.kartenbildPfad.setState', e);
                 }
             } else if (!this.currentEinsatzSnapshot) {
                 this.currentEinsatzSnapshot = { routen: [], rueckmeldungen: [] };
@@ -4084,14 +4265,14 @@ class WaipWeb extends utils.Adapter {
 
             if (lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon)) {
                 try {
-                    await this.setStateAsync('einsatz.latitude', lat, true);
+                    await this.setStateAsync('einsatzAktuell.latitude', lat, true);
                 } catch (e) {
-                    this.safeWarn('einsatz.latitude.setState', e);
+                    this.safeWarn('einsatzAktuell.latitude.setState', e);
                 }
                 try {
-                    await this.setStateAsync('einsatz.longitude', lon, true);
+                    await this.setStateAsync('einsatzAktuell.longitude', lon, true);
                 } catch (e) {
-                    this.safeWarn('einsatz.longitude.setState', e);
+                    this.safeWarn('einsatzAktuell.longitude.setState', e);
                 }
                 this.currentEinsatzSnapshot.position = { lat, lon };
                 // DE: Rohe (nicht von normalizeData() bereinigte) geometry aus incoming
@@ -4118,12 +4299,12 @@ class WaipWeb extends utils.Adapter {
                 await this.generateEinsatzMapImage(lat, lon, incoming && incoming.geometry);
             } else {
                 try {
-                    await this.setStateAsync('einsatz.latitude', null, true);
+                    await this.setStateAsync('einsatzAktuell.latitude', null, true);
                 } catch {
                     /* ignore */
                 }
                 try {
-                    await this.setStateAsync('einsatz.longitude', null, true);
+                    await this.setStateAsync('einsatzAktuell.longitude', null, true);
                 } catch {
                     /* ignore */
                 }
@@ -4131,9 +4312,9 @@ class WaipWeb extends utils.Adapter {
             }
 
             try {
-                await this.setStateAsync('einsatz.alarmAktiv', true, true);
+                await this.setStateAsync('einsatzAktuell.alarmAktiv', true, true);
             } catch (e) {
-                this.safeWarn('einsatz.alarmAktiv.setState', e);
+                this.safeWarn('einsatzAktuell.alarmAktiv.setState', e);
             }
 
             // DE: flache Felder setzen und gleichzeitig im Snapshot mitführen
@@ -4142,7 +4323,7 @@ class WaipWeb extends utils.Adapter {
             for (const k of this.ALLOWED_EINSATZ_FIELDS) {
                 if (Object.prototype.hasOwnProperty.call(data, k)) {
                     this.currentEinsatzSnapshot[k] = data[k];
-                    tasks.push(this.setField(`einsatz.${k}`, data[k]));
+                    tasks.push(this.setField(`einsatzAktuell.${k}`, data[k]));
                 }
             }
             if (data.em_alarmiert !== undefined) {
@@ -4160,7 +4341,7 @@ class WaipWeb extends utils.Adapter {
             // the state name differs from the server's field name.
             if (Object.prototype.hasOwnProperty.call(data, 'zeitstempel')) {
                 this.currentEinsatzSnapshot.alarmierungszeit = data.zeitstempel;
-                tasks.push(this.setField('einsatz.alarmierungszeit', data.zeitstempel));
+                tasks.push(this.setField('einsatzAktuell.alarmierungszeit', data.zeitstempel));
             }
 
             // DE: Beschreibung zum Stichwort lokal ermitteln (kommt nicht vom Server) und wie die
@@ -4169,7 +4350,7 @@ class WaipWeb extends utils.Adapter {
             // and set/carry it along like the other flat fields.
             const beschreibung = this.lookupStichwortBeschreibung(this.currentEinsatzSnapshot.stichwort);
             this.currentEinsatzSnapshot.beschreibung = beschreibung;
-            tasks.push(this.setField('einsatz.beschreibung', beschreibung));
+            tasks.push(this.setField('einsatzAktuell.beschreibung', beschreibung));
 
             const results = await Promise.allSettled(tasks);
             for (const r of results) {
@@ -4179,8 +4360,8 @@ class WaipWeb extends utils.Adapter {
             }
 
             await this.persistEinsatzSnapshot();
-            await this.writeJsonArrayState('einsatz.json.emAlarmiert', this.currentEinsatzSnapshot.emAlarmiert);
-            await this.writeJsonArrayState('einsatz.json.emWeitere', this.currentEinsatzSnapshot.emWeitere);
+            await this.writeJsonArrayState('einsatzAktuell.json.emAlarmiert', this.currentEinsatzSnapshot.emAlarmiert);
+            await this.writeJsonArrayState('einsatzAktuell.json.emWeitere', this.currentEinsatzSnapshot.emWeitere);
             // DE: Ereignisgetriggerter Dashboard-Refresh (Plandokument Abschnitt 4.1) - NICHT
             // awaited, damit ein (evtl. mehrere Sekunden dauernder, siehe fetchDbrdDetail())
             // Dashboard-Zyklus die Alarmverarbeitung selbst nicht verzögert. Die
@@ -4244,8 +4425,11 @@ class WaipWeb extends utils.Adapter {
             }
 
             await this.persistEinsatzSnapshot();
-            await this.writeJsonArrayState('einsatz.json.rueckmeldungen', this.currentEinsatzSnapshot.rueckmeldungen);
-            await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatz');
+            await this.writeJsonArrayState(
+                'einsatzAktuell.json.rueckmeldungen',
+                this.currentEinsatzSnapshot.rueckmeldungen,
+            );
+            await this.updateRueckmeldungCounts(this.currentEinsatzSnapshot.rueckmeldungen, 'einsatzAktuell');
         } catch (e) {
             // DE: Eine Rückmeldung konnte nicht verarbeitet werden -> echter Datenverlust.
             // EN: A feedback event couldn't be processed -> actual data loss.
@@ -4299,9 +4483,9 @@ class WaipWeb extends utils.Adapter {
         this.currentEinsatzSnapshot = null;
 
         try {
-            await this.setStateAsync('einsatz.alarmAktiv', false, true);
+            await this.setStateAsync('einsatzAktuell.alarmAktiv', false, true);
         } catch (e) {
-            this.safeWarn('einsatz.alarmAktiv.setState', e);
+            this.safeWarn('einsatzAktuell.alarmAktiv.setState', e);
         }
         await this.pushEinsatzToHistory(snapshot);
         await this.clearCurrentEinsatzStates();
@@ -4329,17 +4513,17 @@ class WaipWeb extends utils.Adapter {
        derived counters. Called after pushEinsatzToHistory(), so the completed incident
        remains retrievable via einsatz.json.history10. */
     async clearCurrentEinsatzStates() {
-        const tasks = this.ALLOWED_EINSATZ_FIELDS.map(k => this.setStateAsync(`einsatz.${k}`, null, true));
-        tasks.push(this.setStateAsync('einsatz.beschreibung', null, true));
+        const tasks = this.ALLOWED_EINSATZ_FIELDS.map(k => this.setStateAsync(`einsatzAktuell.${k}`, null, true));
+        tasks.push(this.setStateAsync('einsatzAktuell.beschreibung', null, true));
         // DE: alarmierungszeit ist wie beschreibung ein Sonderfall (nicht in
         // ALLOWED_EINSATZ_FIELDS, siehe handleAlarm()) und muss daher hier separat geleert
         // werden.
         // EN: alarmierungszeit is a special case like beschreibung (not in
         // ALLOWED_EINSATZ_FIELDS, see handleAlarm()), so it needs to be cleared separately
         // here.
-        tasks.push(this.setStateAsync('einsatz.alarmierungszeit', null, true));
-        tasks.push(this.setStateAsync('einsatz.latitude', null, true));
-        tasks.push(this.setStateAsync('einsatz.longitude', null, true));
+        tasks.push(this.setStateAsync('einsatzAktuell.alarmierungszeit', null, true));
+        tasks.push(this.setStateAsync('einsatzAktuell.latitude', null, true));
+        tasks.push(this.setStateAsync('einsatzAktuell.longitude', null, true));
         // DE: Anders als einsatz.tts.last (dessen Vorbild ursprünglich für kartenbildPfad
         // übernommen wurde) wird kartenbildPfad jetzt doch wie die übrigen einsatz.*-Felder
         // geleert - kein Alarm aktiv soll auch bedeuten, dass kein Kartenbild mehr referenziert
@@ -4347,13 +4531,13 @@ class WaipWeb extends utils.Adapter {
         // EN: Unlike einsatz.tts.last (whose pattern was originally borrowed for
         // kartenbildPfad), kartenbildPfad is now cleared like the other einsatz.* fields
         // after all - no active alarm should also mean no map image is referenced anymore.
-        tasks.push(this.setStateAsync('einsatz.kartenbildPfad', null, true));
-        tasks.push(this.writeJsonArrayState('einsatz.json.current', []));
-        tasks.push(this.writeJsonArrayState('einsatz.json.routen', []));
-        tasks.push(this.writeJsonArrayState('einsatz.json.rueckmeldungen', []));
-        tasks.push(this.writeJsonArrayState('einsatz.json.emAlarmiert', []));
-        tasks.push(this.writeJsonArrayState('einsatz.json.emWeitere', []));
-        tasks.push(this.setStateAsync('einsatz.routenGesamt', 0, true));
+        tasks.push(this.setStateAsync('einsatzAktuell.kartenbildPfad', null, true));
+        tasks.push(this.writeJsonArrayState('einsatzAktuell.json.current', []));
+        tasks.push(this.writeJsonArrayState('einsatzAktuell.json.routen', []));
+        tasks.push(this.writeJsonArrayState('einsatzAktuell.json.rueckmeldungen', []));
+        tasks.push(this.writeJsonArrayState('einsatzAktuell.json.emAlarmiert', []));
+        tasks.push(this.writeJsonArrayState('einsatzAktuell.json.emWeitere', []));
+        tasks.push(this.setStateAsync('einsatzAktuell.routenGesamt', 0, true));
         const results = await Promise.allSettled(tasks);
         for (const r of results) {
             if (r.status === 'rejected') {
@@ -4379,7 +4563,7 @@ class WaipWeb extends utils.Adapter {
         // which is now null -> all counters get consistently reset to 0.
         await this.updateRueckmeldungCounts(
             this.currentEinsatzSnapshot && this.currentEinsatzSnapshot.rueckmeldungen,
-            'einsatz',
+            'einsatzAktuell',
         );
     }
 
@@ -4487,13 +4671,17 @@ class WaipWeb extends utils.Adapter {
 
             await this.persistEinsatzSnapshot();
             await this.writeJsonArrayState(
-                'einsatz.json.routen',
+                'einsatzAktuell.json.routen',
                 this.currentEinsatzSnapshot.routen.map(r => this.flattenRoutenEntry(r)),
             );
             try {
-                await this.setStateAsync('einsatz.routenGesamt', this.currentEinsatzSnapshot.routen.length, true);
+                await this.setStateAsync(
+                    'einsatzAktuell.routenGesamt',
+                    this.currentEinsatzSnapshot.routen.length,
+                    true,
+                );
             } catch (e) {
-                this.safeWarn('einsatz.routenGesamt.setState', e);
+                this.safeWarn('einsatzAktuell.routenGesamt.setState', e);
             }
         } catch (e) {
             // DE: Ein Routen-Event konnte nicht verarbeitet werden -> echter Datenverlust.
@@ -4532,8 +4720,8 @@ class WaipWeb extends utils.Adapter {
 
             const data = normalizeData(incoming || {});
             const ts = new Date().toISOString();
-            await this.setField('einsatz.tts.last', this.resolveTtsUrl(data));
-            await this.setField('einsatz.tts.lastTimestamp', ts);
+            await this.setField('einsatzAktuell.tts.last', this.resolveTtsUrl(data));
+            await this.setField('einsatzAktuell.tts.lastTimestamp', ts);
         } catch (e) {
             // DE: Ein TTS-Event konnte nicht verarbeitet werden -> echter Datenverlust.
             // EN: A TTS event couldn't be processed -> actual data loss.
@@ -4879,7 +5067,7 @@ class WaipWeb extends utils.Adapter {
         this.restzeitInterval = this.setInterval(async () => {
             let rest = 0;
             try {
-                const s = await this.getStateAsync('einsatz.ablaufzeit');
+                const s = await this.getStateAsync('einsatzAktuell.ablaufzeit');
                 if (s && s.val !== undefined && s.val !== null && s.val !== '') {
                     const end = new Date(s.val);
                     if (!isNaN(end.getTime())) {
@@ -4982,7 +5170,7 @@ class WaipWeb extends utils.Adapter {
         if (this._lastRestzeit !== rest) {
             this._lastRestzeit = rest;
             try {
-                await this.setStateAsync('einsatz.restzeit', rest, true);
+                await this.setStateAsync('einsatzAktuell.restzeit', rest, true);
             } catch {
                 /* ignore */
             }
@@ -5034,7 +5222,9 @@ if (require.main !== module) {
         ALLOWED_EINSATZ_FIELDS,
         OBSOLETE_OBJECT_IDS,
         OBSOLETE_FOLDER_IDS,
-        HISTORY_SIZE,
+        HISTORY_SIZE_MIN,
+        HISTORY_SIZE_MAX,
+        DEFAULT_HISTORY_SIZE,
         MONITOR_AUDIT_SIZE,
         WaipWeb,
     };

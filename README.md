@@ -33,8 +33,8 @@ open.
   - [Incident map image](#incident-map-image)
   - [Dashboard](#dashboard)
 - [States (under `waip-web.0.*`)](#states-under-waip-web0)
-  - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
-    [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
+  - [info](#info) · [status](#status) · [einsatzAktuell](#einsatzaktuell) ·
+    [einsatzAktuell.json](#einsatzaktuelljson) · [einsatzAktuell.tts](#einsatzaktuelltts) ·
     [dashboard](#dashboard-states) · [debug](#debug)
 - [Logging](#logging)
 - [Changelog](#changelog)
@@ -87,49 +87,52 @@ independent client for its Socket.IO interface.
 This section is about what you can actually *build* with the states this
 adapter provides – typical use in a fire station/EMS environment:
 
-- **Wall-mounted alarm display.** Bind `einsatz.json.current` to a VIS
+- **Wall-mounted alarm display.** Bind `einsatzAktuell.json.current` to a VIS
   table widget on a wall-mounted tablet or TV in the day room/vehicle
   hall – incident type, keyword, address and alerted resources appear
   automatically, without anyone having to keep a browser tab open on that
   screen (which is the whole reason this adapter exists in the first
   place).
 - **Plain-language keyword on displays and notifications.**
-  `einsatz.beschreibung` turns a cryptic dispatch code (`B:Wald groß/WSP`,
+  `einsatzAktuell.beschreibung` turns a cryptic dispatch code (`B:Wald groß/WSP`,
   `R1N0`) into a readable description ("Wald-/Getreidefeldbrand (groß)",
   "Rettungswagen: 1, Notfalleinsatzfahrzeug: 0") – bind it next to
-  `einsatz.stichwort` on the wall display or include it in the push
+  `einsatzAktuell.stichwort` on the wall display or include it in the push
   notification/TTS announcement, so members don't have to memorize every
   keyword.
 - **Trigger automations the instant an alarm comes in.** Watch
-  `einsatz.alarmAktiv` (or `info.connection` together with it) in a
+  `einsatzAktuell.alarmAktiv` (or `info.connection` together with it) in a
   script/blockly rule to switch on lights in the vehicle hall, open a
   gate/door, send a push notification (e.g. via a Telegram/Pushover
-  adapter) with `einsatz.stichwort`/`einsatz.beschreibung` + `einsatz.ort`,
-  or flash a smart-light scene – all a few seconds after the actual pager
-  alert, no polling required since ioBroker state changes fire instantly.
-- **Announce the alarm out loud.** `einsatz.tts.last` is a ready-to-play
-  absolute mp3 URL; point a `sonos`/`snapcast`/`text2speech`-style
-  automation at it (or just play the URL directly) to have the incident
-  announced over building speakers the moment `io.playtts` fires –
-  useful where members aren't all looking at a screen.
-- **Live headcount / feedback board.** The `einsatz.rueckmeldungen.*`
+  adapter) with `einsatzAktuell.stichwort`/`einsatzAktuell.beschreibung` +
+  `einsatzAktuell.ort`, or flash a smart-light scene – all a few seconds
+  after the actual pager alert, no polling required since ioBroker state
+  changes fire instantly.
+- **Announce the alarm out loud.** `einsatzAktuell.tts.last` is a
+  ready-to-play absolute mp3 URL; point a
+  `sonos`/`snapcast`/`text2speech`-style automation at it (or just play
+  the URL directly) to have the incident announced over building
+  speakers the moment `io.playtts` fires – useful where members aren't
+  all looking at a screen.
+- **Live headcount / feedback board.** The `einsatzAktuell.rueckmeldungen.*`
   counters (`rollen.ek`/`.gf`/`.zf`/`.vf` per role, `funktionen.agt`/`.fzf`/
   `.ma`/`.med` per qualification) update in real time as responders
   confirm via the app – bind them to gauge or number widgets for an
   at-a-glance "who's coming" overview
   during the response.
-- **Post-incident review / statistics.** `einsatz.json.history10` keeps
-  the last 10 completed incidents as a flat table – bind it to a second
-  VIS view or export it periodically (e.g. via a script reading the
-  state on `io.standby`) to keep a longer-running log or feed incident
-  counts into a dashboard/statistics adapter.
-- **Route/vehicle overview on a map.** `einsatz.json.routen` carries
+- **Post-incident review / statistics.** `einsatzAktuell.json.history` keeps
+  the last N completed incidents (configurable, default 10) as a flat
+  table – bind it to a second VIS view or export it periodically (e.g.
+  via a script reading the state on `io.standby`) to keep a
+  longer-running log or feed incident counts into a
+  dashboard/statistics adapter.
+- **Route/vehicle overview on a map.** `einsatzAktuell.json.routen` carries
   each responding station's `lat`/`lon` and `color` – bind it to a VIS
   map widget for a quick visual of who is en route, independent of the
   WAIP-Web map itself.
 - **Bridge into other ioBroker automations.** Because every field is a
   plain ioBroker state, it composes with anything else already running
-  in the instance – forward `einsatz.*` into a smart-home scene engine,
+  in the instance – forward `einsatzAktuell.*` into a smart-home scene engine,
   a Grafana/InfluxDB history for response-time analysis, or a
   Node-RED-style flow via the ioBroker MQTT adapter, without writing a
   single line against the WAIP-Web API.
@@ -145,7 +148,8 @@ adapter provides – typical use in a fire station/EMS environment:
 - Registration timeout with an audit log (`debug.monitorAudit`)
 - Geodata normalization (wgs84 fields, `position`, or GeoJSON `geometry`
   → centroid)
-- History of the last 10 completed incidents (`einsatz.json.history10`)
+- History of the last N completed incidents (configurable, default 10;
+  `einsatzAktuell.json.history`)
 - Separate handlers for alarm (`io.new_waip`), feedback (`io.new_rmld`),
   routes (`io.routes`), TTS (`io.playtts`) and standby (`io.standby`)
 - Automatic session-cookie management (see below), so alarm delivery
@@ -153,20 +157,20 @@ adapter provides – typical use in a fire station/EMS environment:
 - Server-restart detection via `io.version`, with automatic session
   refresh + reconnect
 - Incident, feedback, route and alerted-resource data available as
-  separate, flat JSON arrays under `einsatz.json.*` – no nesting, so VIS
+  separate, flat JSON arrays under `einsatzAktuell.json.*` – no nesting, so VIS
   table widgets can bind to them directly
 - Aggregated feedback counters per role/capability, mirroring the live
   badges on the web UI
 - Clean state on every restart: all states are actively reset to their
   empty value (`false`/`0`/`null`/`[]`) on adapter start, except
-  `einsatz.json.history10` and `debug.monitorAudit` (both kept across
+  `einsatzAktuell.json.history` and `debug.monitorAudit` (both kept across
   restarts). Note that if the adapter restarts while an incident is
-  actively running, its live fields (`einsatz.*`) are cleared too and
+  actively running, its live fields (`einsatzAktuell.*`) are cleared too and
   only repopulate once the server sends the next event for that
   incident.
 - Stale-data protection: when a new incident starts before the previous
   one's routes/feedback events for the *new* incident have arrived,
-  `einsatz.json.routen`/`.rueckmeldungen` and the feedback counters are
+  `einsatzAktuell.json.routen`/`.rueckmeldungen` and the feedback counters are
   cleared immediately rather than waiting for those events. And if
   `io.standby` is ever missed for an incident (e.g. due to a disconnect
   at the wrong moment), a watchdog automatically finalizes the incident
@@ -175,8 +179,8 @@ adapter provides – typical use in a fire station/EMS environment:
 - Only ever shows the single most recently active incident; multiple
   concurrently active incidents can currently only be viewed via the
   WAIP-Web instance's own dashboard
-- Optional plain-language description for `einsatz.stichwort`
-  (`einsatz.beschreibung`), resolved locally from a user-maintained
+- Optional plain-language description for `einsatzAktuell.stichwort`
+  (`einsatzAktuell.beschreibung`), resolved locally from a user-maintained
   keyword table plus an optional decoder for the `R<RTW>N<NEF>`
   rescue-service keyword scheme used by several dispatch
   centers - see [Rescue service](#rescue-service)
@@ -208,6 +212,7 @@ and **Incident map image** – see below for all four.
 | Monitor ID | Picked from a live dropdown, fetched from the configured server's `/waip/` overview page and grouped by Leitstelle/Kreis/Träger/Wache; manual entry stays possible if the server can't be reached. Empty/`0` = global monitor (all incidents) | *(empty)* |
 | Registration timeout (s) | Time until a missing registration confirmation is logged | `10` |
 | Reconnect delay (s) | Wait time before a manual reconnect after disconnect/error | `5` |
+| Number of incidents in history | How many completed incidents to keep in `einsatzAktuell.json.history` (most recent first). Existing entries beyond a lowered limit are trimmed on the next adapter restart | `10` |
 
 The session keepalive interval is **not configurable** – it's derived
 fully automatically on every renewal from the cookie lifetime the server
@@ -238,9 +243,9 @@ itself uses.
 default): incidents whose `einsatzart` identifies them as a
 rescue-service call (contains "Rettung" or "Krankentransport",
 case-insensitive - see the `einsatzart` examples in
-[einsatz](#einsatz)) are processed normally by default, matching every
+[einsatzAktuell](#einsatzaktuell)) are processed normally by default, matching every
 prior version of the adapter. Unchecking this box makes the adapter
-**completely ignore** such incidents instead: no `einsatz.*` states are
+**completely ignore** such incidents instead: no `einsatzAktuell.*` states are
 updated, no history entry is written, no TTS announcement is triggered
 - as if the incident had never arrived. This exists because
 rescue-service incidents reportedly only get alarmed/signaled via WAIP
@@ -250,10 +255,10 @@ the tab (the decoding checkbox and its label fields) is only shown
 while it's checked - if it's unchecked, rescue-service incidents are
 ignored entirely anyway, so their keyword decoding is irrelevant.
 
-`einsatz.stichwort` is passed through unchanged from the server as a
+`einsatzAktuell.stichwort` is passed through unchanged from the server as a
 bare code (e.g. `B2`, `H:VU mit P`) – WAIP-Web itself doesn't explain
 what it means, and there is no nationwide standard: every dispatch
-center uses its own keyword catalog. `einsatz.beschreibung` fills that
+center uses its own keyword catalog. `einsatzAktuell.beschreibung` fills that
 gap **entirely locally**, no data is sent anywhere. This tab is the
 first of two sources checked, in order (see
 [Keyword descriptions](#keyword-descriptions) for the second):
@@ -303,7 +308,7 @@ config dialog doesn't refresh it from an external import
 automatically (a state-sync limitation of the Admin table component
 itself, not something this adapter controls).
 
-If neither this table nor the decoder above match, `einsatz.beschreibung`
+If neither this table nor the decoder above match, `einsatzAktuell.beschreibung`
 is simply `null` - not an error.
 
 ### Incident map image
@@ -339,18 +344,18 @@ way. Only **Outline thickness** is shown below the checkbox, since it
 genuinely only affects the polygon outline - the marker dot's size is
 fixed, not configurable.
 
-The file path is written to `einsatz.kartenbildPfad` (see
-[einsatz](#einsatz)) – typical use is attaching that file from a
+The file path is written to `einsatzAktuell.kartenbildPfad` (see
+[einsatzAktuell](#einsatzaktuell)) – typical use is attaching that file from a
 Blockly/JavaScript script, e.g. as a Pushover notification attachment.
 Only the 10 most recently generated images are kept on disk; older
 ones are deleted automatically whenever a new one is written. Alarm
 processing waits for the image to finish before continuing, so
-`einsatz.kartenbildPfad` is guaranteed to already hold the correct
+`einsatzAktuell.kartenbildPfad` is guaranteed to already hold the correct
 value by the time the rest of the incident's fields (e.g.
-`einsatz.alarmAktiv`) become available – but only up to the
+`einsatzAktuell.alarmAktiv`) become available – but only up to the
 configurable **OSM timeout**: if the tile download/composition isn't
 done within that time, a warning is logged and
-`einsatz.kartenbildPfad` stays empty for that incident, without
+`einsatzAktuell.kartenbildPfad` stays empty for that incident, without
 blocking alarm processing indefinitely.
 
 | Field | Description | Default |
@@ -365,7 +370,7 @@ blocking alarm processing indefinitely.
 
 Images are stored under this adapter instance's own data directory
 (`iobroker-data/<instance>/maps/`), not as ioBroker file objects –
-`einsatz.kartenbildPfad` is therefore a real, absolute filesystem path
+`einsatzAktuell.kartenbildPfad` is therefore a real, absolute filesystem path
 that a script running on the same host can read directly. This
 directory is **not** deleted automatically when the adapter is
 stopped or its instance configuration is reset; to remove it when
@@ -386,10 +391,11 @@ js-controller 4.0 / Admin 5 for any adapter's instance data directory
 **Enable dashboard** (admin checkbox, off by default): mirrors the
 last N incidents matching this instance's configured monitor as
 `dashboard.einsatz1` … `dashboard.einsatzN`, in addition to the single
-current incident already available under [einsatz](#einsatz). This is
-useful with a monitor ID scoped to "all dispatch monitors" (`0`) or to
-a wider district/carrier, where several incidents can be active at
-once and `einsatz.*` alone only ever shows the most recent one.
+current incident already available under
+[einsatzAktuell](#einsatzaktuell). This is useful with a monitor ID
+scoped to "all dispatch monitors" (`0`) or to a wider district/carrier,
+where several incidents can be active at once and `einsatzAktuell.*`
+alone only ever shows the most recent one.
 
 Unlike the always-on `/waip` connection this adapter otherwise keeps,
 the dashboard is refreshed periodically: the adapter fetches the
@@ -411,7 +417,7 @@ below reflects that.
 A refresh also runs once immediately after every adapter (re)start (so
 the dashboard doesn't stay empty for up to the configured interval),
 and once whenever a new alarm is received for this instance's own
-monitor (`einsatz.*`) - in addition to the regular timer. A manual
+monitor (`einsatzAktuell.*`) - in addition to the regular timer. A manual
 refresh can be triggered any time via the `dashboard.refreshNow`
 button state, e.g. from a VIS button or a script.
 
@@ -420,10 +426,10 @@ generated separately for dashboard slots - they are looked up in the
 same file history [Incident map image](#incident-map-image) already
 produces for this instance's own monitor. A slot only has a map image
 when this adapter has *already* generated one for that exact incident
-via its own `einsatz.*` alarm handling - most complete when **Monitor
+via its own `einsatzAktuell.*` alarm handling - most complete when **Monitor
 ID** is `0` (all dispatch monitors) and **Generate a map image for
 each incident** is enabled, since then every incident that can appear
-on the dashboard has also passed through `einsatz.*` at least once.
+on the dashboard has also passed through `einsatzAktuell.*` at least once.
 With a narrower Monitor ID, dashboard slots for incidents outside that
 monitor's own alarm history will have no map image - this is expected,
 not a bug.
@@ -440,7 +446,7 @@ is open).
 ## States (under `waip-web.0.*`)
 
 Feedback and routes are 1:n lists per incident. They are stored as
-**flat** JSON arrays under `einsatz.json.*` (no nested objects/arrays
+**flat** JSON arrays under `einsatzAktuell.json.*` (no nested objects/arrays
 inside a row) so they can be bound directly to VIS table widgets –
 complemented by quick-to-bind counters so bindings and triggers don't
 need JSON parsing at all.
@@ -461,24 +467,24 @@ need JSON parsing at all.
 | `registrationAccepted` | boolean | `true` once the first event was received, `false` right after connecting or once the registration timeout elapses |
 | `registrationPending` | boolean | `true` right after connecting while a response from the server is still awaited, `false` once accepted or timed out |
 
-### einsatz
+### einsatzAktuell
 
 Flat fields of the currently running incident. Cleared (`null`/`0`) on
 `io.standby`, matching the official frontend – `alarmAktiv` is therefore
 a reliable switch for whether these fields currently hold real live data.
 The most recently finished incident remains available via
-`einsatz.json.history10`:
+`einsatzAktuell.json.history`:
 
 > **Note:** The adapter always reflects only the single most recently
-> active incident (`einsatz.*` / `einsatz.json.current`) – matching the
-> official WAIP-Web frontend's alarm monitor. WAIP-Web can, in principle,
-> have several incidents active at the same time (e.g. two alerts coming
-> in close together). These states are **not an array of concurrently
-> running incidents** – they get overwritten by each new `io.new_waip`
-> event, so a second incident running in parallel is currently not
-> visible through this adapter. A complete overview of all currently
-> active incidents is, for now, only available via the connected
-> WAIP-Web instance's own dashboard.
+> active incident (`einsatzAktuell.*` / `einsatzAktuell.json.current`) –
+> matching the official WAIP-Web frontend's alarm monitor. WAIP-Web can,
+> in principle, have several incidents active at the same time (e.g. two
+> alerts coming in close together). These states are **not an array of
+> concurrently running incidents** – they get overwritten by each new
+> `io.new_waip` event, so a second incident running in parallel is
+> currently not visible through this adapter. A complete overview of all
+> currently active incidents is, for now, only available via the
+> connected WAIP-Web instance's own dashboard.
 
 > **Note:** WAIP-Web's server only fills `einsatznummer`, `objekt`/
 > `objektteil`, `besonderheiten`, `strasse`/`hausnummer`,
@@ -516,21 +522,22 @@ The most recently finished incident remains available via
 | `rueckmeldungen.funktionen.ma` | number | Feedback count as driver/operator ("Maschinist") |
 | `rueckmeldungen.funktionen.med` | number | Feedback count with a medical qualification |
 
-### einsatz.json
+### einsatzAktuell.json
 
 Flat JSON objects/arrays, one level deep at most, meant to be bound
 directly to VIS table widgets (nested structures like a plain
 `{routen, rueckmeldungen, ...}` object generally aren't rendered by
 those widgets). `routen`/`rueckmeldungen`/`emAlarmiert`/`emWeitere` only
 ever hold the *current* incident's data – they are cleared (`[]`) on
-`io.standby` and are **not** part of the history. As with `einsatz.*`
-above, `current` only ever holds the single most recently active
-incident – see the note in the [`einsatz`](#einsatz) section.
+`io.standby` and are **not** part of the history. As with
+`einsatzAktuell.*` above, `current` only ever holds the single most
+recently active incident – see the note in the
+[`einsatzAktuell`](#einsatzaktuell) section.
 
 | State | Type | Description |
 | --- | --- | --- |
-| `current` | string (JSON array) | Current incident's flat data: the same 12 fields as the individual `einsatz.*` states above (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), plus `registeredMonitor`/`registeredMonitorName` (the monitor the adapter was registered to at the time), bundled as one object inside a single-element array (`[]` if no incident is active) – the array wrapper is needed because most table widgets require an array at the root, not a bare object |
-| `history10` | string (JSON array) | Last 10 completed incidents, same shape as `current`, one array entry per incident, written on `io.standby` |
+| `current` | string (JSON array) | Current incident's flat data: the same 12 fields as the individual `einsatzAktuell.*` states above (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), plus `registeredMonitor`/`registeredMonitorName` (the monitor the adapter was registered to at the time), bundled as one object inside a single-element array (`[]` if no incident is active) – the array wrapper is needed because most table widgets require an array at the root, not a bare object |
+| `history` | string (JSON array) | Last N completed incidents (`N` = the configured [Number of incidents in history](#connection), default 10), same shape as `current`, one array entry per incident, written on `io.standby` |
 | `routen` | string (JSON array) | Routes of the current incident; each entry has `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` resolved to flat `lat`/`lon` - see the note below on what `lat`/`lon` represents for a route) |
 | `rueckmeldungen` | string (JSON array) | Feedback entries of the current incident, as received from the server |
 | `emAlarmiert` | string (JSON array) | Alerted resources of the current incident; each entry has `name`, `zeit`, `wache`, `zeit_alarmierung_iso`, `zeit_ausgerueckt_iso` |
@@ -545,12 +552,12 @@ incident – see the note in the [`einsatz`](#einsatz) section.
 > `LineString` case) for a consistent meaning across all entries. The complete
 > route geometry itself is not exposed as a state.
 
-### einsatz.tts
+### einsatzAktuell.tts
 
 Voice announcement (`io.playtts`) for the currently running incident –
-lives under `einsatz` rather than its own top-level channel since it has
-no meaning without an incident. No history: a TTS announcement only
-matters in the moment, so only the most recent one is kept.
+lives under `einsatzAktuell` rather than its own top-level channel since
+it has no meaning without an incident. No history: a TTS announcement
+only matters in the moment, so only the most recent one is kept.
 
 | State | Type | Description |
 | --- | --- | --- |
@@ -564,22 +571,22 @@ matters in the moment, so only the most recent one is kept.
 Only present when [Dashboard](#dashboard) is enabled - see there for
 the object-tree lifecycle on enable/disable/resize. `dashboard.einsatzN`
 (`N` = 1 … the configured slot count) mirrors the same shape as
-`einsatz`/`einsatz.json` above, for the Nth most recent incident
-matching this instance's monitor - **not** limited to the single
-current incident. All fields of an occupied slot are always rewritten
-on every refresh (not just on change), so ongoing feedback for an
-incident that stays on the same slot across refreshes keeps updating;
+`einsatzAktuell`/`einsatzAktuell.json` above, for the Nth most recent
+incident matching this instance's monitor - **not** limited to the
+single current incident. All fields of an occupied slot are always
+rewritten on every refresh (not just on change), so ongoing feedback for
+an incident that stays on the same slot across refreshes keeps updating;
 an unoccupied slot (fewer matching incidents than configured slots)
-has all fields at their empty value, exactly like `einsatz.*` when no
-incident is active.
+has all fields at their empty value, exactly like `einsatzAktuell.*`
+when no incident is active.
 
 Deliberately **without** `restzeit`/`ablaufzeit` (WAIP-Web's `/dbrd/`
 incident-detail data has no equivalent field, unlike the live `/waip`
-alarm stream) and without `einsatz.tts`'s equivalent (no TTS event
+alarm stream) and without `einsatzAktuell.tts`'s equivalent (no TTS event
 exists in the `/dbrd` namespace). `dashboard.einsatzN.json.wachen` has
-no `einsatz.json.*` counterpart the other way around - it comes from a
-field (`wachen[]`, the incident's participating stations) that only
-the `/dbrd` payload includes.
+no `einsatzAktuell.json.*` counterpart the other way around - it comes
+from a field (`wachen[]`, the incident's participating stations) that
+only the `/dbrd` payload includes.
 
 | State | Type | Description |
 | --- | --- | --- |
@@ -587,23 +594,23 @@ the `/dbrd` payload includes.
 | `einsatzN.alarmAktiv` | boolean | `true` while the slot is occupied by a matching incident |
 | `einsatzN.id` | number | Internal incident ID |
 | `einsatzN.uuid` | string | Unique incident UUID |
-| `einsatzN.einsatzart` | string | Same meaning as [einsatz.einsatzart](#einsatz) |
+| `einsatzN.einsatzart` | string | Same meaning as [einsatzAktuell.einsatzart](#einsatzaktuell) |
 | `einsatzN.stichwort` | string | Alarm keyword |
-| `einsatzN.beschreibung` | string | Description for `stichwort`, resolved the same way as [einsatz.beschreibung](#einsatz) |
+| `einsatzN.beschreibung` | string | Description for `stichwort`, resolved the same way as [einsatzAktuell.beschreibung](#einsatzaktuell) |
 | `einsatzN.ort` | string | Location/town |
 | `einsatzN.ortsteil` | string | District (if different from `ort`) |
 | `einsatzN.alarmierungszeit` | string (date) | Alarm time |
 | `einsatzN.sondersignal` | number | `1` = special signal (lights & siren), otherwise none |
-| `einsatzN.latitude` / `einsatzN.longitude` | number | Incident location, same normalization as [einsatz](#einsatz) |
+| `einsatzN.latitude` / `einsatzN.longitude` | number | Incident location, same normalization as [einsatzAktuell](#einsatzaktuell) |
 | `einsatzN.kartenbildPfad` | string | Path to a matching, previously generated incident map image - see [Dashboard](#dashboard) above. Empty if none was found |
 | `einsatzN.routenGesamt` | number | Number of routes for this slot's incident |
 | `einsatzN.rueckmeldungenGesamt` | number | Total feedback count for this slot's incident |
-| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Same eight feedback counters as [einsatz.rueckmeldungen](#einsatz), per slot |
-| `einsatzN.json.current` | string (JSON array) | This slot's flat incident data, same shape as `einsatz.json.current` (without `registeredMonitor`/`registeredMonitorName`) |
-| `einsatzN.json.routen` | string (JSON array) | Routes of this slot's incident, same shape as `einsatz.json.routen` |
+| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Same eight feedback counters as [einsatzAktuell.rueckmeldungen](#einsatzaktuell), per slot |
+| `einsatzN.json.current` | string (JSON array) | This slot's flat incident data, same shape as `einsatzAktuell.json.current` (without `registeredMonitor`/`registeredMonitorName`) |
+| `einsatzN.json.routen` | string (JSON array) | Routes of this slot's incident, same shape as `einsatzAktuell.json.routen` |
 | `einsatzN.json.rueckmeldungen` | string (JSON array) | Feedback entries of this slot's incident |
 | `einsatzN.json.emAlarmiert` | string (JSON array) | Alerted resources of this slot's incident |
-| `einsatzN.json.wachen` | string (JSON array) | Participating stations of this slot's incident (`em_station_id`/`em_station_name`) - only available via `/dbrd`, no `einsatz.json.*` counterpart |
+| `einsatzN.json.wachen` | string (JSON array) | Participating stations of this slot's incident (`em_station_id`/`em_station_name`) - only available via `/dbrd`, no `einsatzAktuell.json.*` counterpart |
 
 ### debug
 
@@ -639,6 +646,21 @@ example.
     Collect changes for the upcoming release underneath it.
 -->
 ### **WORK IN PROGRESS**
+
+- **Breaking change:** the `einsatz` channel is renamed to `einsatzAktuell`
+  (to distinguish it from the `dashboard.einsatz1` … `einsatzN` dashboard
+  channels), and `einsatzAktuell.json.history10` is renamed to
+  `einsatzAktuell.json.history`, now holding a configurable number of
+  entries (new "Number of incidents in history" setting on the
+  [Connection](#connection) tab, 1-100, default 10). Update any VIS
+  bindings/scripts referencing the old `einsatz.*`/`einsatz.json.history10`
+  paths - they are removed automatically on upgrade, along with their
+  values.
+- Dashboard channel/state display names no longer use "Slot" - they now
+  say "Einsatz N" consistently with the `einsatzAktuell.*` naming, and
+  the redundant "flat JSON array" phrase was removed from every state
+  name. Object IDs are unaffected, only the display names shown in
+  Admin/VIS.
 
 ### 0.12.1 (2026-08-30)
 
@@ -711,7 +733,7 @@ example.
   **`einsatz.alarmierungszeit`**. Old objects (including now-orphaned
   channel/folder objects, not just states) are removed automatically
   on upgrade; scripts/VIS bindings referencing the old paths need to
-  be updated - see [einsatz](#einsatz).
+  be updated - see [einsatzAktuell](#einsatzaktuell).
 
 Older entries have been moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md).
 
