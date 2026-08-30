@@ -638,6 +638,8 @@ example.
     Re-add it afterwards (or use `npm run release -- --addPlaceholder`).
     Collect changes for the upcoming release underneath it.
 -->
+### **WORK IN PROGRESS**
+
 ### 0.12.1 (2026-08-30)
 
 - Fixed the Dashboard admin config: the tab was mistranslated as "Armaturenbrett"
