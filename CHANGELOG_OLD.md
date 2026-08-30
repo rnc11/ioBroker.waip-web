@@ -792,6 +792,17 @@ here for a complete history of what was worked on.)*
 - Initial version: ported the original "WAIP Instrumented v3.9" ioBroker
   JavaScript-adapter script into a standalone adapter. The URL/monitor
   ID now come from the admin configuration instead of a runtime state.
+## 0.7.36 (2026-08-25)
+
+- Object structure change: `einsatz.rueckmeldungAnzahl` is now
+  **`einsatz.rueckmeldungen`** (the `rollen.*`/`funktionen.*`
+  sub-channels are unchanged), `einsatz.rueckmeldungGesamt` is now
+  **`einsatz.rueckmeldungenGesamt`**, and `einsatz.zeitstempel` is now
+  **`einsatz.alarmierungszeit`**. Old objects (including now-orphaned
+  channel/folder objects, not just states) are removed automatically
+  on upgrade; scripts/VIS bindings referencing the old paths need to
+  be updated - see [einsatzAktuell](#einsatzaktuell).
+
 ## 0.7.35 (2026-08-24)
 
 - Object structure change: the eight feedback counters under

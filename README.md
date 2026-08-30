@@ -645,7 +645,7 @@ example.
     Re-add it afterwards (or use `npm run release -- --addPlaceholder`).
     Collect changes for the upcoming release underneath it.
 -->
-### **WORK IN PROGRESS**
+### 1.0.0 (2026-08-30)
 
 - **Breaking change:** the `einsatz` channel is renamed to `einsatzAktuell`
   (to distinguish it from the `dashboard.einsatz1` … `einsatzN` dashboard
@@ -723,17 +723,6 @@ example.
   already-finished incident, while every other `einsatz.*` field
   correctly stayed cleared. Both handlers now ignore such events while
   no incident is active.
-
-### 0.7.36 (2026-08-25)
-
-- Object structure change: `einsatz.rueckmeldungAnzahl` is now
-  **`einsatz.rueckmeldungen`** (the `rollen.*`/`funktionen.*`
-  sub-channels are unchanged), `einsatz.rueckmeldungGesamt` is now
-  **`einsatz.rueckmeldungenGesamt`**, and `einsatz.zeitstempel` is now
-  **`einsatz.alarmierungszeit`**. Old objects (including now-orphaned
-  channel/folder objects, not just states) are removed automatically
-  on upgrade; scripts/VIS bindings referencing the old paths need to
-  be updated - see [einsatzAktuell](#einsatzaktuell).
 
 Older entries have been moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md).
 
