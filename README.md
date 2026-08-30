@@ -645,6 +645,8 @@ example.
     Re-add it afterwards (or use `npm run release -- --addPlaceholder`).
     Collect changes for the upcoming release underneath it.
 -->
+### **WORK IN PROGRESS**
+
 ### 1.0.0 (2026-08-30)
 
 - **Breaking change:** the `einsatz` channel is renamed to `einsatzAktuell`
