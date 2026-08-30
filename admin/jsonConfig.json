@@ -57,6 +57,21 @@
                     "md": 6,
                     "lg": 4,
                     "xl": 4
+                },
+                "_divider2": {
+                    "type": "divider"
+                },
+                "historySize": {
+                    "type": "number",
+                    "label": "Number of incidents in history",
+                    "help": "How many completed incidents to keep in einsatzAktuell.json.history (most recent first). Existing entries beyond a lowered limit are trimmed on the next adapter restart.",
+                    "min": 1,
+                    "max": 100,
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 6,
+                    "lg": 4,
+                    "xl": 4
                 }
             }
         },

@@ -208,10 +208,10 @@ describe('buildDashboardChannelDefs/buildDashboardStateDefs', () => {
         expect(ids.some(id => id.includes('.tts.'))).to.be.false;
     });
 
-    it('has a json.wachen state with no einsatz.* counterpart (deliberate asymmetry)', () => {
+    it('has a json.wachen state with no einsatzAktuell.* counterpart (deliberate asymmetry)', () => {
         const defs = t.buildDashboardStateDefs(1);
         expect(defs.some(d => d.id === 'dashboard.einsatz1.json.wachen')).to.be.true;
-        expect(t.STATE_DEFS.some(d => d.id === 'einsatz.json.wachen')).to.be.false;
+        expect(t.STATE_DEFS.some(d => d.id === 'einsatzAktuell.json.wachen')).to.be.false;
     });
 
     it('has no json.history10/emWeitere states (not part of the dashboard schema)', () => {
@@ -699,10 +699,10 @@ describe('state definitions - internal consistency', () => {
     });
 
     it('has a state for every allowed incident field', () => {
-        // DE: ALLOWED_EINSATZ_FIELDS wird 1:1 nach einsatz.<feld> geschrieben.
-        // EN: ALLOWED_EINSATZ_FIELDS is written 1:1 to einsatz.<field>.
+        // DE: ALLOWED_EINSATZ_FIELDS wird 1:1 nach einsatzAktuell.<feld> geschrieben.
+        // EN: ALLOWED_EINSATZ_FIELDS is written 1:1 to einsatzAktuell.<field>.
         const ids = new Set(t.STATE_DEFS.map(d => d.id));
-        const missing = t.ALLOWED_EINSATZ_FIELDS.filter(f => !ids.has(`einsatz.${f}`));
+        const missing = t.ALLOWED_EINSATZ_FIELDS.filter(f => !ids.has(`einsatzAktuell.${f}`));
         expect(missing, missing.join(', ')).to.be.empty;
     });
 
@@ -886,25 +886,25 @@ describe('WaipWeb.prototype - pure instance helpers', () => {
         const empty = def => proto.computeEmptyStateValue.call(ctx, def);
 
         it('empties booleans to false', () => {
-            expect(empty({ id: 'einsatz.alarmAktiv', type: 'boolean' })).to.be.false;
+            expect(empty({ id: 'einsatzAktuell.alarmAktiv', type: 'boolean' })).to.be.false;
         });
 
         it('empties ordinary numbers to 0', () => {
-            expect(empty({ id: 'einsatz.restzeit', type: 'number' })).to.equal(0);
+            expect(empty({ id: 'einsatzAktuell.restzeit', type: 'number' })).to.equal(0);
         });
 
         it('empties coordinates to null, not 0 (0/0 is a real position)', () => {
-            expect(empty({ id: 'einsatz.latitude', type: 'number' })).to.be.null;
-            expect(empty({ id: 'einsatz.longitude', type: 'number' })).to.be.null;
-            expect(empty({ id: 'einsatz.id', type: 'number' })).to.be.null;
+            expect(empty({ id: 'einsatzAktuell.latitude', type: 'number' })).to.be.null;
+            expect(empty({ id: 'einsatzAktuell.longitude', type: 'number' })).to.be.null;
+            expect(empty({ id: 'einsatzAktuell.id', type: 'number' })).to.be.null;
         });
 
         it('empties JSON-array states to "[]", not null', () => {
-            expect(empty({ id: 'einsatz.json.routen', type: 'string' })).to.equal('[]');
+            expect(empty({ id: 'einsatzAktuell.json.routen', type: 'string' })).to.equal('[]');
         });
 
         it('empties ordinary strings to null', () => {
-            expect(empty({ id: 'einsatz.stichwort', type: 'string' })).to.be.null;
+            expect(empty({ id: 'einsatzAktuell.stichwort', type: 'string' })).to.be.null;
         });
     });
 
@@ -1367,18 +1367,18 @@ describe('updateRueckmeldungCounts (parametrized, plan document section 4.8)', (
         return { inst, written };
     }
 
-    it('writes the expected counts under the given statePrefix (einsatz.*, regression for the pre-4.8 behavior)', async () => {
+    it('writes the expected counts under the given statePrefix (einsatzAktuell.*, regression for the pre-4.8 behavior)', async () => {
         const { inst, written } = makeInstance();
-        await inst.updateRueckmeldungCounts(sampleRueckmeldungen, 'einsatz');
-        expect(written['einsatz.rueckmeldungen.rollen.ek']).to.equal(2);
-        expect(written['einsatz.rueckmeldungen.rollen.gf']).to.equal(1);
-        expect(written['einsatz.rueckmeldungen.rollen.zf']).to.equal(1);
-        expect(written['einsatz.rueckmeldungen.rollen.vf']).to.equal(1);
-        expect(written['einsatz.rueckmeldungen.funktionen.agt']).to.equal(1);
-        expect(written['einsatz.rueckmeldungen.funktionen.fzf']).to.equal(1);
-        expect(written['einsatz.rueckmeldungen.funktionen.ma']).to.equal(1);
-        expect(written['einsatz.rueckmeldungen.funktionen.med']).to.equal(1);
-        expect(written['einsatz.rueckmeldungenGesamt']).to.equal(sampleRueckmeldungen.length);
+        await inst.updateRueckmeldungCounts(sampleRueckmeldungen, 'einsatzAktuell');
+        expect(written['einsatzAktuell.rueckmeldungen.rollen.ek']).to.equal(2);
+        expect(written['einsatzAktuell.rueckmeldungen.rollen.gf']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungen.rollen.zf']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungen.rollen.vf']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungen.funktionen.agt']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungen.funktionen.fzf']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungen.funktionen.ma']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungen.funktionen.med']).to.equal(1);
+        expect(written['einsatzAktuell.rueckmeldungenGesamt']).to.equal(sampleRueckmeldungen.length);
     });
 
     it('writes to a dashboard slot prefix with the identical counting logic', async () => {
@@ -1387,17 +1387,17 @@ describe('updateRueckmeldungCounts (parametrized, plan document section 4.8)', (
         expect(written['dashboard.einsatz3.rueckmeldungen.rollen.ek']).to.equal(2);
         expect(written['dashboard.einsatz3.rueckmeldungen.funktionen.med']).to.equal(1);
         expect(written['dashboard.einsatz3.rueckmeldungenGesamt']).to.equal(sampleRueckmeldungen.length);
-        // DE: keine Vermischung mit dem einsatz.*-Präfix.
-        // EN: no bleed-over into the einsatz.* prefix.
-        expect(written['einsatz.rueckmeldungenGesamt']).to.be.undefined;
+        // DE: keine Vermischung mit dem einsatzAktuell.*-Präfix.
+        // EN: no bleed-over into the einsatzAktuell.* prefix.
+        expect(written['einsatzAktuell.rueckmeldungenGesamt']).to.be.undefined;
     });
 
     it('resets all counters to 0 for an empty/null rueckmeldungen list (e.g. after a standby reset)', async () => {
         const { inst, written } = makeInstance();
-        await inst.updateRueckmeldungCounts(null, 'einsatz');
-        expect(written['einsatz.rueckmeldungen.rollen.ek']).to.equal(0);
-        expect(written['einsatz.rueckmeldungen.funktionen.med']).to.equal(0);
-        expect(written['einsatz.rueckmeldungenGesamt']).to.equal(0);
+        await inst.updateRueckmeldungCounts(null, 'einsatzAktuell');
+        expect(written['einsatzAktuell.rueckmeldungen.rollen.ek']).to.equal(0);
+        expect(written['einsatzAktuell.rueckmeldungen.funktionen.med']).to.equal(0);
+        expect(written['einsatzAktuell.rueckmeldungenGesamt']).to.equal(0);
     });
 
     it('two slots with different rueckmeldungen never cross-contaminate their counts', async () => {
@@ -1814,5 +1814,52 @@ describe('onStateChange (dashboard.refreshNow button, plan document section 3.5)
         await new Promise(r => setTimeout(r, 0));
         await new Promise(r => setTimeout(r, 0));
         expect(written['dashboard.refreshNow']).to.deep.equal({ val: false, ack: true });
+    });
+});
+
+describe('trimHistoryIfNeeded (startup trim after lowering historySize)', () => {
+    const proto = t.WaipWeb.prototype;
+
+    function makeInstance(historyValue, historySize) {
+        const written = {};
+        const inst = Object.create(proto);
+        inst.historySize = historySize;
+        inst.getStateAsync = async id => {
+            if (id === 'einsatzAktuell.json.history' && historyValue !== undefined) {
+                return { val: historyValue };
+            }
+            return null;
+        };
+        inst.setStateAsync = async (id, val) => {
+            written[id] = val;
+        };
+        inst.safeWarn = () => {};
+        return { inst, written };
+    }
+
+    it('trims an existing history down to the current historySize', async () => {
+        const entries = [{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }, { uuid: 'd' }];
+        const { inst, written } = makeInstance(JSON.stringify(entries), 2);
+        await inst.trimHistoryIfNeeded();
+        expect(JSON.parse(written['einsatzAktuell.json.history'])).to.deep.equal([{ uuid: 'a' }, { uuid: 'b' }]);
+    });
+
+    it('does nothing when the history is already within the limit', async () => {
+        const entries = [{ uuid: 'a' }, { uuid: 'b' }];
+        const { inst, written } = makeInstance(JSON.stringify(entries), 10);
+        await inst.trimHistoryIfNeeded();
+        expect(written['einsatzAktuell.json.history']).to.be.undefined;
+    });
+
+    it('does nothing when no history state exists yet (fresh install)', async () => {
+        const { inst, written } = makeInstance(undefined, 10);
+        await inst.trimHistoryIfNeeded();
+        expect(written['einsatzAktuell.json.history']).to.be.undefined;
+    });
+
+    it('does nothing and does not throw on malformed JSON', async () => {
+        const { inst, written } = makeInstance('not json', 5);
+        await inst.trimHistoryIfNeeded();
+        expect(written['einsatzAktuell.json.history']).to.be.undefined;
     });
 });

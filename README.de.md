@@ -24,8 +24,8 @@ ohne dass ein Browser-Tab dauerhaft offen sein muss.
   - [Einsatzkarte](#einsatzkarte)
   - [Dashboard](#dashboard)
 - [States (unter `waip-web.0.*`)](#states-unter-waip-web0)
-  - [info](#info) · [status](#status) · [einsatz](#einsatz) ·
-    [einsatz.json](#einsatzjson) · [einsatz.tts](#einsatztts) ·
+  - [info](#info) · [status](#status) · [einsatzAktuell](#einsatzaktuell) ·
+    [einsatzAktuell.json](#einsatzaktuelljson) · [einsatzAktuell.tts](#einsatzaktuelltts) ·
     [dashboard](#dashboard-states) · [debug](#debug)
 - [Logging](#logging)
 - [Lizenz und Changelog](#lizenz-und-changelog)
@@ -79,51 +79,51 @@ In diesem Abschnitt geht es darum, was sich mit den States dieses Adapters
 konkret **bauen** lässt – typischer Einsatz auf einer Feuerwehr-/
 Rettungsdienst-Wache:
 
-- **Wandmontierte Alarmanzeige.** `einsatz.json.current` an ein
+- **Wandmontierte Alarmanzeige.** `einsatzAktuell.json.current` an ein
   VIS-Tabellen-Widget auf einem wandmontierten Tablet/TV im Aufenthalts-
   raum oder in der Fahrzeughalle binden – Einsatzart, Stichwort, Adresse
   und alarmierte Einsatzmittel erscheinen automatisch, ohne dass dort
   dauerhaft ein Browser-Tab offen gehalten werden muss (genau dafür
   existiert dieser Adapter).
 - **Klartext-Stichwort auf Anzeigen und Benachrichtigungen.**
-  `einsatz.beschreibung` macht aus einem kryptischen Alarmierungscode
+  `einsatzAktuell.beschreibung` macht aus einem kryptischen Alarmierungscode
   (`B:Wald groß/WSP`, `R1N0`) eine lesbare Beschreibung
   ("Wald-/Getreidefeldbrand (groß)", "Rettungswagen: 1,
-  Notfalleinsatzfahrzeug: 0") – neben `einsatz.stichwort` auf der
+  Notfalleinsatzfahrzeug: 0") – neben `einsatzAktuell.stichwort` auf der
   Wandanzeige einblenden oder in Push-Benachrichtigung/TTS-Ansage mit
   aufnehmen, damit nicht jeder alle Stichwörter auswendig kennen muss.
-- **Automationen direkt bei Alarmeingang auslösen.** `einsatz.alarmAktiv`
+- **Automationen direkt bei Alarmeingang auslösen.** `einsatzAktuell.alarmAktiv`
   (ggf. zusammen mit `info.connection`) in einem Script/einer Blockly-Regel
   beobachten, um bei Alarm Licht in der Fahrzeughalle einzuschalten, ein
   Tor/eine Tür zu öffnen, eine Push-Benachrichtigung (z. B. über einen
-  Telegram-/Pushover-Adapter) mit `einsatz.stichwort`/`einsatz.beschreibung`
-  + `einsatz.ort` zu versenden oder eine Lichtszene auszulösen – wenige
+  Telegram-/Pushover-Adapter) mit `einsatzAktuell.stichwort`/`einsatzAktuell.beschreibung`
+  + `einsatzAktuell.ort` zu versenden oder eine Lichtszene auszulösen – wenige
   Sekunden nach der eigentlichen Alarmierung, da ioBroker-State-Änderungen
   sofort feuern und kein Polling nötig ist.
-- **Alarm laut ansagen.** `einsatz.tts.last` ist eine fertige, absolute
+- **Alarm laut ansagen.** `einsatzAktuell.tts.last` ist eine fertige, absolute
   mp3-URL; eine `sonos`-/`snapcast`-/`text2speech`-Automation darauf
   ansetzen (oder die URL direkt abspielen), um den Einsatz über
   Gebäudelautsprecher anzusagen, sobald `io.playtts` feuert – hilfreich,
   wenn nicht alle Mitglieder gerade auf einen Bildschirm schauen.
-- **Live-Übersicht der Rückmeldungen.** Die `einsatz.rueckmeldungen.*`
+- **Live-Übersicht der Rückmeldungen.** Die `einsatzAktuell.rueckmeldungen.*`
   Zähler (`rollen.ek`/`.gf`/`.zf`/`.vf` pro Rolle, `funktionen.agt`/`.fzf`/
   `.ma`/`.med` pro Zusatzfunktion) aktualisieren sich in Echtzeit, sobald
   Einsatzkräfte per App zurückmelden – als Gauge- oder Zahlen-Widget
   gebunden ergibt das eine
   Übersicht auf einen Blick, wer bereits kommt.
-- **Nachbereitung/Statistik.** `einsatz.json.history10` hält die letzten
+- **Nachbereitung/Statistik.** `einsatzAktuell.json.history` hält die letzten
   10 abgeschlossenen Einsätze als flache Tabelle vor – an eine zweite
   VIS-Ansicht binden oder periodisch exportieren (z. B. per Script, das
   den State bei `io.standby` ausliest), um ein längerfristiges Log zu
   führen oder Einsatzzahlen in ein Statistik-/Dashboard-Adapter
   einzuspeisen.
-- **Routen-/Fahrzeugübersicht auf einer Karte.** `einsatz.json.routen`
+- **Routen-/Fahrzeugübersicht auf einer Karte.** `einsatzAktuell.json.routen`
   enthält für jede alarmierte Wache `lat`/`lon` und `color` – an ein
   VIS-Kartenwidget gebunden ergibt das auf einen Blick, wer unterwegs ist,
   unabhängig von der WAIP-Web-eigenen Karte.
 - **Anbindung an weitere ioBroker-Automationen.** Da jedes Feld ein
   gewöhnlicher ioBroker-State ist, lässt sich das Ganze mit allem
-  kombinieren, was ohnehin in der Instanz läuft – `einsatz.*` in eine
+  kombinieren, was ohnehin in der Instanz läuft – `einsatzAktuell.*` in eine
   Smart-Home-Szenensteuerung einspeisen, eine Grafana-/InfluxDB-Historie
   für Reaktionszeit-Auswertungen führen, oder per ioBroker-MQTT-Adapter
   in einen Node-RED-artigen Flow einbinden, ganz ohne eigene Anbindung an
@@ -141,7 +141,7 @@ Rettungsdienst-Wache:
 - Registrierungs-Timeout mit Audit-Log (`debug.monitorAudit`)
 - Normalisierung von Geodaten (wgs84-Felder, `position` oder
   GeoJSON-`geometry` → Mittelpunkt)
-- History der letzten 10 abgeschlossenen Einsätze (`einsatz.json.history10`)
+- History der letzten 10 abgeschlossenen Einsätze (`einsatzAktuell.json.history`)
 - Getrennte Handler für Alarm (`io.new_waip`), Rückmeldung (`io.new_rmld`),
   Routen (`io.routes`), TTS (`io.playtts`) und Standby (`io.standby`)
 - Automatisches Session-Cookie-Management (siehe unten), damit die
@@ -149,20 +149,20 @@ Rettungsdienst-Wache:
 - Server-Neustart-Erkennung über `io.version` mit automatischem
   Session-Refresh + Reconnect
 - Einsatz-, Rückmeldungs-, Routen- und Einsatzmittel-Daten als eigene,
-  flache JSON-Arrays unter `einsatz.json.*` – ohne Verschachtelung, damit
+  flache JSON-Arrays unter `einsatzAktuell.json.*` – ohne Verschachtelung, damit
   VIS-Tabellen-Widgets direkt daran binden können
 - Aggregierte Rückmeldungs-Zähler pro Rolle/Fähigkeit, analog zu den
   Live-Badges der Weboberfläche
 - Sauberer Zustand bei jedem Neustart: alle States werden beim Adapter-
   Start aktiv auf ihren leeren Wert zurückgesetzt (`false`/`0`/`null`/
-  `[]`), außer `einsatz.json.history10` und `debug.monitorAudit` (beide
+  `[]`), außer `einsatzAktuell.json.history` und `debug.monitorAudit` (beide
   bleiben über Neustarts hinweg erhalten). Startet der Adapter neu,
   während gerade ein Einsatz läuft, werden dessen Live-Felder
-  (`einsatz.*`) ebenfalls geleert und füllen sich erst wieder, sobald
+  (`einsatzAktuell.*`) ebenfalls geleert und füllen sich erst wieder, sobald
   der Server das nächste Event zu diesem Einsatz sendet.
 - Schutz vor veralteten Daten: Beginnt ein neuer Einsatz, bevor für ihn
   eigene Routen-/Rückmeldungs-Events eingetroffen sind, werden
-  `einsatz.json.routen`/`.rueckmeldungen` und die Rückmeldungs-Zähler
+  `einsatzAktuell.json.routen`/`.rueckmeldungen` und die Rückmeldungs-Zähler
   sofort geleert, statt auf diese Events zu warten. Und falls `io.standby`
   für einen Einsatz jemals verpasst wird (z.B. durch einen Disconnect
   zum falschen Zeitpunkt), schließt ein Watchdog den Einsatz automatisch
@@ -172,8 +172,8 @@ Rettungsdienst-Wache:
 - Zeigt immer nur den zuletzt aktiven Einsatz; mehrere gleichzeitig
   laufende Einsätze sind aktuell nur über das Dashboard der
   WAIP-Web-Instanz selbst einsehbar
-- Optionale Klartext-Beschreibung zu `einsatz.stichwort`
-  (`einsatz.beschreibung`), lokal ermittelt aus einer selbst pflegbaren
+- Optionale Klartext-Beschreibung zu `einsatzAktuell.stichwort`
+  (`einsatzAktuell.beschreibung`), lokal ermittelt aus einer selbst pflegbaren
   Stichwort-Tabelle sowie einem optionalen Dekoder für das von
   mehreren Leitstellen verwendete Rettungsdienst-Stichwortschema
   (`R<RTW>N<NEF>`) - siehe [Rettungsdienst](#rettungsdienst)
@@ -239,10 +239,10 @@ Website selbst verwendet.
 **an**): Einsätze, deren `einsatzart` auf einen Rettungsdienst-Einsatz
 hindeutet (enthält "Rettung" oder "Krankentransport", ohne
 Berücksichtigung von Groß-/Kleinschreibung - siehe die
-`einsatzart`-Beispiele unter [einsatz](#einsatz)), werden standardmäßig
+`einsatzart`-Beispiele unter [einsatzAktuell](#einsatzaktuell)), werden standardmäßig
 ganz normal verarbeitet, wie in jeder früheren Adapter-Version. Wird die
 Checkbox deaktiviert, ignoriert der Adapter solche Einsätze stattdessen
-**komplett**: keine `einsatz.*`-States werden aktualisiert, kein
+**komplett**: keine `einsatzAktuell.*`-States werden aktualisiert, kein
 History-Eintrag geschrieben, keine TTS-Ansage ausgelöst - als wäre der
 Einsatz nie eingegangen. Hintergrund: Rettungsdienst-Einsätze werden
 über WAIP Berichten zufolge nur in manchen Regionen/Leitstellen
@@ -253,11 +253,11 @@ wird nur angezeigt, solange diese Checkbox aktiv ist - ist sie aus,
 werden Rettungsdienst-Einsätze ohnehin komplett ignoriert, ihre
 Stichwort-Dekodierung ist dann irrelevant.
 
-`einsatz.stichwort` wird unverändert vom Server als bloßer Code
+`einsatzAktuell.stichwort` wird unverändert vom Server als bloßer Code
 übernommen (z.B. `B2`, `H:VU mit P`) – WAIP-Web selbst erklärt nicht,
 was das bedeutet, und es gibt kein bundesweit einheitliches Schema:
 jede Leitstelle nutzt ihr eigenes Stichwortverzeichnis.
-`einsatz.beschreibung` schließt diese Lücke **vollständig lokal**, es
+`einsatzAktuell.beschreibung` schließt diese Lücke **vollständig lokal**, es
 werden dabei keine Daten irgendwohin gesendet. Dieser Tab ist die erste
 von zwei Quellen, die der Reihe nach geprüft werden (die zweite steht
 unter [Stichwort-Stammdaten](#stichwort-stammdaten)):
@@ -314,7 +314,7 @@ State-Sync-Einschränkung der Admin-Tabellenkomponente selbst, nicht
 etwas, das dieser Adapter beeinflussen kann).
 
 Passt weder diese Tabelle noch der Dekoder oben, bleibt
-`einsatz.beschreibung` einfach `null` – kein Fehler.
+`einsatzAktuell.beschreibung` einfach `null` – kein Fehler.
 
 ### Einsatzkarte
 
@@ -351,18 +351,18 @@ Bildbreite/-höhe für das Bild selbst in beiden Fällen. Nur die
 wirklich nur den Polygon-Umriss betrifft - die Größe der
 Punkt-Markierung ist fest vorgegeben, nicht einstellbar.
 
-Der Dateipfad wird in `einsatz.kartenbildPfad` geschrieben (siehe
-[einsatz](#einsatz)) – typische Verwendung ist der Versand dieser Datei
+Der Dateipfad wird in `einsatzAktuell.kartenbildPfad` geschrieben (siehe
+[einsatzAktuell](#einsatzaktuell)) – typische Verwendung ist der Versand dieser Datei
 aus einem Blockly-/JavaScript-Skript heraus, z.B. als
 Pushover-Benachrichtigungsanhang. Es werden nur die 10 zuletzt erzeugten
 Bilder aufgehoben, ältere werden automatisch gelöscht, sobald ein neues
 geschrieben wird. Die Alarmverarbeitung wartet auf die Fertigstellung
-des Bildes, bevor sie fortfährt – `einsatz.kartenbildPfad` trägt daher
+des Bildes, bevor sie fortfährt – `einsatzAktuell.kartenbildPfad` trägt daher
 garantiert schon den richtigen Wert, sobald auch die übrigen Felder des
-Einsatzes (z.B. `einsatz.alarmAktiv`) verfügbar werden – allerdings
+Einsatzes (z.B. `einsatzAktuell.alarmAktiv`) verfügbar werden – allerdings
 höchstens bis zum konfigurierbaren **OSM-Timeout**: Ist der
 Kachel-Download/die Bildzusammensetzung bis dahin nicht fertig, wird
-eine Warnung geloggt und `einsatz.kartenbildPfad` bleibt für diesen
+eine Warnung geloggt und `einsatzAktuell.kartenbildPfad` bleibt für diesen
 Einsatz leer, ohne die Alarmverarbeitung unbegrenzt zu blockieren.
 
 | Feld | Beschreibung | Default |
@@ -377,7 +377,7 @@ Einsatz leer, ohne die Alarmverarbeitung unbegrenzt zu blockieren.
 
 Die Bilder liegen im eigenen Datenverzeichnis dieser Adapterinstanz
 (`iobroker-data/<instance>/maps/`), nicht als ioBroker-Dateiobjekte –
-`einsatz.kartenbildPfad` ist deshalb ein echter, absoluter
+`einsatzAktuell.kartenbildPfad` ist deshalb ein echter, absoluter
 Dateisystempfad, den ein auf demselben Host laufendes Skript direkt
 lesen kann. Dieses Verzeichnis wird **nicht** automatisch gelöscht,
 wenn der Adapter gestoppt oder seine Instanzkonfiguration
@@ -398,12 +398,12 @@ die Option **"Auch Instanzdaten löschen"** anhaken (seit js-controller
 ### Dashboard
 
 **Dashboard aktivieren** (Admin-Checkbox, standardmäßig aus): spiegelt
-zusätzlich zum einzelnen aktuellen Einsatz unter [einsatz](#einsatz)
+zusätzlich zum einzelnen aktuellen Einsatz unter [einsatzAktuell](#einsatzaktuell)
 die letzten N Einsätze, die zum konfigurierten Monitor dieser Instanz
 passen, als `dashboard.einsatz1` … `dashboard.einsatzN`. Sinnvoll bei
 einer Monitor-ID, die auf "alle Wachalarme" (`0`) oder einen größeren
 Kreis/Träger eingestellt ist, wo mehrere Einsätze gleichzeitig aktiv
-sein können und `einsatz.*` allein immer nur den jeweils aktuellsten
+sein können und `einsatzAktuell.*` allein immer nur den jeweils aktuellsten
 zeigt.
 
 Anders als die dauerhaft offene `/waip`-Verbindung dieses Adapters wird
@@ -426,7 +426,7 @@ das Minimum beim **Refresh-Intervall** unten trägt dem Rechnung.
 Zusätzlich zum regulären Timer läuft ein Refresh auch einmal sofort
 nach jedem (Neu-)Start des Adapters (damit das Dashboard nicht bis zum
 konfigurierten Intervall leer bleibt) sowie einmal bei jedem neuen
-Alarm für den eigenen Monitor dieser Instanz (`einsatz.*`). Ein
+Alarm für den eigenen Monitor dieser Instanz (`einsatzAktuell.*`). Ein
 manueller Refresh lässt sich jederzeit über den Button-State
 `dashboard.refreshNow` auslösen, z. B. per VIS-Button oder Skript.
 
@@ -435,11 +435,11 @@ eigens für Dashboard-Slots erzeugt – sie werden aus demselben
 Datei-Fundus abgeleitet, den [Einsatzkarte](#einsatzkarte) für den
 eigenen Monitor dieser Instanz bereits erzeugt hat. Ein Slot hat also
 nur dann ein Kartenbild, wenn dieser Adapter für genau diesen Einsatz
-über die eigene `einsatz.*`-Alarmverarbeitung bereits eines erzeugt
+über die eigene `einsatzAktuell.*`-Alarmverarbeitung bereits eines erzeugt
 hat – am vollständigsten, wenn die **Monitor-ID** auf `0` (alle
 Wachalarme) steht und **Kartenbild für jeden Einsatz erzeugen**
 aktiviert ist, da dann jeder Einsatz, der im Dashboard erscheinen kann,
-zuvor auch schon einmal `einsatz.*` durchlaufen hat. Bei einer
+zuvor auch schon einmal `einsatzAktuell.*` durchlaufen hat. Bei einer
 enger gefassten Monitor-ID fehlt Dashboard-Slots für Einsätze außerhalb
 der eigenen Alarm-Historie das Kartenbild – das ist erwartetes
 Verhalten, kein Fehler.
@@ -457,7 +457,7 @@ noch offen ist).
 ## States (unter `waip-web.0.*`)
 
 Rückmeldungen und Routen sind pro Einsatz Listen (1:n). Sie liegen als
-**flache** JSON-Arrays unter `einsatz.json.*` (keine verschachtelten
+**flache** JSON-Arrays unter `einsatzAktuell.json.*` (keine verschachtelten
 Objekte/Arrays innerhalb einer Zeile), damit sie direkt an VIS-Tabellen-
 Widgets gebunden werden können – ergänzt um schnell bindbare Zähler,
 damit Bindings und Trigger komplett ohne JSON-Parsing auskommen.
@@ -478,16 +478,16 @@ damit Bindings und Trigger komplett ohne JSON-Parsing auskommen.
 | `registrationAccepted` | boolean | `true` sobald das erste Event empfangen wurde, sonst `false` direkt nach Connect oder nach Ablauf des Registrierungs-Timeouts |
 | `registrationPending` | boolean | `true` direkt nach Connect, solange noch auf eine Antwort vom Server gewartet wird, sonst `false` sobald bestätigt oder Timeout erreicht |
 
-### einsatz
+### einsatzAktuell
 
 Flache Felder des aktuell laufenden Einsatzes. Werden bei `io.standby`
 geleert (`null`/`0`), analog zum offiziellen Frontend – `alarmAktiv` ist
 damit ein verlässlicher Schalter dafür, ob hier gerade echte Live-Daten
 stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
-`einsatz.json.history10` abrufbar:
+`einsatzAktuell.json.history` abrufbar:
 
 > **Hinweis:** Der Adapter bildet immer nur den zuletzt aktiv gemeldeten
-> Einsatz ab (`einsatz.*` bzw. `einsatz.json.current`) – analog zum
+> Einsatz ab (`einsatzAktuell.*` bzw. `einsatzAktuell.json.current`) – analog zum
 > Alarmmonitor des offiziellen WAIP-Web-Frontends. Theoretisch können in
 > WAIP-Web mehrere Einsätze gleichzeitig aktiv sein (z. B. wenn kurz
 > hintereinander zwei Alarmierungen eingehen). Diese States sind **kein
@@ -534,7 +534,7 @@ stehen. Der zuletzt abgeschlossene Einsatz bleibt trotzdem über
 | `rueckmeldungen.funktionen.ma` | number | Anzahl Rückmeldungen als Maschinist |
 | `rueckmeldungen.funktionen.med` | number | Anzahl Rückmeldungen mit medizinischer Befähigung |
 
-### einsatz.json
+### einsatzAktuell.json
 
 Flache JSON-Objekte/Arrays, maximal eine Verschachtelungsebene, gedacht
 zum direkten Binden an VIS-Tabellen-Widgets (verschachtelte Strukturen wie
@@ -542,14 +542,14 @@ ein einfaches `{routen, rueckmeldungen, ...}`-Objekt werden von diesen
 Widgets in der Regel nicht dargestellt). `routen`/`rueckmeldungen`/
 `emAlarmiert`/`emWeitere` enthalten immer nur die Daten des **aktuellen**
 Einsatzes – sie werden bei `io.standby` geleert (`[]`) und sind **nicht**
-Teil der History. Wie bei `einsatz.*` oben gilt auch hier: `current`
+Teil der History. Wie bei `einsatzAktuell.*` oben gilt auch hier: `current`
 enthält immer nur den zuletzt aktiven Einsatz – siehe Hinweis im
-Abschnitt [`einsatz`](#einsatz).
+Abschnitt [`einsatzAktuell`](#einsatzaktuell).
 
 | State | Typ | Beschreibung |
 | --- | --- | --- |
-| `current` | string (JSON-Array) | Flache Daten des aktuellen Einsatzes: dieselben 12 Felder wie die einzelnen `einsatz.*`-States oben (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), zusätzlich `registeredMonitor`/`registeredMonitorName` (der Monitor, auf den der Adapter zu diesem Zeitpunkt registriert war), gebündelt als ein Objekt innerhalb eines Arrays mit einem Element (`[]` falls kein Einsatz aktiv) – der Array-Wrapper ist nötig, weil die meisten Tabellen-Widgets am Root ein Array statt eines nackten Objekts erwarten |
-| `history10` | string (JSON-Array) | Letzte 10 abgeschlossenen Einsätze, gleiches Schema wie `current`, ein Array-Eintrag pro Einsatz, geschrieben bei `io.standby` |
+| `current` | string (JSON-Array) | Flache Daten des aktuellen Einsatzes: dieselben 12 Felder wie die einzelnen `einsatzAktuell.*`-States oben (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), zusätzlich `registeredMonitor`/`registeredMonitorName` (der Monitor, auf den der Adapter zu diesem Zeitpunkt registriert war), gebündelt als ein Objekt innerhalb eines Arrays mit einem Element (`[]` falls kein Einsatz aktiv) – der Array-Wrapper ist nötig, weil die meisten Tabellen-Widgets am Root ein Array statt eines nackten Objekts erwarten |
+| `history` | string (JSON-Array) | Letzte 10 abgeschlossenen Einsätze, gleiches Schema wie `current`, ein Array-Eintrag pro Einsatz, geschrieben bei `io.standby` |
 | `routen` | string (JSON-Array) | Routen des aktuellen Einsatzes; jeder Eintrag hat `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` zu flachem `lat`/`lon` aufgelöst - siehe Hinweis unten, wofür `lat`/`lon` bei einer Route steht) |
 | `rueckmeldungen` | string (JSON-Array) | Rückmeldungen des aktuellen Einsatzes, wie vom Server empfangen |
 | `emAlarmiert` | string (JSON-Array) | Alarmierte Einsatzmittel des aktuellen Einsatzes; jeder Eintrag hat `name`, `zeit`, `wache`, `zeit_alarmierung_iso`, `zeit_ausgerueckt_iso` |
@@ -564,10 +564,10 @@ Abschnitt [`einsatz`](#einsatz).
 > Linie), damit die Bedeutung über alle Einträge hinweg konsistent bleibt. Die
 > vollständige Routen-Geometrie selbst wird nicht als State bereitgestellt.
 
-### einsatz.tts
+### einsatzAktuell.tts
 
 Sprachansage (`io.playtts`) zum aktuell laufenden Einsatz – liegt unter
-`einsatz` statt in einem eigenen Top-Level-Kanal, da sie ohne Einsatzbezug
+`einsatzAktuell` statt in einem eigenen Top-Level-Kanal, da sie ohne Einsatzbezug
 keine Bedeutung hat. Keine History: eine TTS-Ansage ist nur im Moment
 relevant, deshalb wird nur die jeweils letzte vorgehalten.
 
@@ -583,7 +583,7 @@ relevant, deshalb wird nur die jeweils letzte vorgehalten.
 Nur vorhanden, wenn [Dashboard](#dashboard) aktiviert ist – siehe dort
 für den Objektbaum-Lebenszyklus bei Aktivierung/Deaktivierung/
 Größenänderung. `dashboard.einsatzN` (`N` = 1 … die konfigurierte
-Slot-Anzahl) spiegelt dasselbe Schema wie `einsatz`/`einsatz.json`
+Slot-Anzahl) spiegelt dasselbe Schema wie `einsatzAktuell`/`einsatzAktuell.json`
 oben, für den N-aktuellsten Einsatz, der zum Monitor dieser Instanz
 passt – **nicht** beschränkt auf den einen aktuellen Einsatz. Alle
 Felder eines belegten Slots werden bei jedem Refresh immer komplett
@@ -591,13 +591,13 @@ neu geschrieben (nicht nur bei Änderung), damit laufende Rückmeldungen
 für einen Einsatz, der über mehrere Refreshs hinweg auf demselben Slot
 bleibt, weiter aktualisiert werden; ein unbelegter Slot (weniger
 passende Einsätze als konfigurierte Slots) trägt an allen Feldern den
-Leerwert, genau wie `einsatz.*`, wenn kein Einsatz aktiv ist.
+Leerwert, genau wie `einsatzAktuell.*`, wenn kein Einsatz aktiv ist.
 
 Bewusst **ohne** `restzeit`/`ablaufzeit` (WAIP-Webs `/dbrd/`-
 Einsatzdetaildaten haben kein entsprechendes Feld, anders als der
-Live-Alarmstream unter `/waip`) und ohne Entsprechung zu `einsatz.tts`
+Live-Alarmstream unter `/waip`) und ohne Entsprechung zu `einsatzAktuell.tts`
 (kein TTS-Event im `/dbrd`-Namespace vorhanden). Umgekehrt hat
-`dashboard.einsatzN.json.wachen` kein `einsatz.json.*`-Gegenstück – es
+`dashboard.einsatzN.json.wachen` kein `einsatzAktuell.json.*`-Gegenstück – es
 stammt aus einem Feld (`wachen[]`, die am Einsatz beteiligten Wachen),
 das nur im `/dbrd`-Payload enthalten ist.
 
@@ -607,23 +607,23 @@ das nur im `/dbrd`-Payload enthalten ist.
 | `einsatzN.alarmAktiv` | boolean | `true`, solange der Slot mit einem passenden Einsatz belegt ist |
 | `einsatzN.id` | number | Interne Einsatz-ID |
 | `einsatzN.uuid` | string | Eindeutige Einsatz-UUID |
-| `einsatzN.einsatzart` | string | Gleiche Bedeutung wie [einsatz.einsatzart](#einsatz) |
+| `einsatzN.einsatzart` | string | Gleiche Bedeutung wie [einsatzAktuell.einsatzart](#einsatzaktuell) |
 | `einsatzN.stichwort` | string | Alarmstichwort |
-| `einsatzN.beschreibung` | string | Beschreibung zum Stichwort, ermittelt wie bei [einsatz.beschreibung](#einsatz) |
+| `einsatzN.beschreibung` | string | Beschreibung zum Stichwort, ermittelt wie bei [einsatzAktuell.beschreibung](#einsatzaktuell) |
 | `einsatzN.ort` | string | Ort |
 | `einsatzN.ortsteil` | string | Ortsteil (falls abweichend von `ort`) |
 | `einsatzN.alarmierungszeit` | string (date) | Alarmierungszeitpunkt |
 | `einsatzN.sondersignal` | number | `1` = Sondersignal (Blaulicht & Martinshorn), sonst keins |
-| `einsatzN.latitude` / `einsatzN.longitude` | number | Einsatzort, gleiche Normalisierung wie bei [einsatz](#einsatz) |
+| `einsatzN.latitude` / `einsatzN.longitude` | number | Einsatzort, gleiche Normalisierung wie bei [einsatzAktuell](#einsatzaktuell) |
 | `einsatzN.kartenbildPfad` | string | Pfad zu einem passenden, bereits erzeugten Einsatzkarten-Bild – siehe [Dashboard](#dashboard) oben. Leer, falls keins gefunden wurde |
 | `einsatzN.routenGesamt` | number | Anzahl Routen für den Einsatz dieses Slots |
 | `einsatzN.rueckmeldungenGesamt` | number | Rückmeldungen gesamt für den Einsatz dieses Slots |
-| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Dieselben acht Rückmeldungs-Zähler wie bei [einsatz.rueckmeldungen](#einsatz), pro Slot |
-| `einsatzN.json.current` | string (JSON-Array) | Flache Einsatzdaten dieses Slots, gleiches Schema wie `einsatz.json.current` (ohne `registeredMonitor`/`registeredMonitorName`) |
-| `einsatzN.json.routen` | string (JSON-Array) | Routen des Einsatzes dieses Slots, gleiches Schema wie `einsatz.json.routen` |
+| `einsatzN.rueckmeldungen.rollen.*` / `.funktionen.*` | number | Dieselben acht Rückmeldungs-Zähler wie bei [einsatzAktuell.rueckmeldungen](#einsatzaktuell), pro Slot |
+| `einsatzN.json.current` | string (JSON-Array) | Flache Einsatzdaten dieses Slots, gleiches Schema wie `einsatzAktuell.json.current` (ohne `registeredMonitor`/`registeredMonitorName`) |
+| `einsatzN.json.routen` | string (JSON-Array) | Routen des Einsatzes dieses Slots, gleiches Schema wie `einsatzAktuell.json.routen` |
 | `einsatzN.json.rueckmeldungen` | string (JSON-Array) | Rückmeldungen des Einsatzes dieses Slots |
 | `einsatzN.json.emAlarmiert` | string (JSON-Array) | Alarmierte Einsatzmittel des Einsatzes dieses Slots |
-| `einsatzN.json.wachen` | string (JSON-Array) | Am Einsatz dieses Slots beteiligte Wachen (`em_station_id`/`em_station_name`) – nur über `/dbrd` verfügbar, kein `einsatz.json.*`-Gegenstück |
+| `einsatzN.json.wachen` | string (JSON-Array) | Am Einsatz dieses Slots beteiligte Wachen (`em_station_id`/`em_station_name`) – nur über `/dbrd` verfügbar, kein `einsatzAktuell.json.*`-Gegenstück |
 
 ### debug
 
