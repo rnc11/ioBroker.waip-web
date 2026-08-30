@@ -550,10 +550,19 @@ Abschnitt [`einsatz`](#einsatz).
 | --- | --- | --- |
 | `current` | string (JSON-Array) | Flache Daten des aktuellen Einsatzes: dieselben 12 Felder wie die einzelnen `einsatz.*`-States oben (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), zusätzlich `registeredMonitor`/`registeredMonitorName` (der Monitor, auf den der Adapter zu diesem Zeitpunkt registriert war), gebündelt als ein Objekt innerhalb eines Arrays mit einem Element (`[]` falls kein Einsatz aktiv) – der Array-Wrapper ist nötig, weil die meisten Tabellen-Widgets am Root ein Array statt eines nackten Objekts erwarten |
 | `history10` | string (JSON-Array) | Letzte 10 abgeschlossenen Einsätze, gleiches Schema wie `current`, ein Array-Eintrag pro Einsatz, geschrieben bei `io.standby` |
-| `routen` | string (JSON-Array) | Routen des aktuellen Einsatzes; jeder Eintrag hat `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` zu flachem `lat`/`lon` aufgelöst) |
+| `routen` | string (JSON-Array) | Routen des aktuellen Einsatzes; jeder Eintrag hat `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` zu flachem `lat`/`lon` aufgelöst - siehe Hinweis unten, wofür `lat`/`lon` bei einer Route steht) |
 | `rueckmeldungen` | string (JSON-Array) | Rückmeldungen des aktuellen Einsatzes, wie vom Server empfangen |
 | `emAlarmiert` | string (JSON-Array) | Alarmierte Einsatzmittel des aktuellen Einsatzes; jeder Eintrag hat `name`, `zeit`, `wache`, `zeit_alarmierung_iso`, `zeit_ausgerueckt_iso` |
 | `emWeitere` | string (JSON-Array) | Weitere Einsatzmittel des aktuellen Einsatzes, gleiches Schema wie `emAlarmiert` |
+
+> **Hinweis:** `routen[].lat`/`.lon` ist der **Standort der alarmierten Wache**, kein
+> Punkt entlang der tatsächlichen Anfahrtsroute und nicht der Einsatzort. Der Server
+> sendet jede Route entweder als vollständigen `LineString` (die berechnete Strecke
+> von der Wache zum Einsatzort) oder, wenn keine Strecke berechnet werden konnte, als
+> einzelnes Koordinatenpaar für die Wache selbst - in beiden Fällen löst der Adapter
+> `lat`/`lon` auf den Wachenstandort auf (im `LineString`-Fall der erste Punkt der
+> Linie), damit die Bedeutung über alle Einträge hinweg konsistent bleibt. Die
+> vollständige Routen-Geometrie selbst wird nicht als State bereitgestellt.
 
 ### einsatz.tts
 

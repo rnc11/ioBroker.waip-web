@@ -1034,6 +1034,39 @@ function getCenterFromGeometry(g) {
         }
 
         const coords = geom.coordinates;
+
+        // DE: Sonderfall LineString (siehe io.routes/einsatz.json.routen): eine Route ist
+        // KEINE Fläche, deren Bounding-Box-Mitte einen aussagekräftigen Punkt ergäbe -
+        // sie besteht aus dutzenden Wegpunkten zwischen der alarmierten Wache und dem
+        // Einsatzort, deren Bounding-Box-Zentrum "irgendwo auf dem Weg" liegt, an keinem
+        // real bedeutsamen Ort. Der ERSTE Wegpunkt der Linie ist dagegen praktisch immer
+        // der Standort der Wache selbst (die Route beginnt dort) - live bestätigt: der
+        // Server liefert genau diesen Wachenstandort auch direkt (ohne Linienzug) über
+        // das eigenständige data.coords-Fallback-Format (siehe normalizeData()), wenn für
+        // eine Wache keine Routenberechnung vorliegt. Der erste LineString-Punkt macht das
+        // Verhalten für beide Fälle konsistent.
+        // EN: Special case LineString (see io.routes/einsatz.json.routen): a route is NOT
+        // an area, whose bounding-box center would be a meaningful point - it consists of
+        // dozens of waypoints between the alerted station and the incident location,
+        // whose bounding-box center lies "somewhere along the way", at no real place of
+        // significance. The FIRST waypoint of the line, on the other hand, is practically
+        // always the station's own location (the route starts there) - live-confirmed:
+        // the server also delivers this exact station location directly (without a line)
+        // via the standalone data.coords fallback format (see normalizeData()) when no
+        // route calculation exists for a station. Using the first LineString point makes
+        // the behavior consistent for both cases.
+        if (geom.type === 'LineString' && Array.isArray(coords) && coords.length) {
+            const first = coords[0];
+            if (Array.isArray(first) && first.length >= 2) {
+                const lon = Number(first[0]);
+                const lat = Number(first[1]);
+                if (!isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)) {
+                    return { lat: Number(lat.toFixed(6)), lon: Number(lon.toFixed(6)) };
+                }
+            }
+            return null;
+        }
+
         const collectPoints = (c, type) => {
             const pts = [];
             const pushIfPoint = p => {
@@ -1049,7 +1082,7 @@ function getCenterFromGeometry(g) {
 
             if (type === 'Point') {
                 pushIfPoint(c);
-            } else if (type === 'LineString' || type === 'MultiPoint') {
+            } else if (type === 'MultiPoint') {
                 for (const p of c) {
                     pushIfPoint(p);
                 }
@@ -1113,12 +1146,14 @@ function getCenterFromGeometry(g) {
  DE: Normalisiert Payload:
  - priorisiert wgs84_x/wgs84_y (wenn nicht 0/0),
  - akzeptiert data.position falls nicht 0/0,
+ - akzeptiert data.coords ([lat, lon], siehe unten) falls nicht 0/0,
  - fällt auf geometry (auch stringified) zurück.
  - entfernt roh-geo Felder und setzt position nur, wenn valide.
 
  EN: Normalizes the payload:
  - prioritizes wgs84_x/wgs84_y (if not 0/0),
  - accepts data.position if not 0/0,
+ - accepts data.coords ([lat, lon], see below) if not 0/0,
  - falls back to geometry (also if stringified).
  - removes raw geo fields and only sets position if valid.
 */
@@ -1154,6 +1189,24 @@ function normalizeData(obj) {
             }
         }
 
+        if (!center && Array.isArray(data.coords) && data.coords.length >= 2) {
+            // DE: Live bestätigtes drittes Positionsformat, bislang nur in io.routes-
+            // Einträgen beobachtet - vermutlich der Server-Fallback, wenn für eine Wache
+            // keine Routenberechnung (LineString) vorliegt, sondern nur ihr eigener
+            // Standort. Reihenfolge ist [lat, lon] (dieselbe Konvention wie wgs84_x/y oben),
+            // NICHT die GeoJSON-Reihenfolge [lon, lat], die geometry.coordinates verwendet.
+            // EN: Live-confirmed third position format, so far only observed in io.routes
+            // entries - presumably the server's fallback when no route calculation
+            // (LineString) exists for a station, only its own location. Order is
+            // [lat, lon] (same convention as wgs84_x/y above), NOT the GeoJSON order
+            // [lon, lat] used by geometry.coordinates.
+            const latC = Number(data.coords[0]);
+            const lonC = Number(data.coords[1]);
+            if (!isNaN(latC) && !isNaN(lonC) && !(latC === 0 && lonC === 0)) {
+                center = { lat: latC, lon: lonC };
+            }
+        }
+
         if (!center && data.geometry) {
             const c = getCenterFromGeometry(data.geometry);
             if (c) {
@@ -1166,6 +1219,7 @@ function normalizeData(obj) {
         delete data.wgs84_y;
         delete data.geojson;
         delete data.geometry_type;
+        delete data.coords;
 
         if (center) {
             data.position = { lat: center.lat, lon: center.lon };
@@ -3478,7 +3532,17 @@ class WaipWeb extends utils.Adapter {
     async writeDashboardSlot(i, listingEntry, detail) {
         const p = `dashboard.einsatz${i}`;
         const einsatz = normalizeData(detail.einsatz || {});
-        const routes = Array.isArray(detail.routes) ? detail.routes : [];
+        // DE: normalizeData() muss auch auf jeden Routen-Eintrag angewendet werden, exakt
+        // wie handleRoutes() es für einsatz.json.routen bereits tut - sonst bleiben rohe
+        // Geo-Felder (geometry als kompletter LineString, oder das coords-Fallback-Format,
+        // siehe normalizeData()) unverändert im Objekt stehen, statt zu position{lat,lon}
+        // aufgelöst zu werden. Vor diesem Fix fehlte dieser Aufruf hier komplett.
+        // EN: normalizeData() must also be applied to every route entry, exactly like
+        // handleRoutes() already does for einsatz.json.routen - otherwise raw geo fields
+        // (geometry as a complete LineString, or the coords fallback format, see
+        // normalizeData()) stay unchanged in the object instead of being resolved to
+        // position{lat,lon}. Before this fix, this call was missing here entirely.
+        const routes = Array.isArray(detail.routes) ? detail.routes.map(r => normalizeData(r)) : [];
         const rueckmeldungen = Array.isArray(detail.rueckmeldungen) ? detail.rueckmeldungen : [];
 
         const tasks = [this.setField(`${p}.alarmAktiv`, true)];

@@ -531,10 +531,19 @@ incident – see the note in the [`einsatz`](#einsatz) section.
 | --- | --- | --- |
 | `current` | string (JSON array) | Current incident's flat data: the same 12 fields as the individual `einsatz.*` states above (`id` … `sondersignal`, plus `beschreibung`, `alarmierungszeit`, `lat`/`lon`), plus `registeredMonitor`/`registeredMonitorName` (the monitor the adapter was registered to at the time), bundled as one object inside a single-element array (`[]` if no incident is active) – the array wrapper is needed because most table widgets require an array at the root, not a bare object |
 | `history10` | string (JSON array) | Last 10 completed incidents, same shape as `current`, one array entry per incident, written on `io.standby` |
-| `routen` | string (JSON array) | Routes of the current incident; each entry has `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` resolved to flat `lat`/`lon`) |
+| `routen` | string (JSON array) | Routes of the current incident; each entry has `nr_wache`, `name_wache`, `color`, `lat`, `lon` (`position` resolved to flat `lat`/`lon` - see the note below on what `lat`/`lon` represents for a route) |
 | `rueckmeldungen` | string (JSON array) | Feedback entries of the current incident, as received from the server |
 | `emAlarmiert` | string (JSON array) | Alerted resources of the current incident; each entry has `name`, `zeit`, `wache`, `zeit_alarmierung_iso`, `zeit_ausgerueckt_iso` |
 | `emWeitere` | string (JSON array) | Additional resources of the current incident, same shape as `emAlarmiert` |
+
+> **Note:** `routen[].lat`/`.lon` is the **location of the alerted station**, not a
+> point along the actual driving route and not the incident location. The server
+> sends each route either as a full `LineString` (the calculated path from the
+> station to the incident) or, when no path could be calculated, as a single
+> coordinate pair for the station itself - in both cases the adapter resolves
+> `lat`/`lon` to the station's location (the first point of the line in the
+> `LineString` case) for a consistent meaning across all entries. The complete
+> route geometry itself is not exposed as a state.
 
 ### einsatz.tts
 
@@ -630,6 +639,23 @@ example.
     Collect changes for the upcoming release underneath it.
 -->
 ### **WORK IN PROGRESS**
+
+- Fixed the Dashboard admin config: the tab was mistranslated as "Armaturenbrett"
+  (car dashboard) in German instead of "Dashboard", its help texts used
+  wrong/mistranslated terms ("Versandzentrum"/"Vorfall" instead of
+  "Leitstelle"/"Einsatz"), and the refresh interval label was missing its "(s)"
+  unit suffix.
+- Fixed `routen[].lat`/`.lon` (both `einsatz.json.routen` and
+  `dashboard.einsatzN.json.routen`): previously resolved to the geometric
+  bounding-box center of the entire route line - a point with no real meaning,
+  since it lies "somewhere along the way" rather than at any actual location.
+  Now resolves to the alerted station's own location instead (the first point of
+  the route line, matching a separate coordinate-pair format the server sends
+  when no route could be calculated for a station). Also fixed
+  `dashboard.einsatzN.json.routen` specifically: it was missing the same geo
+  normalization `einsatz.json.routen` already applied, so a route's raw,
+  unresolved geometry (dozens of coordinate pairs) or the raw fallback
+  coordinate field ended up in the written JSON instead of flat `lat`/`lon`.
 
 ### 0.12.0 (2026-08-28)
 

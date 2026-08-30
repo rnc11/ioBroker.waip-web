@@ -400,6 +400,52 @@ describe('normalizeData - geo normalization', () => {
         expect(out.position).to.deep.equal({ lat: 51.2, lon: 14.2 });
     });
 
+    it('uses the first LineString point as position, not the centroid (route case)', () => {
+        // DE: Regressionstest für den Bugfix - eine Route ist keine Fläche; ihre Bounding-
+        // Box-Mitte war vorher ein bedeutungsloser Punkt "irgendwo auf dem Weg". Der erste
+        // Punkt entspricht dem Wachenstandort, siehe getCenterFromGeometry().
+        // EN: Regression test for the bug fix - a route is not an area; its bounding-box
+        // center used to be a meaningless point "somewhere along the way". The first point
+        // corresponds to the station location, see getCenterFromGeometry().
+        const out = t.normalizeData({
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [13.610583938139387, 52.34045015968357],
+                    [13.7, 52.5],
+                    [14.0, 53.0],
+                ],
+            },
+        });
+        expect(out.position).to.deep.equal({ lat: 52.34045, lon: 13.610584 });
+    });
+
+    it('falls back to data.coords ([lat, lon], live-confirmed io.routes fallback format)', () => {
+        // DE: Live bestätigt an einem echten io.routes-Eintrag ohne Routenberechnung -
+        // der Server liefert dann nur den Wachenstandort als [lat, lon]-Paar statt eines
+        // geometry-LineStrings.
+        // EN: Live-confirmed on a real io.routes entry without a route calculation - the
+        // server then only supplies the station's own location as a [lat, lon] pair
+        // instead of a geometry LineString.
+        const out = t.normalizeData({
+            nr_wache: 610703,
+            name_wache: 'LDS FW Miersdorf',
+            coords: [52.34045015968357, 13.610583938139387],
+        });
+        expect(out.position).to.deep.equal({ lat: 52.34045015968357, lon: 13.610583938139387 });
+        expect(out).to.not.have.property('coords');
+    });
+
+    it('ignores a 0/0 data.coords pair', () => {
+        const out = t.normalizeData({ coords: [0, 0] });
+        expect(out.position).to.be.undefined;
+    });
+
+    it('prioritizes wgs84_x/y over data.coords when both are present', () => {
+        const out = t.normalizeData({ wgs84_x: 51.5, wgs84_y: 14.4, coords: [1, 2] });
+        expect(out.position).to.deep.equal({ lat: 51.5, lon: 14.4 });
+    });
+
     it('strips the raw geo fields from the result', () => {
         // DE: Wichtig: buildEinsatzMapImage() braucht deshalb die ROHE incoming.geometry.
         // EN: Important: that's why buildEinsatzMapImage() needs the RAW incoming.geometry.
@@ -427,6 +473,51 @@ describe('normalizeData - geo normalization', () => {
         expect(t.normalizeData(null)).to.be.null;
         expect(t.normalizeData(undefined)).to.be.undefined;
         expect(() => t.normalizeData({ geometry: 'not json' })).to.not.throw();
+    });
+});
+
+describe('getCenterFromGeometry', () => {
+    it('returns the first point of a LineString, not its bounding-box center', () => {
+        const out = t.getCenterFromGeometry({
+            type: 'LineString',
+            coordinates: [
+                [13.6, 52.3],
+                [14.0, 53.0],
+            ],
+        });
+        expect(out).to.deep.equal({ lat: 52.3, lon: 13.6 });
+    });
+
+    it('returns null for an empty LineString', () => {
+        expect(t.getCenterFromGeometry({ type: 'LineString', coordinates: [] })).to.be.null;
+    });
+
+    it('returns null for a LineString whose first point is 0/0', () => {
+        expect(
+            t.getCenterFromGeometry({
+                type: 'LineString',
+                coordinates: [
+                    [0, 0],
+                    [14.0, 53.0],
+                ],
+            }),
+        ).to.be.null;
+    });
+
+    it('still averages a Polygon into its bounding-box center (unaffected by the LineString fix)', () => {
+        const out = t.getCenterFromGeometry({
+            type: 'Polygon',
+            coordinates: [
+                [
+                    [14.0, 51.0],
+                    [14.2, 51.0],
+                    [14.2, 51.2],
+                    [14.0, 51.2],
+                    [14.0, 51.0],
+                ],
+            ],
+        });
+        expect(out).to.deep.equal({ lat: 51.1, lon: 14.1 });
     });
 });
 
@@ -1543,6 +1634,58 @@ describe('refreshDashboard / _refreshDashboardNow (orchestration, plan document 
         await inst.refreshDashboard();
         expect(written['dashboard.einsatz1.alarmAktiv']).to.equal(false);
         expect(written['dashboard.einsatz2.uuid']).to.equal(ok.uuid);
+    });
+
+    it('normalizes route entries before writing them (regression: raw geometry/coords must not leak through)', async () => {
+        // DE: Regressionstest für den Bugfix - vor der Korrektur wurde normalizeData() auf
+        // Routen im Dashboard-Pfad gar nicht aufgerufen, sodass ein kompletter LineString
+        // (viele Koordinatenpaare) oder das rohe coords-Fallback-Feld unverändert im
+        // geschriebenen JSON landeten, statt zu flachen lat/lon-Feldern aufgelöst zu werden.
+        // EN: Regression test for the bug fix - before the correction, normalizeData() was
+        // never called on routes in the dashboard path, so a complete LineString (many
+        // coordinate pairs) or the raw coords fallback field ended up unchanged in the
+        // written JSON, instead of being resolved into flat lat/lon fields.
+        const entry1 = sampleListingEntry('11111111-1111-1111-1111-111111111111');
+        const { inst, written } = makeInstance({
+            fetchDbrdList: async () => [entry1],
+            fetchDbrdDetail: async uuid =>
+                sampleDetail({
+                    einsatz: { ...sampleDetail().einsatz, uuid },
+                    routes: [
+                        {
+                            nr_wache: 730310,
+                            name_wache: 'UM FW Schwedt HAK',
+                            color: '#bf360c',
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: [
+                                    [14.282139, 53.054951],
+                                    [14.303245, 53.072857],
+                                ],
+                            },
+                        },
+                        {
+                            nr_wache: 610703,
+                            name_wache: 'LDS FW Miersdorf',
+                            color: '#00838f',
+                            coords: [52.34045015968357, 13.610583938139387],
+                        },
+                    ],
+                }),
+        });
+        await inst.refreshDashboard();
+        const routen = JSON.parse(written['dashboard.einsatz1.json.routen']);
+        expect(routen).to.have.lengthOf(2);
+        // DE: Erster Eintrag: geometry ist weg, lat/lon entsprechen dem ersten Linienpunkt.
+        // EN: First entry: geometry is gone, lat/lon match the first line point.
+        expect(routen[0]).to.not.have.property('geometry');
+        expect(routen[0].lat).to.equal(53.054951);
+        expect(routen[0].lon).to.equal(14.282139);
+        // DE: Zweiter Eintrag: coords ist weg, lat/lon entsprechen dem coords-Fallback-Wert.
+        // EN: Second entry: coords is gone, lat/lon match the coords fallback value.
+        expect(routen[1]).to.not.have.property('coords');
+        expect(routen[1].lat).to.equal(52.34045015968357);
+        expect(routen[1].lon).to.equal(13.610583938139387);
     });
 
     it('treats a slot timeout as empty and logs a recurring warning', async () => {
