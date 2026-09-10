@@ -68,6 +68,23 @@ const DEFAULT_SESSION_KEEPALIVE_SEC = 300;
 // server/app_cfg.js: 60s!) - so the interval below is derived adaptively from the
 // expiry time the server reports, instead of assuming a fixed value.
 const SESSION_KEEPALIVE_MIN_MS = 55 * 1000;
+// DE: Konfigurierbarer Bereich für registrationTimeoutSec/reconnectDelaySec (siehe
+// onReady()) - identisch zu den Admin-UI-Grenzen (min: 1, max: 120), zusätzlich per
+// clampNumber() im Code selbst durchgesetzt. Ohne diese Klemmung könnte eine direkte
+// Instanzkonfigurations-JSON-Bearbeitung/ein Import einen Wert außerhalb des
+// Admin-UI-Bereichs enthalten (z.B. negativ oder unrealistisch groß), der ungeprüft in
+// setTimeout()/setInterval() landen würde.
+// EN: Configurable range for registrationTimeoutSec/reconnectDelaySec (see onReady()) -
+// identical to the admin UI limits (min: 1, max: 120), additionally enforced in code via
+// clampNumber(). Without this clamp, a direct instance config JSON edit/import could
+// contain a value outside the admin UI range (e.g. negative or unrealistically large)
+// that would end up unchecked in setTimeout()/setInterval().
+const REGISTRATION_TIMEOUT_SEC_MIN = 1;
+const REGISTRATION_TIMEOUT_SEC_MAX = 120;
+const DEFAULT_REGISTRATION_TIMEOUT_SEC = 10;
+const RECONNECT_DELAY_SEC_MIN = 1;
+const RECONNECT_DELAY_SEC_MAX = 120;
+const DEFAULT_RECONNECT_DELAY_SEC = 5;
 // DE: Konfigurierbarer Bereich für die Größe von einsatzAktuell.json.history (siehe
 // onReady()/pushEinsatzToHistory()/trimHistoryIfNeeded()) - historySize ist ein
 // Konfigurationswert (1..100, Default 10 zur Wahrung des bisherigen Verhaltens
@@ -1650,13 +1667,6 @@ class WaipWeb extends utils.Adapter {
         this.on('ready', this.onReady.bind(this));
         this.on('unload', this.onUnload.bind(this));
         this.on('message', this.onMessage.bind(this));
-        // DE: Erstmaliger stateChange-Listener in diesem Adapter (siehe onStateChange()) -
-        // bisher wurde nirgends subscribeStates() genutzt. Nur für den Dashboard-Refresh-
-        // Button (dashboard.refreshNow, Plandokument Abschnitt 3.5) benötigt.
-        // EN: First stateChange listener in this adapter (see onStateChange()) - until now
-        // subscribeStates() was never used anywhere. Only needed for the dashboard refresh
-        // button (dashboard.refreshNow, plan document section 3.5).
-        this.on('stateChange', this.onStateChange.bind(this));
 
         this.socket = null;
         this.currentMonitor = '';
@@ -1724,14 +1734,26 @@ class WaipWeb extends utils.Adapter {
     }
 
     async onReady() {
-        this.REGISTRATION_TIMEOUT_MS = (Number(this.config.registrationTimeoutSec) || 10) * 1000;
-        this.RECONNECT_DELAY_MS = (Number(this.config.reconnectDelaySec) || 5) * 1000;
-        // DE: Größe von einsatzAktuell.json.history (siehe pushEinsatzToHistory()) - anders
-        // als die beiden Timeout-Werte oben per clampNumber() geklemmt, da eine direkte
+        this.REGISTRATION_TIMEOUT_MS =
+            clampNumber(
+                this.config.registrationTimeoutSec,
+                REGISTRATION_TIMEOUT_SEC_MIN,
+                REGISTRATION_TIMEOUT_SEC_MAX,
+                DEFAULT_REGISTRATION_TIMEOUT_SEC,
+            ) * 1000;
+        this.RECONNECT_DELAY_MS =
+            clampNumber(
+                this.config.reconnectDelaySec,
+                RECONNECT_DELAY_SEC_MIN,
+                RECONNECT_DELAY_SEC_MAX,
+                DEFAULT_RECONNECT_DELAY_SEC,
+            ) * 1000;
+        // DE: Größe von einsatzAktuell.json.history (siehe pushEinsatzToHistory()) - ebenso
+        // per clampNumber() geklemmt wie die beiden Timeout-Werte oben, da eine direkte
         // Instanzkonfigurations-JSON-Bearbeitung/ein Import Werte außerhalb des
         // Admin-UI-Bereichs (1..100) enthalten könnte.
-        // EN: Size of einsatzAktuell.json.history (see pushEinsatzToHistory()) - unlike the
-        // two timeout values above, clamped via clampNumber() since a direct instance
+        // EN: Size of einsatzAktuell.json.history (see pushEinsatzToHistory()) - clamped via
+        // clampNumber() just like the two timeout values above, since a direct instance
         // config JSON edit/import could contain values outside the admin UI range (1..100).
         this.historySize = clampNumber(
             this.config.historySize,
@@ -1960,8 +1982,18 @@ class WaipWeb extends utils.Adapter {
             this.startDashboardRefreshInterval();
             // DE: Nur abonnieren, wenn das Feature aktiv ist - kein Sinn, den Button bei
             // deaktiviertem Dashboard zu abonnieren (siehe Plandokument Abschnitt 3.5).
+            // Der stateChange-Listener selbst wird ebenfalls erst hier registriert (nicht
+            // schon im Constructor) - onStateChange() behandelt ausschließlich
+            // dashboard.refreshNow, ein Listener ohne zugehöriges subscribeStates() liefe
+            // ohnehin nie an, wäre aber unnötige tote Infrastruktur bei deaktiviertem
+            // Dashboard.
             // EN: Only subscribe when the feature is active - no point subscribing to the
             // button while the dashboard is disabled (see the plan document section 3.5).
+            // The stateChange listener itself is also only registered here (not already in
+            // the constructor) - onStateChange() exclusively handles dashboard.refreshNow,
+            // a listener without a matching subscribeStates() would never fire anyway, but
+            // would be unnecessary dead infrastructure while the dashboard is disabled.
+            this.on('stateChange', this.onStateChange.bind(this));
             this.subscribeStates('dashboard.refreshNow');
         }
         // DE: Nicht awaiten - der Alarm-Empfang soll nicht auf diesen (rein informativen)

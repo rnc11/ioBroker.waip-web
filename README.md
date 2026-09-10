@@ -647,6 +647,16 @@ example.
 -->
 ### **WORK IN PROGRESS**
 
+- `registrationTimeoutSec` and `reconnectDelaySec` are now clamped in
+  code to their admin UI range (1-120s), matching how every other
+  numeric configuration value (e.g. `historySize`, `mapImageWidth`) was
+  already handled - a direct instance config JSON edit/import can no
+  longer set them outside that range.
+- The `stateChange` listener (used only for `dashboard.refreshNow`) is
+  now registered only while the Dashboard feature is enabled, matching
+  its `subscribeStates()` call, instead of unconditionally in the
+  constructor.
+
 ### 1.0.0 (2026-08-30)
 
 - **Breaking change:** the `einsatz` channel is renamed to `einsatzAktuell`
