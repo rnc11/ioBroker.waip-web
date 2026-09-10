@@ -36,7 +36,7 @@
     "README.de.md"
   ],
   "dependencies": {
-    "@iobroker/adapter-core": "^3.4.1",
+    "@iobroker/adapter-core": "^3.4.3",
     "jimp": "^1.6.1",
     "socket.io-client": "^4.7.5"
   },
@@ -47,7 +47,7 @@
     "@alcalzone/release-script-plugin-manual-review": "^5.2.0",
     "@iobroker/adapter-dev": "^1.5.0",
     "@iobroker/eslint-config": "^2.2.0",
-    "@iobroker/testing": "^5.2.2",
+    "@iobroker/testing": "^6.2.1",
     "@tsconfig/node22": "^22.0.6",
     "@types/node": "^22.0.0"
   },
