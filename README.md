@@ -4,8 +4,8 @@
 
 [![NPM version](https://img.shields.io/npm/v/iobroker.waip-web.svg)](https://www.npmjs.com/package/iobroker.waip-web)
 [![Downloads](https://img.shields.io/npm/dm/iobroker.waip-web.svg)](https://www.npmjs.com/package/iobroker.waip-web)
-[![Number of Installations (latest)](https://iobroker.live/badges/waip-web-installed.svg)]
-[![Current version in stable repository](https://iobroker.live/badges/waip-web-stable.svg)]
+![Number of Installations (latest)](https://iobroker.live/badges/waip-web-installed.svg)
+![Current version in stable repository](https://iobroker.live/badges/waip-web-stable.svg)
 [![Test and Release](https://github.com/rnc11/ioBroker.waip-web/actions/workflows/test-and-release.yml/badge.svg)](https://github.com/rnc11/ioBroker.waip-web/actions/workflows/test-and-release.yml)
 [![Translation status](https://weblate.iobroker.net/widgets/adapters/-/waip-web/svg-badge.svg)](https://weblate.iobroker.net/engage/adapters/?utm_source=widget)
 [![License](https://img.shields.io/npm/l/iobroker.waip-web.svg)](LICENSE)
