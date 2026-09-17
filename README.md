@@ -10,8 +10,6 @@
 [![Translation status](https://weblate.iobroker.net/widgets/adapters/-/waip-web/svg-badge.svg)](https://weblate.iobroker.net/engage/adapters/?utm_source=widget)
 [![License](https://img.shields.io/npm/l/iobroker.waip-web.svg)](LICENSE)
 
-![Number of Installations (latest)](https://shields.io)
-
 🇩🇪 [Deutsche Version dieser README](README.de.md)
 
 ioBroker adapter for **Wachalarm IP-Web (WAIP-Web)**
