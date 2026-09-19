@@ -34,7 +34,7 @@ npm run release -- patch # oder direkt
 
 ## Publishing / Tooling
 - gh CLI lokal auth als rnc11
-- PR ioBroker/ioBroker.repositories#6487 („Add waip-web to latest") wartet auf Review von mcm1957
+- PR ioBroker/ioBroker.repositories#6487 („Add waip-web to latest") wurde am 10.09.2026 von mcm1957 gemergt — waip-web ist im `latest`-Repository gelistet. Aufnahme in `stable` erfolgt automatisch nach einer gewissen Zeit ohne gemeldete Probleme (repocheck-Hinweis S4047 bis dahin normal, keine Aktion nötig).
 
 ## Arbeitsweise mit dem Nutzer
 - Bei Freigabe eines mehrstufigen Workflows (z. B. kompletter Release-Zyklus) erwartet er die vollständige autonome Durchführung bis zum Ende in einem Zug
