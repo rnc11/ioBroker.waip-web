@@ -645,7 +645,7 @@ example.
     Re-add it afterwards (or use `npm run release -- --addPlaceholder`).
     Collect changes for the upcoming release underneath it.
 -->
-### **WORK IN PROGRESS**
+### 1.0.1 (2026-09-19)
 
 - `registrationTimeoutSec` and `reconnectDelaySec` are now clamped in
   code to their admin UI range (1-120s), matching how every other
@@ -729,16 +729,6 @@ example.
   geo normalization, the keyword decoder/table, the monitor matching and
   the state-definition consistency. `npm test` now runs it alongside the
   package tests.
-
-### 0.7.37 (2026-08-26)
-
-- Fixed a bug where a routes update (`io.routes`) or TTS announcement
-  (`io.playtts`) arriving after an incident had already ended
-  (`io.standby`) could revive `einsatz.json.current`/`.routen`/
-  `einsatz.routenGesamt` or `einsatz.tts.last`/`.lastTimestamp` for the
-  already-finished incident, while every other `einsatz.*` field
-  correctly stayed cleared. Both handlers now ignore such events while
-  no incident is active.
 
 Older entries have been moved to [CHANGELOG_OLD.md](CHANGELOG_OLD.md).
 

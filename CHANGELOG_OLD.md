@@ -792,6 +792,16 @@ here for a complete history of what was worked on.)*
 - Initial version: ported the original "WAIP Instrumented v3.9" ioBroker
   JavaScript-adapter script into a standalone adapter. The URL/monitor
   ID now come from the admin configuration instead of a runtime state.
+## 0.7.37 (2026-08-26)
+
+- Fixed a bug where a routes update (`io.routes`) or TTS announcement
+  (`io.playtts`) arriving after an incident had already ended
+  (`io.standby`) could revive `einsatz.json.current`/`.routen`/
+  `einsatz.routenGesamt` or `einsatz.tts.last`/`.lastTimestamp` for the
+  already-finished incident, while every other `einsatz.*` field
+  correctly stayed cleared. Both handlers now ignore such events while
+  no incident is active.
+
 ## 0.7.36 (2026-08-25)
 
 - Object structure change: `einsatz.rueckmeldungAnzahl` is now
